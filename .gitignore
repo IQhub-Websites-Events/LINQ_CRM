@@ -1,0 +1,84 @@
+# ── Credentials & Secrets ──────────────────────────────────────────────────
+/config/credentials/
+backend/credentials/
+*.pem
+*.key
+*.p12
+service-account*.json
+
+# ── Environment Variables ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.Python
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+*.egg-info/
+dist/
+*.egg
+MANIFEST
+
+# Generated reports (not source data)
+backend/*.csv
+
+# ── Node / React ─────────────────────────────────────────────────────────────
+node_modules/
+build/
+dist/
+.pnp
+.pnp.js
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+frontend/*.log
+
+# ── IDE & Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.project
+.classpath
+.settings/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
