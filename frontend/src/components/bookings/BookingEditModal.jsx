@@ -6,6 +6,16 @@ import { StatusBadge } from "../ui/Badge";
 import { SourceBadge } from "../ui/SourceBadge";
 import { fmt } from "../../utils/helpers";
 
+const BOOKING_CODES = [
+  "", "Speaker", "Delegate", "Group Pass", "SPP", "SPP / Group Pass",
+  "PLT SpEx", "GLD SpEx", "SLV SpEx",
+  "Speaker / PLT SpEx", "Speaker / GLD SpEx", "Speaker / SLV SpEx",
+  "Speaker / PTN SpEx", "Speaker / Group Pass",
+  "PTN SpEx",
+  "Upgraded to PLT SpEx", "Upgraded to GLD SpEx", "Upgraded to SLV SpEx",
+  "Speaker Table", "Advisory Board Member", "Complimentary", "Media", "Add-Ons",
+];
+
 const COLS = [
   { key: "delegate_payment_status", label: "Pmt Status",   width: 180, type: "select", options: ["", "Pending", "Paid", "Cancelled", "Refunded", "Credit Pending (Free)", "Credit Pending (Paid)", "Credit Transferred", "Paid (Transferred)"] },
   { key: "_booking_code",           label: "Booking Code", width: 130, invoiceLevel: true },
@@ -171,49 +181,42 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
 
         {/* ── HEADER ── */}
         <div style={headerWrap}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <Avatar name={leadName} size={32} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-                <span style={headerTitle}>Edit Booking</span>
-                <StatusBadge status={form.payment_status} />
-                <SourceBadge source={form.source} />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
-                <span style={metaChip}>{form.invoice_number || "—"}</span>
-                <MetaDot />
-                <span style={metaText}>{form.event_code || "—"}</span>
-                <MetaDot />
-                <span style={metaText}>{leadName}</span>
-                <MetaDot />
-                <span style={metaText}>{form.company_name || "—"}</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <Avatar name={leadName} size={32} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                  <span style={headerTitle}>Edit Booking</span>
+                  <StatusBadge status={form.payment_status} />
+                  <SourceBadge source={form.source} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
+                  <span style={metaText}>{leadName}</span>
+                  <MetaDot />
+                  <span style={metaText}>{form.company_name || "—"}</span>
+                </div>
               </div>
             </div>
+            <button onClick={onClose} style={closeBtn}>✕</button>
           </div>
-          <button onClick={onClose} style={closeBtn}>✕</button>
-        </div>
 
-        {/* ── INVOICE INFORMATION ── */}
-        <div style={sectionWrap}>
-          <SectionLabel>Invoice Information</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            <FGroup label="Event Code" req>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.55fr", gap: "0 12px", marginTop: 12 }}>
+            <FGroup label="Event Code" req compact>
               <EventCodePicker
                 value={form.event_code}
                 events={events}
+                compact
                 onChange={(code, ev) => {
                   set("event_code", code);
                   set("event_name", ev?.name || "");
                 }}
               />
             </FGroup>
-            <FGroup label="Event Name">
-              <FInput value={form.event_name} readOnly />
+            <FGroup label="Event Name" compact>
+              <FInput value={form.event_name} readOnly compact />
             </FGroup>
-          </div>
-          <div style={{ marginTop: 10, maxWidth: "50%" }}>
-            <FGroup label="Invoice Number">
-              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} />
+            <FGroup label="Invoice Number" compact>
+              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} compact />
             </FGroup>
           </div>
         </div>
@@ -331,7 +334,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         if (c.key === "_booking_code") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} />
+              <CellSelect value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} options={BOOKING_CODES} />
             </td>
           );
         }
@@ -415,7 +418,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
    Event Code rich picker
 ═══════════════════════════════════════════════════════════ */
 
-function EventCodePicker({ value, events, onChange }) {
+function EventCodePicker({ value, events, onChange, compact }) {
   const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -445,7 +448,7 @@ function EventCodePicker({ value, events, onChange }) {
         type="button"
         onClick={() => { setOpen(o => !o); setSearch(""); }}
         style={{
-          width: "100%", height: 38, padding: "0 32px 0 10px",
+          width: "100%", height: compact ? 34 : 38, padding: "0 32px 0 10px",
           border: `1px solid ${open ? "var(--accent)" : BORDER}`,
           borderRadius: 4, background: "#fff",
           display: "flex", alignItems: "center", gap: 8,
@@ -902,8 +905,8 @@ const modalBox = {
 };
 
 const headerWrap = {
-  display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "11px 20px",
+  display: "flex", flexDirection: "column",
+  padding: "11px 20px 14px",
   borderBottom: `1px solid ${BORDER}`,
   background: "#fff",
   position: "sticky", top: 0, zIndex: 20,
@@ -951,6 +954,7 @@ const sectionLabelStyle = {
 
 const delegateWrap = {
   borderBottom: `1px solid ${BORDER}`,
+  paddingBottom: 16,
 };
 
 const footerWrap = {

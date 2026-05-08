@@ -36,7 +36,7 @@ export const fmt = {
   dateShort: (d) => {
     if (!d) return "—";
     return new Date(d + "T00:00:00").toLocaleDateString("en-GB", {
-      day: "2-digit", month: "short",
+      day: "2-digit", month: "short", year: "numeric",
     });
   },
 

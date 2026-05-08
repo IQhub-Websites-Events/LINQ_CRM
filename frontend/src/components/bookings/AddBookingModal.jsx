@@ -3,19 +3,29 @@ import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { fmt, today } from "../../utils/helpers";
 
+const BOOKING_CODES = [
+  "", "Speaker", "Delegate", "Group Pass", "SPP", "SPP / Group Pass",
+  "PLT SpEx", "GLD SpEx", "SLV SpEx",
+  "Speaker / PLT SpEx", "Speaker / GLD SpEx", "Speaker / SLV SpEx",
+  "Speaker / PTN SpEx", "Speaker / Group Pass",
+  "PTN SpEx",
+  "Upgraded to PLT SpEx", "Upgraded to GLD SpEx", "Upgraded to SLV SpEx",
+  "Speaker Table", "Advisory Board Member", "Complimentary", "Media", "Add-Ons",
+];
+
 const COLS = [
-  { key: "delegate_payment_status", label: "Pmt Status",   width: 180, type: "select", options: ["", "Pending", "Paid", "Cancelled", "Refunded", "Credit Pending (Free)", "Credit Pending (Paid)", "Credit Transferred", "Paid (Transferred)"] },
-  { key: "_booking_code",           label: "Booking Code", width: 130, invoiceLevel: true },
-  { key: "_request_date",           label: "Request Date", width: 130, type: "date",   invoiceLevel: true, readOnly: true },
-  { key: "_invoice_date",           label: "Invoice Date", width: 130, type: "date",   invoiceLevel: true },
-  { key: "_full_name",              label: "Name",         width: 160, virtual: "name" },
-  { key: "position",                label: "Job Title",    width: 180 },
-  { key: "_company_name",           label: "Company",      width: 180, invoiceLevel: true },
-  { key: "email",                   label: "Email",        width: 240, type: "email" },
-  { key: "phone_number",            label: "Direct Line",  width: 160, mono: true },
-  { key: "attendance",              label: "Attendance",   width: 80,  type: "checkbox" },
-  { key: "delegate_payment_type",   label: "Pmt Type",     width: 140, type: "select", options: ["", "Bank", "Stripe"] },
-  { key: "delegate_payment_date",   label: "Pmt Date",     width: 150, type: "date" },
+  { key: "delegate_payment_status", label: "Pmt Status", width: 180, type: "select", options: ["", "Pending", "Paid", "Cancelled", "Refunded", "Credit Pending (Free)", "Credit Pending (Paid)", "Credit Transferred", "Paid (Transferred)"] },
+  { key: "_booking_code", label: "Booking Code", width: 130, invoiceLevel: true },
+  { key: "_request_date", label: "Request Date", width: 130, type: "date", invoiceLevel: true, readOnly: true },
+  { key: "_invoice_date", label: "Invoice Date", width: 130, type: "date", invoiceLevel: true },
+  { key: "_full_name", label: "Name", width: 160, virtual: "name" },
+  { key: "position", label: "Job Title", width: 180 },
+  { key: "_company_name", label: "Company", width: 180, invoiceLevel: true },
+  { key: "email", label: "Email", width: 240, type: "email" },
+  { key: "phone_number", label: "Direct Line", width: 160, mono: true },
+  { key: "attendance", label: "Attendance", width: 80, type: "checkbox" },
+  { key: "delegate_payment_type", label: "Pmt Type", width: 140, type: "select", options: ["", "Bank", "Stripe"] },
+  { key: "delegate_payment_date", label: "Pmt Date", width: 150, type: "date" },
 ];
 
 const BLANK_DELEGATE = () => ({
@@ -85,15 +95,15 @@ export function AddBookingModal({ onClose, onSaved }) {
   };
 
   const invoiceCtx = {
-    request_date:     today(),
+    request_date: today(),
     payment_due_date: form.payment_due_date,
-    company_name:     form.company_name,
-    paid_free:        form.paid_free,
-    invoice_date:     form.invoice_date,
-    booking_code:     form.booking_code,
-    payment_status:   form.payment_status,
-    payment_type:     form.payment_type,
-    payment_date:     form.payment_date,
+    company_name: form.company_name,
+    paid_free: form.paid_free,
+    invoice_date: form.invoice_date,
+    booking_code: form.booking_code,
+    payment_status: form.payment_status,
+    payment_type: form.payment_type,
+    payment_date: form.payment_date,
   };
 
   return (
@@ -133,7 +143,7 @@ export function AddBookingModal({ onClose, onSaved }) {
               <FInput value={form.event_name} onChange={v => set("event_name", v)} placeholder="Auto-filled from event" />
             </FGroup>
             <FGroup label="Booking Code">
-              <FInput value={form.booking_code} onChange={v => set("booking_code", v)} />
+              <FSelect value={form.booking_code} onChange={v => set("booking_code", v)} options={BOOKING_CODES} />
             </FGroup>
           </div>
         </div>
@@ -226,7 +236,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         {onRemove && (
           <button onClick={onRemove} style={removeDelegateBtn} title="Remove delegate">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             </svg>
           </button>
         )}
@@ -243,7 +253,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         if (c.key === "_booking_code") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} />
+              <CellSelect value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} options={BOOKING_CODES} />
             </td>
           );
         }
@@ -611,6 +621,7 @@ const sectionLabelStyle = {
 
 const delegateWrap = {
   borderBottom: `1px solid ${BORDER}`,
+  paddingBottom: 16,
 };
 
 const footerWrap = {

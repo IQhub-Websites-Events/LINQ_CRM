@@ -1,31 +1,12 @@
-import { useState, useEffect } from "react";
-import { searchApi } from "../api";
+import { useState } from "react";
 import { BookingsTable } from "../components/bookings/BookingsTable";
 import { BookingsCardGrid } from "../components/bookings/BookingsCardGrid";
-import { fmt } from "../utils/helpers";
 
 const STATUS_TABS = ["All", "Pending", "Paid"];
 
 export function BookingsPage({ navItem }) {
   const [view, setView] = useState("table"); // "table" | "cards"
   const [statusFilter, setStatusFilter] = useState(navItem ? "" : "Pending");
-  const [stats, setStats] = useState({});
-  const [tableTotal, setTableTotal] = useState(null);
-
-  useEffect(() => {
-    searchApi.stats().then(setStats).catch(() => { });
-  }, []);
-
-  const inv = stats?.invoices || {};
-
-  const kpis = [
-    {
-      label: "Total Invoices",
-      value: tableTotal != null ? tableTotal : (inv.total ?? "—"),
-      sub: "All time",
-      highlight: false,
-    }
-  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
@@ -44,7 +25,6 @@ export function BookingsPage({ navItem }) {
           <h1 style={{
             margin: 0,
             fontFamily: "var(--font-serif)",
-            // fontStyle: "italic"`,
             fontWeight: 500,
             fontSize: 38,
             lineHeight: 1,
@@ -62,90 +42,21 @@ export function BookingsPage({ navItem }) {
         <ViewToggle view={view} onChange={setView} />
       </div>
 
-      {/* KPI row */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
-        gap: 14,
-        padding: "0 28px 16px",
-        flexShrink: 0,
-      }}>
-        {kpis.map((kpi) => (
-          <KpiCard key={kpi.label} {...kpi} />
-        ))}
-      </div>
-
       {/* Filter strip */}
       <FilterStrip statusFilter={statusFilter} onStatusChange={(s) => setStatusFilter(s)} />
 
       {/* Content */}
       <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
         {view === "table" ? (
-          <BookingsTable
-            statusFilter={statusFilter}
-            onTotalChange={setTableTotal}
-          />
+          <BookingsTable statusFilter={statusFilter} />
         ) : (
-          <BookingsCardGrid
-            statusFilter={statusFilter}
-            onTotalChange={setTableTotal}
-          />
+          <BookingsCardGrid statusFilter={statusFilter} />
         )}
       </div>
     </div>
   );
 }
 
-
-function KpiCard({ label, value, sub, highlight, danger }) {
-  return (
-    <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border)",
-      borderRadius: 10,
-      padding: "16px 18px",
-      position: "relative",
-      overflow: "hidden",
-    }}>
-      {highlight && (
-        <div style={{
-          position: "absolute",
-          top: 0, left: 0, right: 0,
-          height: 2,
-          background: "var(--accent)",
-          borderRadius: "10px 10px 0 0",
-        }} />
-      )}
-      <div style={{
-        fontSize: 11,
-        fontWeight: 500,
-        textTransform: "uppercase",
-        letterSpacing: "0.02em",
-        color: "var(--text-dim)",
-        marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontFamily: "var(--font-serif)",
-        fontWeight: 500,
-        fontSize: 26,
-        lineHeight: 1.1,
-        letterSpacing: "-0.02em",
-        color: "var(--text)",
-      }}>
-        {value}
-      </div>
-      <div style={{
-        fontSize: 11,
-        color: danger ? "var(--danger)" : "var(--text-dim)",
-        marginTop: 4,
-      }}>
-        {sub}
-      </div>
-    </div>
-  );
-}
 
 
 function FilterStrip({ statusFilter, onStatusChange }) {

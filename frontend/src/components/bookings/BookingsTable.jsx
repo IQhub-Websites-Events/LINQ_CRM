@@ -161,7 +161,6 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <Th>Type</Th>
                 <SortTh sortKey="full_name" current={sortKey} dir={sortDir} onSort={handleSort}>Delegate</SortTh>
                 <Th>Company</Th>
-                <SortTh sortKey="net_total" current={sortKey} dir={sortDir} onSort={handleSort} align="right">Amount</SortTh>
                 <SortTh sortKey="invoice__invoice_date" current={sortKey} dir={sortDir} onSort={handleSort}>Invoice date</SortTh>
                 <Th style={{ width: 110 }} />
               </tr>
@@ -231,9 +230,6 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
 
 
 const DelegateRow = memo(({ delegate, onEdit }) => {
-  const amount = delegate.net_total ?? delegate.amount ?? null;
-  const currency = delegate.currency || "USD";
-
   return (
     <tr
       onClick={onEdit}
@@ -295,20 +291,6 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
 
       <td style={cell}>
         <span style={{ color: "var(--text-dim)" }}>{delegate.company_display || "—"}</span>
-      </td>
-
-      <td style={{ ...cell, textAlign: "right" }}>
-        {amount != null ? (
-          <span>
-            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500, color: "var(--text)" }}>
-              {fmt.currency(amount, currency)}
-            </span>
-            {" "}
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-faint)" }}>{currency}</span>
-          </span>
-        ) : (
-          <span style={{ color: "var(--text-faint)" }}>—</span>
-        )}
       </td>
 
       <td style={cell}>
