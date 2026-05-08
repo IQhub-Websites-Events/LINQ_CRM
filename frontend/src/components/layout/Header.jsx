@@ -20,7 +20,7 @@ export function Header({ onNavigate }) {
         const data = await searchApi.global(q);
         setResults(data.results);
         setOpen(true);
-      } catch {}
+      } catch { }
       finally { setLoading(false); }
     }, 300);
     return () => clearTimeout(t);
@@ -52,7 +52,7 @@ export function Header({ onNavigate }) {
         const mins = Math.round((Date.now() - new Date(s.last_sync)) / 60000);
         setSyncLabel(mins < 1 ? "Synced just now" : `Synced ${mins}m ago`);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const jump = (screen, id) => { onNavigate(screen, id); setQ(""); setOpen(false); };
@@ -85,7 +85,7 @@ export function Header({ onNavigate }) {
           border: "1px solid var(--border)",
         }}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round">
-            <circle cx="5.5" cy="5.5" r="4.5"/><path d="M10 10l2 2"/>
+            <circle cx="5.5" cy="5.5" r="4.5" /><path d="M10 10l2 2" />
           </svg>
           <input
             value={q}
@@ -153,18 +153,12 @@ export function Header({ onNavigate }) {
         {/* Export ghost */}
         <button style={ghostBtnStyle}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 9v2h8V9M6 1v7M3.5 4.5L6 7l2.5-2.5"/>
+            <path d="M2 9v2h8V9M6 1v7M3.5 4.5L6 7l2.5-2.5" />
           </svg>
           Export
         </button>
 
-        {/* New booking primary */}
-        <button
-          onClick={() => onNavigate("bookings")}
-          style={primaryBtnStyle}
-        >
-          + New booking
-        </button>
+
 
         {/* Theme toggle */}
         <button
@@ -181,11 +175,11 @@ export function Header({ onNavigate }) {
         >
           {mode === "light" ? (
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 14 14">
-              <circle cx="7" cy="7" r="3"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.9 2.9l1.1 1.1M10 10l1.1 1.1M10 4l1.1-1.1M2.9 11.1L4 10"/>
+              <circle cx="7" cy="7" r="3" /><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.9 2.9l1.1 1.1M10 10l1.1 1.1M10 4l1.1-1.1M2.9 11.1L4 10" />
             </svg>
           ) : (
             <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 14 14">
-              <path d="M12 7.8A5 5 0 016.2 2a5 5 0 100 10 5 5 0 005.8-4.2z"/>
+              <path d="M12 7.8A5 5 0 016.2 2a5 5 0 100 10 5 5 0 005.8-4.2z" />
             </svg>
           )}
         </button>

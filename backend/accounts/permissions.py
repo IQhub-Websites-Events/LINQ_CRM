@@ -37,22 +37,29 @@ class RBACMixin:
         if user.is_admin:
             return qs
 
-        # 1. If the model has a sales_executive field, filter by it directly.
-        # This is the most accurate way to bifurcate data.
-        if hasattr(qs.model, "sales_executive"):
-            return qs.filter(sales_executive=user)
-
-        # 2. Fallback: Filter by event_code if assigned.
-        codes = user.assigned_event_codes() or []
-        if not codes:
-            return qs.none()
-
         from django.db.models import Q
-        query = Q()
+
+        codes = user.assigned_event_codes() or []
+
+        # Build event_code OR clause (used as either primary or secondary filter).
+        ec_query = Q()
         for code in codes:
-            query |= Q(**{f"{event_code_field}__icontains": code})
-        
-        return qs.filter(query)
+            ec_query |= Q(**{f"{event_code_field}__icontains": code})
+
+        # For models with a sales_executive FK, allow access if the user is the
+        # assigned executive OR the event is in their assigned events.
+        # This keeps the invoice retrieve consistent with the delegate list view,
+        # which is filtered by event_code only (BookDelegate has no sales_executive).
+        if hasattr(qs.model, "sales_executive"):
+            combined = Q(sales_executive=user)
+            if ec_query:
+                combined |= ec_query
+            return qs.filter(combined)
+
+        # For models without sales_executive, use event_code only.
+        if not ec_query:
+            return qs.none()
+        return qs.filter(ec_query)
 
     def rbac_filter_invoice(self, qs):
         return self.rbac_filter(qs, event_code_field="event_code")

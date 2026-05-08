@@ -19,6 +19,12 @@ export const invoicesApi = {
   create: (payload) =>
     client.post("invoices/", payload).then((r) => r.data),
 
+  delete: (id) =>
+    client.delete(`invoices/${id}/`).then((r) => r.data),
+
   createFromWebsite: (payload) =>
     client.post("invoices/create_from_website/", payload).then((r) => r.data),
+
+  webhookLogs: (params) =>
+    client.get("invoices/webhook_logs/", { params }).then((r) => r.data),
 };

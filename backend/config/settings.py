@@ -150,6 +150,9 @@ LOGGING = {
     },
 }
 
+# ── Website Integration ───────────────────────────────────────────────────────
+WEBSITE_API_KEY = os.environ.get("WEBSITE_API_KEY", "")
+
 # ── Google Sheets Sync ────────────────────────────────────────────────────────
 # Look for credentials relative to project root
 _creds_path = os.environ.get("GOOGLE_SHEETS_CREDENTIALS", "config/credentials/google-sheets.json")

@@ -10,10 +10,11 @@ class EventFilter(django_filters.FilterSet):
     event_date_to   = django_filters.DateFilter(field_name="event_date", lookup_expr="lte")
     city            = django_filters.CharFilter(lookup_expr="icontains")
     event_code      = django_filters.CharFilter(lookup_expr="icontains")
+    year            = django_filters.NumberFilter(field_name="event_date", lookup_expr="year")
 
     class Meta:
         model  = Event
-        fields = ["status", "sub_company", "event_date_from", "event_date_to", "city", "event_code"]
+        fields = ["status", "sub_company", "event_date_from", "event_date_to", "city", "event_code", "year"]
 
     def filter_status(self, queryset, name, value):
         today = timezone.now().date()

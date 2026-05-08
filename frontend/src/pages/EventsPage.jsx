@@ -12,7 +12,6 @@ import { useFetch } from "../hooks/useFetch";
 import { useSort } from "../hooks/useSort";
 import { usePagination } from "../hooks/usePagination";
 import { fmt } from "../utils/helpers";
-import { EVENT_STATUSES, SUB_COMPANIES } from "../utils/constants";
 
 const PAGE_SIZE = 50;
 
@@ -43,7 +42,7 @@ export function EventsPage() {
   });
 
   const openCreate = () => setModal({ mode: "create", data: { 
-    event_code: "", name: "", official_name: "", sub_company: "Linq Conferences", city: "", country: "", 
+    event_code: "", name: "", official_name: "", city: "", country: "",
     venue: "", event_date: "", end_date: "", capacity: 500, sales_executive: null,
     speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
     content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
@@ -114,7 +113,6 @@ export function EventsPage() {
               <SortableTh sortKey="event_code" sort={sort} onSort={sortToggle}>Code</SortableTh>
               <SortableTh sortKey="name"        sort={sort} onSort={sortToggle}>Name</SortableTh>
               <SortableTh sortKey="official_name" sort={sort} onSort={sortToggle}>Official Name</SortableTh>
-              <SortableTh sortKey="sub_company" sort={sort} onSort={sortToggle}>Sub-company</SortableTh>
               <SortableTh sortKey="city"        sort={sort} onSort={sortToggle}>City</SortableTh>
               <SortableTh sortKey="event_date"  sort={sort} onSort={sortToggle}>Date</SortableTh>
               <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={sortToggle}>Web Bookings</SortableTh>
@@ -139,7 +137,6 @@ export function EventsPage() {
                 <Td><span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span></Td>
                 <Td><span style={{ fontWeight: 600, fontSize: 13 }}>{ev.name}</span></Td>
                 <Td muted>{ev.official_name || "—"}</Td>
-                <Td muted>{ev.sub_company}</Td>
                 <Td muted>{ev.city}</Td>
                 <Td mono>{fmt.date(ev.event_date)}</Td>
                 <Td><span className={`badge badge-soft-${ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
@@ -211,14 +208,9 @@ export function EventsPage() {
               <Input value={modal.data.official_name || ""} onChange={(v) => setField("official_name", v)} placeholder="Official Name" />
             </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Sub-company">
-                <Select value={modal.data.sub_company} onChange={(v) => setField("sub_company", v)} options={SUB_COMPANIES} />
-              </FormField>
-              <FormField label="City">
-                <Input value={modal.data.city} onChange={(v) => setField("city", v)} placeholder="London" />
-              </FormField>
-            </div>
+            <FormField label="City">
+              <Input value={modal.data.city} onChange={(v) => setField("city", v)} placeholder="London" />
+            </FormField>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Country">

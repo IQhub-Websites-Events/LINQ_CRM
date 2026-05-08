@@ -45,7 +45,6 @@ export function EventDetailDrawer({ eventId, onClose }) {
               <InfoItem label="Date"       value={fmt.date(event.event_date)} mono />
               {event.end_date && <InfoItem label="End Date" value={fmt.date(event.end_date)} mono />}
               <InfoItem label="City"        value={event.city} />
-              <InfoItem label="Sub-company" value={event.sub_company} />
               {event.venue && <InfoItem label="Venue" value={event.venue} span />}
               <InfoItem label="Capacity" value={event.capacity?.toLocaleString()} mono />
               <InfoItem label="Sales Executive" value={event.sales_executive_name || "—"} />

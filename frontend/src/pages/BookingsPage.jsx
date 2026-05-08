@@ -82,7 +82,6 @@ export function BookingsPage({ navItem }) {
       <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
         {view === "table" ? (
           <BookingsTable
-            navItemId={navItem?.id}
             statusFilter={statusFilter}
             onTotalChange={setTableTotal}
           />

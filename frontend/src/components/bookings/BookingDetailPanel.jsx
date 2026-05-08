@@ -16,7 +16,7 @@ export function BookingDetailPanel({ booking, onClose }) {
   return (
     <>
       {/* Overlay / Dimmer */}
-      <div 
+      <div
         onClick={onClose}
         style={{
           position: "fixed",
@@ -26,11 +26,11 @@ export function BookingDetailPanel({ booking, onClose }) {
           opacity: 1,
           backdropFilter: "blur(1px)",
           transition: "opacity 0.3s ease",
-        }} 
+        }}
       />
 
       {/* Sliding Panel */}
-      <div 
+      <div
         style={{
           position: "fixed",
           top: 0,
@@ -57,7 +57,7 @@ export function BookingDetailPanel({ booking, onClose }) {
         </style>
 
         {/* Panel Header */}
-        <div 
+        <div
           style={{
             padding: "16px 24px",
             borderBottom: "1px solid #eee",
@@ -77,7 +77,7 @@ export function BookingDetailPanel({ booking, onClose }) {
             </h5>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button 
+            <button
               className="btn btn-light btn-sm"
               style={{ fontSize: 12, color: "#666", display: "flex", alignItems: "center", gap: 6 }}
               title="Print"
@@ -89,14 +89,14 @@ export function BookingDetailPanel({ booking, onClose }) {
               </svg>
               Print
             </button>
-            <button 
+            <button
               className="btn btn-light btn-sm"
               style={{ fontSize: 12, color: "#666" }}
               title="Edit"
             >
               Edit
             </button>
-            <button 
+            <button
               onClick={onClose}
               style={{
                 background: "none",
@@ -117,7 +117,7 @@ export function BookingDetailPanel({ booking, onClose }) {
         </div>
 
         {/* Panel Body */}
-        <div 
+        <div
           style={{
             flex: 1,
             overflowY: "auto",
@@ -141,7 +141,7 @@ export function BookingDetailPanel({ booking, onClose }) {
 
           {/* SECTION: DATES */}
           <PanelSection title="Dates">
-            <DataRow label="Request Date" value={fmt.date(booking.created_at)} />
+            <DataRow label="Booking Date" value={fmt.date(booking.created_at)} />
             <DataRow label="Invoice Date" value={fmt.date(booking.invoice_date || booking.created_at)} />
             <DataRow label="Payment Due" value={fmt.date(booking.payment_date)} />
           </PanelSection>
@@ -174,11 +174,11 @@ export function BookingDetailPanel({ booking, onClose }) {
 function PanelSection({ title, children }) {
   return (
     <div style={{ marginBottom: 30 }}>
-      <h6 style={{ 
-        fontSize: 11, 
-        fontWeight: 700, 
-        color: "#adb5bd", 
-        textTransform: "uppercase", 
+      <h6 style={{
+        fontSize: 11,
+        fontWeight: 700,
+        color: "#adb5bd",
+        textTransform: "uppercase",
         letterSpacing: ".5px",
         marginBottom: 12,
         paddingBottom: 8,
@@ -195,9 +195,9 @@ function PanelSection({ title, children }) {
 
 function DataRow({ label, value, children }) {
   return (
-    <div style={{ 
-      display: "flex", 
-      alignItems: "center", 
+    <div style={{
+      display: "flex",
+      alignItems: "center",
       padding: "10px 0",
       borderBottom: "1px solid #f8fafc"
     }}>

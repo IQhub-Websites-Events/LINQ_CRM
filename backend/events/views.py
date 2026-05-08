@@ -49,6 +49,19 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
         ser.is_valid(raise_exception=True)
         return Response(EventListSerializer(ser.save()).data)
 
+    @action(detail=False, methods=["get"])
+    def years(self, request):
+        """GET /api/events/years/ — distinct years from event_date, sorted descending."""
+        from django.db.models.functions import ExtractYear
+        qs = self.get_queryset().filter(event_date__isnull=False)
+        years = (
+            qs.annotate(year=ExtractYear("event_date"))
+            .values_list("year", flat=True)
+            .distinct()
+            .order_by("-year")
+        )
+        return Response(list(years))
+
     @action(detail=True, methods=["get"])
     def stats(self, request, pk=None):
         """GET /api/events/{id}/stats/ — booking and revenue breakdown."""

@@ -7,6 +7,9 @@ export const eventsApi = {
   get: (id) =>
     client.get(`/events/${id}/`).then((r) => r.data),
 
+  years: () =>
+    client.get("/events/years/").then((r) => r.data),
+
   stats: (id) =>
     client.get(`/events/${id}/stats/`).then((r) => r.data),
 

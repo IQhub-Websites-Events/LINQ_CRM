@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { teamsApi, eventsApi, usersApi } from '../../api';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -8,48 +8,33 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
   const [teams, setTeams] = useState([]);
   const [events, setEvents] = useState([]);
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    first_name: '',
-    last_name: '',
-    password: '',
-    confirm_password: '',
-    role: 'sales',
-    status: 'active',
-    team_id: '',
-    assigned_event_ids: []
+    username: '', email: '',
+    first_name: '', last_name: '',
+    password: '', confirm_password: '',
+    role: 'sales', status: 'active',
+    team_id: '', assigned_event_ids: [],
   });
 
   useEffect(() => {
-    if (isOpen) {
-      fetchOptions();
-      if (user) {
-        setFormData({
-          username: user.username || '',
-          email: user.email || '',
-          first_name: user.first_name || '',
-          last_name: user.last_name || '',
-          password: '',
-          confirm_password: '',
-          role: user.role || 'sales',
-          status: user.status || 'active',
-          team_id: user.team_id || '',
-          assigned_event_ids: user.assigned_events?.map(e => e.id) || []
-        });
-      } else {
-        setFormData({
-          username: '',
-          email: '',
-          first_name: '',
-          last_name: '',
-          password: '',
-          confirm_password: '',
-          role: 'sales',
-          status: 'active',
-          team_id: '',
-          assigned_event_ids: []
-        });
-      }
+    if (!isOpen) return;
+    fetchOptions();
+    if (user) {
+      setFormData({
+        username: user.username || '', email: user.email || '',
+        first_name: user.first_name || '', last_name: user.last_name || '',
+        password: '', confirm_password: '',
+        role: user.role || 'sales', status: user.status || 'active',
+        team_id: user.team_id || '',
+        assigned_event_ids: user.assigned_events?.map((e) => e.id) || [],
+      });
+    } else {
+      setFormData({
+        username: '', email: '',
+        first_name: '', last_name: '',
+        password: '', confirm_password: '',
+        role: 'sales', status: 'active',
+        team_id: '', assigned_event_ids: [],
+      });
     }
   }, [isOpen, user]);
 
@@ -57,11 +42,11 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
     try {
       const [teamsRes, eventsRes] = await Promise.all([
         teamsApi.list(),
-        eventsApi.list({ limit: 1000 })
+        eventsApi.list({ limit: 1000 }),
       ]);
       setTeams(teamsRes.results || teamsRes);
       setEvents(eventsRes.results || eventsRes);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load form options');
     }
   };
@@ -72,7 +57,6 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
       toast.error('Passwords do not match');
       return;
     }
-
     setLoading(true);
     try {
       const payload = { ...formData };
@@ -82,198 +66,251 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
 
       if (user) {
         await usersApi.update(user.id, payload);
-        toast.success('User updated successfully');
+        toast.success('User updated');
       } else {
         await usersApi.create(payload);
-        toast.success('User created successfully');
+        toast.success('User created');
       }
       onSave();
       onClose();
-    } catch (error) {
-      const msg = error.response?.data?.detail || error.response?.data?.username?.[0] || 'Failed to save user';
-      toast.error(msg);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || err.response?.data?.username?.[0] || 'Failed to save user');
     } finally {
       setLoading(false);
     }
   };
 
+  const set = (field, value) => setFormData((f) => ({ ...f, [field]: value }));
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
-      <div className="modal-dialog modal-lg modal-dialog-centered">
-        <div className="modal-content border-0">
-          <div className="modal-header p-3 bg-soft-info">
-            <h5 className="modal-title">{user ? 'Edit User' : 'Create New User'}</h5>
-            <button type="button" className="btn-close" onClick={onClose} disabled={loading}></button>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <div className="modal-body p-4">
-              <div className="row g-4">
-                {/* Section 1: Basic Info */}
-                <div className="col-12">
-                  <h6 className="text-muted text-uppercase fw-semibold mb-3" style={{ fontSize: '11px' }}>
-                    Section 1 — Account Information
-                  </h6>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label">First Name</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        required 
-                        value={formData.first_name}
-                        onChange={e => setFormData({ ...formData, first_name: e.target.value })}
-                        placeholder="Enter first name"
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Last Name</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        required 
-                        value={formData.last_name}
-                        onChange={e => setFormData({ ...formData, last_name: e.target.value })}
-                        placeholder="Enter last name"
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Username</label>
-                      <input 
-                        type="text" 
-                        className="form-control" 
-                        required 
-                        value={formData.username}
-                        onChange={e => setFormData({ ...formData, username: e.target.value })}
-                        placeholder="j.doe"
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Email Address</label>
-                      <input 
-                        type="email" 
-                        className="form-control" 
-                        required 
-                        value={formData.email}
-                        onChange={e => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="john@linq.com"
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">{user ? 'New Password (Optional)' : 'Password'}</label>
-                      <input 
-                        type="password" 
-                        className="form-control" 
-                        required={!user}
-                        value={formData.password}
-                        onChange={e => setFormData({ ...formData, password: e.target.value })}
-                        placeholder="••••••••"
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Confirm Password</label>
-                      <input 
-                        type="password" 
-                        className="form-control" 
-                        required={!user && formData.password}
-                        value={formData.confirm_password}
-                        onChange={e => setFormData({ ...formData, confirm_password: e.target.value })}
-                        placeholder="••••••••"
-                      />
-                    </div>
-                  </div>
-                </div>
+    <div
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(15,12,8,0.55)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        width: '100%', maxWidth: 700,
+        maxHeight: 'calc(100vh - 48px)',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 14,
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 80px rgba(20,20,15,0.18)',
+        overflow: 'hidden',
+      }}>
 
-                {/* Section 2: Organization */}
-                <div className="col-12">
-                  <h6 className="text-muted text-uppercase fw-semibold mb-3 mt-2" style={{ fontSize: '11px' }}>
-                    Section 2 — Organization & Role
-                  </h6>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label">Role</label>
-                      <select 
-                        className="form-select" 
-                        value={formData.role}
-                        onChange={e => setFormData({ ...formData, role: e.target.value })}
-                      >
-                        <option value="admin">Administrator</option>
-                        <option value="sales">Sales Executive</option>
-                        <option value="market_research">Market Research</option>
-                        <option value="spex">SpEx</option>
-                        <option value="operations">Operations</option>
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Team</label>
-                      <select 
-                        className="form-select" 
-                        value={formData.team_id}
-                        onChange={e => setFormData({ ...formData, team_id: e.target.value })}
-                      >
-                        <option value="">Unassigned</option>
-                        {teams.map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label">Status</label>
-                      <select 
-                        className="form-select" 
-                        value={formData.status}
-                        onChange={e => setFormData({ ...formData, status: e.target.value })}
-                      >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="suspended">Suspended</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Access */}
-                <div className="col-12">
-                  <h6 className="text-muted text-uppercase fw-semibold mb-3 mt-2" style={{ fontSize: '11px' }}>
-                    Section 3 — Assigned Events
-                  </h6>
-                  <div className="mb-3">
-                    <label className="form-label">Accessible Events</label>
-                    <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #e9ebec', borderRadius: '4px', padding: '10px' }}>
-                      {events.map(event => (
-                        <div key={event.id} className="form-check mb-2">
-                          <input 
-                            className="form-check-input" 
-                            type="checkbox" 
-                            id={`event-${event.id}`}
-                            checked={formData.assigned_event_ids.includes(event.id)}
-                            onChange={(e) => {
-                              const ids = e.target.checked 
-                                ? [...formData.assigned_event_ids, event.id]
-                                : formData.assigned_event_ids.filter(id => id !== event.id);
-                              setFormData({ ...formData, assigned_event_ids: ids });
-                            }}
-                          />
-                          <label className="form-check-label" htmlFor={`event-${event.id}`} style={{ fontSize: '12px' }}>
-                            <span className="fw-semibold">{event.event_code}</span> — {event.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-light" onClick={onClose} disabled={loading}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Processing...' : user ? 'Update User' : 'Create User'}
-              </button>
-            </div>
-          </form>
+        {/* Header */}
+        <div style={{
+          padding: '22px 32px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 24, fontWeight: 400, color: 'var(--text)' }}>
+            {user ? 'Edit user' : 'New user'}
+          </span>
+          <button
+            onClick={onClose} disabled={loading}
+            style={{
+              width: 32, height: 32, borderRadius: 7,
+              background: 'var(--surface-alt)', border: '1px solid var(--border)',
+              color: 'var(--text-dim)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            }}
+          >×</button>
         </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+
+            {/* Section 1 — Account */}
+            <FormSection title="Account" desc="Login credentials and personal identity.">
+              <Field label="First name *" span={3}>
+                <MInput value={formData.first_name} onChange={(v) => set('first_name', v)} required />
+              </Field>
+              <Field label="Last name *" span={3}>
+                <MInput value={formData.last_name} onChange={(v) => set('last_name', v)} required />
+              </Field>
+              <Field label="Username *" span={3}>
+                <MInput mono value={formData.username} onChange={(v) => set('username', v)} placeholder="j.doe" required />
+              </Field>
+              <Field label="Email *" span={3}>
+                <MInput type="email" value={formData.email} onChange={(v) => set('email', v)} placeholder="john@linq.com" required />
+              </Field>
+              <Field label={user ? 'New password (optional)' : 'Password *'} span={3}>
+                <MInput type="password" value={formData.password} onChange={(v) => set('password', v)} placeholder="••••••••" required={!user} />
+              </Field>
+              <Field label="Confirm password" span={3}>
+                <MInput type="password" value={formData.confirm_password} onChange={(v) => set('confirm_password', v)} placeholder="••••••••" required={!user && !!formData.password} />
+              </Field>
+            </FormSection>
+
+            {/* Section 2 — Organisation */}
+            <FormSection title="Organisation" desc="Role, team, and event access." last>
+              <Field label="Role" span={2}>
+                <MSelect value={formData.role} onChange={(v) => set('role', v)} options={[
+                  { value: 'admin', label: 'Administrator' },
+                  { value: 'sales', label: 'Sales Executive' },
+                  { value: 'market_research', label: 'Market Research' },
+                  { value: 'spex', label: 'SpEx' },
+                  { value: 'operations', label: 'Operations' },
+                ]} />
+              </Field>
+              <Field label="Team" span={2}>
+                <MSelect value={formData.team_id} onChange={(v) => set('team_id', v)} options={[
+                  { value: '', label: 'Unassigned' },
+                  ...teams.map((t) => ({ value: t.id, label: t.name })),
+                ]} />
+              </Field>
+              <Field label="Status" span={2}>
+                <MSelect value={formData.status} onChange={(v) => set('status', v)}
+                  options={['active', 'inactive', 'suspended']} />
+              </Field>
+
+              <Field label="Assigned Events" span={6}>
+                <div style={{
+                  maxHeight: 160, overflowY: 'auto',
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6,
+                }}>
+                  {events.length === 0
+                    ? <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>No events available</span>
+                    : events.map((event) => (
+                      <label key={event.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.assigned_event_ids.includes(event.id)}
+                          onChange={(e) => {
+                            const ids = e.target.checked
+                              ? [...formData.assigned_event_ids, event.id]
+                              : formData.assigned_event_ids.filter((id) => id !== event.id);
+                            set('assigned_event_ids', ids);
+                          }}
+                          style={{ accentColor: 'var(--accent)', width: 13, height: 13, flexShrink: 0 }}
+                        />
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent)', fontWeight: 500 }}>{event.event_code}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>— {event.name}</span>
+                      </label>
+                    ))
+                  }
+                </div>
+              </Field>
+            </FormSection>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            padding: '14px 32px',
+            background: 'var(--surface-alt)', borderTop: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10,
+            flexShrink: 0,
+          }}>
+            <button type="button" onClick={onClose} disabled={loading} style={ghostBtn}>Cancel</button>
+            <button type="submit" disabled={loading} style={primaryBtn}>
+              {loading ? (user ? 'Updating…' : 'Creating…') : (user ? 'Save changes' : 'Create user')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
+
+
+/* ─── Layout helpers ─── */
+
+function FormSection({ title, desc, children, last }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: '180px 1fr', gap: 28,
+      paddingBottom: 24, marginBottom: last ? 0 : 24,
+      borderBottom: last ? 'none' : '1px solid var(--border)',
+    }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5 }}>{desc}</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14, alignContent: 'start' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, span = 6, children }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5, gridColumn: `span ${span}` }}>
+      <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 500, letterSpacing: '0.02em' }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function MInput({ value, onChange, type = 'text', mono, readOnly, placeholder, required }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      type={type} value={value ?? ''} readOnly={readOnly}
+      placeholder={placeholder} required={required}
+      onChange={(e) => onChange?.(e.target.value)}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      style={{
+        height: 36, padding: '0 12px',
+        border: `1px solid ${focused ? 'var(--accent)' : 'var(--border)'}`,
+        borderRadius: 8, background: readOnly ? 'var(--surface-alt)' : 'var(--surface)',
+        color: 'var(--text)', fontSize: 13,
+        fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
+        outline: 'none', width: '100%',
+        boxShadow: focused ? '0 0 0 3px var(--accent-soft)' : 'none',
+        transition: 'border-color .15s, box-shadow .15s',
+      }}
+    />
+  );
+}
+
+function MSelect({ value, onChange, options }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <select
+      value={value ?? ''} onChange={(e) => onChange?.(e.target.value)}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      style={{
+        height: 36, padding: '0 28px 0 12px',
+        border: `1px solid ${focused ? 'var(--accent)' : 'var(--border)'}`,
+        borderRadius: 8, background: 'var(--surface)', color: 'var(--text)',
+        fontSize: 13, fontFamily: 'var(--font-sans)',
+        outline: 'none', width: '100%', appearance: 'none', cursor: 'pointer',
+        boxShadow: focused ? '0 0 0 3px var(--accent-soft)' : 'none',
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5853' stroke-width='1.3' fill='none'/%3E%3C/svg%3E\")",
+        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+        transition: 'border-color .15s, box-shadow .15s',
+      }}
+    >
+      {options.map((o) => {
+        const val = typeof o === 'string' ? o : o.value;
+        const lbl = typeof o === 'string' ? o : o.label;
+        return <option key={val} value={val}>{lbl || '(none)'}</option>;
+      })}
+    </select>
+  );
+}
+
+const ghostBtn = {
+  background: 'var(--surface)', border: '1px solid var(--border)',
+  color: 'var(--text)', fontSize: 12, fontWeight: 500,
+  padding: '7px 14px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit',
+};
+
+const primaryBtn = {
+  background: 'var(--accent)', border: 'none', color: '#fff',
+  fontSize: 12, fontWeight: 500, padding: '7px 14px', borderRadius: 7,
+  cursor: 'pointer', fontFamily: 'inherit',
+};

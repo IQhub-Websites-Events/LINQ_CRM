@@ -4,48 +4,83 @@ from companies.serializers import CompanyMiniSerializer
 
 
 class BookDelegateInlineSerializer(serializers.ModelSerializer):
-    full_name       = serializers.ReadOnlyField()
-    payment_status  = serializers.CharField(source="invoice.payment_status", read_only=True)
-    company_display = serializers.ReadOnlyField()
+    full_name                  = serializers.ReadOnlyField()
+    payment_status             = serializers.CharField(source="invoice.payment_status", read_only=True)
+    company_display            = serializers.ReadOnlyField()
+    effective_payment_status   = serializers.SerializerMethodField()
+    effective_payment_type     = serializers.SerializerMethodField()
+    effective_payment_date     = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
         fields = [
             "id", "first_name", "last_name", "full_name",
             "email", "phone_number", "position",
+            "ticket_package", "sponsorship_level",
             "company_display", "attendance", "payment_status",
-            "dietary_requirements",
+            "dietary_requirements", "notes",
+            "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "effective_payment_status", "effective_payment_type", "effective_payment_date",
         ]
+
+    def get_effective_payment_status(self, obj):
+        return obj.delegate_payment_status or obj.invoice.payment_status
+
+    def get_effective_payment_type(self, obj):
+        return obj.delegate_payment_type or obj.invoice.payment_type
+
+    def get_effective_payment_date(self, obj):
+        val = obj.delegate_payment_date or obj.invoice.payment_date
+        return str(val) if val else None
 
 
 class BookDelegateListSerializer(serializers.ModelSerializer):
-    full_name       = serializers.ReadOnlyField()
-    payment_status  = serializers.CharField(source="invoice.payment_status", read_only=True)
-    payment_date    = serializers.DateField(source="invoice.payment_date",   read_only=True)
-    invoice_number  = serializers.CharField(source="invoice.invoice_number", read_only=True)
-    book_event_id   = serializers.IntegerField(source="invoice.id", read_only=True)
-    invoice_date    = serializers.DateField(source="invoice.invoice_date", read_only=True)
-    booking_code    = serializers.CharField(source="invoice.booking_code", read_only=True)
-
-    currency        = serializers.CharField(source="invoice.currency", read_only=True)
-    delegate_count  = serializers.IntegerField(source="invoice.delegate_count", read_only=True)
-    paid_free       = serializers.CharField(source="invoice.paid_free", read_only=True)
-    add_ons         = serializers.CharField(source="invoice.add_ons", read_only=True)
-    reference       = serializers.CharField(source="invoice.reference", read_only=True)
-    event_name      = serializers.CharField(source="invoice.event_name", read_only=True)
+    full_name              = serializers.ReadOnlyField()
+    payment_status         = serializers.CharField(source="invoice.payment_status",  read_only=True)
+    payment_date           = serializers.DateField(source="invoice.payment_date",    read_only=True)
+    invoice_number         = serializers.CharField(source="invoice.invoice_number",  read_only=True)
+    book_event_id          = serializers.IntegerField(source="invoice.id",           read_only=True)
+    invoice_date           = serializers.DateField(source="invoice.invoice_date",    read_only=True)
+    booking_code           = serializers.CharField(source="invoice.booking_code",    read_only=True)
+    currency               = serializers.CharField(source="invoice.currency",        read_only=True)
+    discount               = serializers.DecimalField(source="invoice.discount", max_digits=10, decimal_places=2, read_only=True)
+    discount_code          = serializers.CharField(source="invoice.discount_code",   read_only=True)
+    pre_tax_amount         = serializers.DecimalField(source="invoice.pre_tax_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
+    tax_amount             = serializers.DecimalField(source="invoice.tax_amount",   max_digits=12, decimal_places=2, read_only=True, allow_null=True)
+    total_amount           = serializers.DecimalField(source="invoice.total_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
+    add_ons_total_amount   = serializers.DecimalField(source="invoice.add_ons_total_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
+    delegate_count         = serializers.IntegerField(source="invoice.delegate_count", read_only=True)
+    paid_free              = serializers.CharField(source="invoice.paid_free",       read_only=True)
+    add_ons                = serializers.CharField(source="invoice.add_ons",         read_only=True)
+    reference              = serializers.CharField(source="invoice.reference",       read_only=True)
+    event_name             = serializers.CharField(source="invoice.event_name",      read_only=True)
+    ticket_tier            = serializers.CharField(source="invoice.ticket_tier",     read_only=True)
+    source                 = serializers.CharField(source="invoice.source",          read_only=True)
     accounts_contact_email = serializers.EmailField(source="invoice.accounts_contact_email", read_only=True)
-    sales_executive_name = serializers.SerializerMethodField()
-    company_display = serializers.ReadOnlyField()
+    sales_executive_name   = serializers.SerializerMethodField()
+    team_leader_name       = serializers.SerializerMethodField()
+    company_display        = serializers.ReadOnlyField()
+    effective_payment_status = serializers.SerializerMethodField()
+    effective_payment_type   = serializers.SerializerMethodField()
+    effective_payment_date   = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
         fields = [
             "id", "book_event_id", "invoice_number", "event_code", "booking_code",
             "invoice_date", "first_name", "last_name", "full_name",
-            "email", "phone_number", "position", "delegate_number",
-            "company_display", "attendance", "payment_status", "payment_date",
-            "currency", "delegate_count", "sales_executive_name",
-            "paid_free", "add_ons", "reference", "event_name", "accounts_contact_email",
+            "email", "phone_number", "position",
+            "ticket_package", "sponsorship_level",
+            "delegate_number", "company_display",
+            "attendance", "payment_status", "payment_date",
+            "currency", "discount", "discount_code",
+            "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
+            "delegate_count", "ticket_tier",
+            "sales_executive_name", "team_leader_name",
+            "paid_free", "add_ons", "reference",
+            "event_name", "accounts_contact_email", "source",
+            "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "effective_payment_status", "effective_payment_type", "effective_payment_date",
             "created_at", "updated_at",
         ]
 
@@ -54,6 +89,22 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
             u = obj.invoice.sales_executive
             return u.get_full_name() or u.username
         return None
+
+    def get_team_leader_name(self, obj):
+        if obj.invoice.team_leader_id:
+            u = obj.invoice.team_leader
+            return u.get_full_name() or u.username
+        return None
+
+    def get_effective_payment_status(self, obj):
+        return obj.delegate_payment_status or obj.invoice.payment_status
+
+    def get_effective_payment_type(self, obj):
+        return obj.delegate_payment_type or obj.invoice.payment_type
+
+    def get_effective_payment_date(self, obj):
+        val = obj.delegate_payment_date or obj.invoice.payment_date
+        return str(val) if val else None
 
 
 class BookDelegateDetailSerializer(serializers.ModelSerializer):
@@ -64,6 +115,9 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
     company_display = serializers.ReadOnlyField()
     company_detail  = CompanyMiniSerializer(source="company", read_only=True)
     event_name      = serializers.SerializerMethodField()
+    effective_payment_status = serializers.SerializerMethodField()
+    effective_payment_type   = serializers.SerializerMethodField()
+    effective_payment_date   = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
@@ -71,9 +125,12 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
             "id", "invoice_number", "event_code", "event_name",
             "first_name", "last_name", "full_name",
             "email", "phone_number", "position",
+            "ticket_package", "sponsorship_level",
             "company", "company_detail", "company_name_raw", "company_display",
             "attendance", "payment_status", "payment_date",
             "dietary_requirements", "notes",
+            "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "effective_payment_status", "effective_payment_type", "effective_payment_date",
             "created_at", "updated_at",
         ]
 
@@ -84,6 +141,16 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
         except Event.DoesNotExist:
             return ""
 
+    def get_effective_payment_status(self, obj):
+        return obj.delegate_payment_status or obj.invoice.payment_status
+
+    def get_effective_payment_type(self, obj):
+        return obj.delegate_payment_type or obj.invoice.payment_type
+
+    def get_effective_payment_date(self, obj):
+        val = obj.delegate_payment_date or obj.invoice.payment_date
+        return str(val) if val else None
+
 
 class BookDelegateWriteSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(write_only=True)
@@ -93,7 +160,9 @@ class BookDelegateWriteSerializer(serializers.ModelSerializer):
         fields = [
             "invoice_number", "event_code",
             "first_name", "last_name", "email", "phone_number", "position",
+            "ticket_package", "sponsorship_level",
             "company", "attendance", "dietary_requirements", "notes",
+            "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
         ]
 
     def validate_invoice_number(self, value):

@@ -7,38 +7,38 @@ const Svg = ({ size = 14, children }) => (
   </svg>
 );
 
-const ReceiptIcon  = () => <Svg><path d="M2 1h10a1 1 0 011 1v11l-2-1-2 1-2-1-2 1-2-1V2a1 1 0 011-1z"/><path d="M4 5h6M4 8h4"/></Svg>;
-const CalendarIcon = () => <Svg><rect x="1" y="2" width="12" height="11" rx="1.5"/><path d="M9 1v3M5 1v3M1 6h12"/></Svg>;
-const BuildingIcon = () => <Svg><path d="M2 13V4a1 1 0 011-1h8a1 1 0 011 1v9M2 13h10M2 13H1M12 13h1"/><path d="M5 7h1M8 7h1M5 10h1M8 10h1"/></Svg>;
-const ChartIcon    = () => <Svg><rect x="1" y="8" width="3" height="5"/><rect x="5.5" y="5" width="3" height="8"/><rect x="10" y="2" width="3" height="11"/></Svg>;
-const UsersIcon    = () => <Svg><path d="M9 12v-1a3 3 0 00-3-3H4a3 3 0 00-3 3v1"/><circle cx="5.5" cy="4" r="2.5"/><path d="M12 12v-1a3 3 0 00-2-2.5M9.5 1.5a2.5 2.5 0 010 5"/></Svg>;
+const ReceiptIcon = () => <Svg><path d="M2 1h10a1 1 0 011 1v11l-2-1-2 1-2-1-2 1-2-1V2a1 1 0 011-1z" /><path d="M4 5h6M4 8h4" /></Svg>;
+const CalendarIcon = () => <Svg><rect x="1" y="2" width="12" height="11" rx="1.5" /><path d="M9 1v3M5 1v3M1 6h12" /></Svg>;
+const BuildingIcon = () => <Svg><path d="M2 13V4a1 1 0 011-1h8a1 1 0 011 1v9M2 13h10M2 13H1M12 13h1" /><path d="M5 7h1M8 7h1M5 10h1M8 10h1" /></Svg>;
+const ChartIcon = () => <Svg><rect x="1" y="8" width="3" height="5" /><rect x="5.5" y="5" width="3" height="8" /><rect x="10" y="2" width="3" height="11" /></Svg>;
+const UsersIcon = () => <Svg><path d="M9 12v-1a3 3 0 00-3-3H4a3 3 0 00-3 3v1" /><circle cx="5.5" cy="4" r="2.5" /><path d="M12 12v-1a3 3 0 00-2-2.5M9.5 1.5a2.5 2.5 0 010 5" /></Svg>;
+const WebhookIcon = () => <Svg><path d="M2 7c0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5" /><path d="M7 7l-2 4h4l-2 4" /></Svg>;
 
 const NAV = [
   {
     section: "Pipeline",
     items: [
-      { id: "bookings", label: "Bookings", Icon: ReceiptIcon, badgeKey: "pending" },
+      { id: "bookings", label: "Bookings", Icon: ReceiptIcon },
     ],
   },
   {
     section: "Catalogue",
     items: [
-      { id: "events",    label: "Events",    Icon: CalendarIcon },
-      { id: "companies", label: "Companies", Icon: BuildingIcon },
+      { id: "events", label: "Events", Icon: CalendarIcon },
     ],
   },
   {
     section: "Insights",
     items: [
-      { id: "reports", label: "Reports",    Icon: ChartIcon },
-      { id: "team",    label: "Team Stats", Icon: ChartIcon },
+      { id: "reports", label: "Reports", Icon: ChartIcon },
     ],
   },
 ];
 
 const ADMIN_NAV = [
-  { id: "users",            label: "Users",  Icon: UsersIcon },
-  { id: "teams-management", label: "Teams",  Icon: UsersIcon },
+  { id: "users", label: "Users", Icon: UsersIcon },
+  { id: "teams-management", label: "Teams", Icon: UsersIcon },
+  { id: "webhook-logs", label: "Webhooks", Icon: WebhookIcon },
 ];
 
 const sectionLabel = {
@@ -135,7 +135,7 @@ export function Sidebar({ current, onNav, badges = {} }) {
           cursor: "pointer", padding: 4, display: "flex",
         }}>
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 16 16">
-            <path d="M10 14H3a1 1 0 01-1-1V3a1 1 0 011-1h7M11 11l3-3-3-3M14 8H6"/>
+            <path d="M10 14H3a1 1 0 01-1-1V3a1 1 0 011-1h7M11 11l3-3-3-3M14 8H6" />
           </svg>
         </button>
       </div>

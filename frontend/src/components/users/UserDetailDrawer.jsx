@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { usersApi } from '../../api';
+import { Avatar } from '../ui/Avatar';
 
 export function UserDetailDrawer({ user, isOpen, onClose }) {
   const [logs, setLogs] = useState([]);
@@ -7,9 +8,7 @@ export function UserDetailDrawer({ user, isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && user) {
-      fetchDetails();
-    }
+    if (isOpen && user) fetchDetails();
   }, [isOpen, user]);
 
   const fetchDetails = async () => {
@@ -17,125 +16,205 @@ export function UserDetailDrawer({ user, isOpen, onClose }) {
     try {
       const [logsRes, statsRes] = await Promise.all([
         usersApi.logs(user.id),
-        usersApi.eventsStats(user.id)
+        usersApi.eventsStats(user.id),
       ]);
       setLogs(logsRes);
       setStats(statsRes);
-    } catch (error) {
-      console.error('Failed to fetch user details');
-    } finally {
+    } catch {}
+    finally {
       setLoading(false);
     }
   };
 
-  const getInitials = (name) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
-
   if (!isOpen || !user) return null;
+
+  const statusColors = {
+    active: { bg: 'var(--success-soft)', c: 'var(--success)', dot: 'var(--success)' },
+    inactive: { bg: 'var(--surface-alt)', c: 'var(--text-dim)', dot: 'var(--text-faint)' },
+    suspended: { bg: 'var(--danger-soft)', c: 'var(--danger)', dot: 'var(--danger)' },
+  };
+  const sc = statusColors[user.status || 'active'] || statusColors.inactive;
 
   return (
     <>
-      <div 
-        className="drawer-backdrop" 
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1040 }}
+      <div
         onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(15,12,8,0.4)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 1040,
+        }}
       />
-      <div className="user-detail-drawer" style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: '450px',
-        background: '#fff', zIndex: 1050, boxShadow: '-5px 0 25px rgba(0,0,0,0.1)',
-        display: 'flex', flexDirection: 'column', animation: 'slideInRight 0.3s ease-out'
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 440,
+        background: 'var(--surface)',
+        zIndex: 1050,
+        boxShadow: '-10px 0 40px rgba(0,0,0,0.12)',
+        display: 'flex', flexDirection: 'column',
+        animation: 'slideInRight 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
       }}>
-        <div className="p-4 border-bottom" style={{ background: 'var(--vz-primary)', color: '#fff' }}>
-          <div className="d-flex justify-content-between align-items-start mb-3">
-            <h5 className="modal-title text-white">User Profile</h5>
-            <button type="button" className="btn-close btn-close-white" onClick={onClose}></button>
-          </div>
-          <div className="d-flex align-items-center gap-3">
-             <div className="avatar-initials" style={{ width: '64px', height: '64px', fontSize: '24px', background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-              {getInitials(user.full_name || user.username)}
-            </div>
-            <div>
-              <h5 className="mb-1 text-white">{user.full_name || user.username}</h5>
-              <div style={{ fontSize: '13px', opacity: 0.8 }}>@{user.username} • {user.role}</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto p-4">
-          <section className="mb-4">
-            <h6 className="text-muted text-uppercase fw-semibold mb-3" style={{ fontSize: '11px' }}>Basic Information</h6>
-            <div className="d-flex flex-column gap-2">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted small">Email</span>
-                <span className="small fw-medium">{user.email || '—'}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted small">Team</span>
-                <span className="small fw-medium">{user.team_name || 'Unassigned'}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted small">Status</span>
-                <span className={`badge ${user.status === 'active' ? 'badge-soft-success' : 'badge-soft-danger'}`}>
-                  {user.status || 'active'}
-                </span>
-              </div>
-               <div className="d-flex justify-content-between">
-                <span className="text-muted small">Joined</span>
-                <span className="small fw-medium">{new Date(user.date_joined).toLocaleDateString()}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="mb-4">
-            <h6 className="text-muted text-uppercase fw-semibold mb-3" style={{ fontSize: '11px' }}>Assigned Events ({user.assigned_events_count})</h6>
-            {stats.length === 0 ? (
-              <div className="text-center py-3 bg-light rounded text-muted small">No events assigned</div>
-            ) : (
-              <div className="d-flex flex-column gap-2">
-                {stats.map(stat => (
-                  <div key={stat.event_code} className="p-2 border rounded d-flex justify-content-between align-items-center">
-                    <div>
-                      <div className="fw-semibold small">{stat.event_code}</div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>{stat.name}</div>
-                    </div>
-                    <span className="badge badge-soft-info">{stat.event_status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="mb-4">
-            <h6 className="text-muted text-uppercase fw-semibold mb-3" style={{ fontSize: '11px' }}>Recent Activity</h6>
-            {loading ? <div className="small text-muted">Loading logs...</div> : (
-              <div className="timeline" style={{ position: 'relative', paddingLeft: '20px' }}>
-                <div style={{ position: 'absolute', left: '4px', top: 0, bottom: 0, width: '2px', background: '#e9ebec' }}></div>
-                {logs.length === 0 ? <div className="small text-muted">No activity recorded</div> : logs.map(log => (
-                  <div key={log.id} className="mb-3" style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', left: '-20px', top: '4px', width: '10px', height: '10px', borderRadius: '50%', background: 'var(--vz-primary)', border: '2px solid #fff' }}></div>
-                    <div className="fw-semibold small">{log.action}</div>
-                    <div className="text-muted" style={{ fontSize: '11px' }}>{log.details}</div>
-                    <div className="text-muted" style={{ fontSize: '10px' }}>{new Date(log.created_at).toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-        
-        <div className="p-3 border-top bg-light">
-           <button className="btn btn-outline-danger w-100 btn-sm" onClick={onClose}>Close Overview</button>
-        </div>
-      </div>
-      <style>
-        {`
+        <style>{`
           @keyframes slideInRight {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
           }
-        `}
-      </style>
+        `}</style>
+
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--surface-alt)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 500 }}>
+              User Profile
+            </span>
+            <button
+              onClick={onClose}
+              style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: 'var(--text-dim)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+              }}
+            >×</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <Avatar name={user.full_name || user.username} size={52} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 20, fontWeight: 400, color: 'var(--text)', lineHeight: 1.2, marginBottom: 4 }}>
+                {user.full_name || user.username}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>@{user.username}</span>
+                <span style={{ margin: '0 5px', color: 'var(--border-strong)' }}>·</span>
+                <span style={{ textTransform: 'capitalize' }}>{user.role?.replace('_', ' ') || '—'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+
+          {/* Basic info */}
+          <DrawerSection title="Basic Information">
+            <InfoRow label="Email" value={user.email || '—'} mono />
+            <InfoRow label="Team" value={user.team_name || 'Unassigned'} />
+            <InfoRow label="Status">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 6, background: sc.bg, color: sc.c }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: sc.dot }} />
+                {user.status || 'active'}
+              </span>
+            </InfoRow>
+            <InfoRow label="Joined" value={user.date_joined ? new Date(user.date_joined).toLocaleDateString() : '—'} />
+          </DrawerSection>
+
+          {/* Assigned events */}
+          <DrawerSection title={`Assigned Events (${user.assigned_events_count ?? 0})`}>
+            {stats.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '8px 0' }}>No events assigned</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {stats.map((stat) => (
+                  <div key={stat.event_code} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    background: 'var(--surface-alt)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                  }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500, color: 'var(--accent)' }}>{stat.event_code}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{stat.name}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 6, background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+                      {stat.event_status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DrawerSection>
+
+          {/* Activity log */}
+          <DrawerSection title="Recent Activity" last>
+            {loading ? (
+              <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>Loading activity…</div>
+            ) : logs.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', padding: '8px 0' }}>No activity recorded</div>
+            ) : (
+              <div style={{ position: 'relative', paddingLeft: 16 }}>
+                <div style={{ position: 'absolute', left: 3, top: 0, bottom: 0, width: 1, background: 'var(--border)' }} />
+                {logs.map((log) => (
+                  <div key={log.id} style={{ position: 'relative', marginBottom: 14 }}>
+                    <div style={{
+                      position: 'absolute', left: -17, top: 4,
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: 'var(--accent)', border: '2px solid var(--surface)',
+                    }} />
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>{log.action}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{log.details}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>{new Date(log.created_at).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DrawerSection>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface-alt)', flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%', padding: '7px 0',
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 7, fontSize: 12, fontWeight: 500,
+              color: 'var(--text-dim)', cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </>
+  );
+}
+
+
+function DrawerSection({ title, children, last }) {
+  return (
+    <div style={{ marginBottom: last ? 0 : 24 }}>
+      <div style={{
+        fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+        letterSpacing: '0.05em', color: 'var(--text-faint)',
+        marginBottom: 10,
+        paddingBottom: 6, borderBottom: '1px solid var(--border)',
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({ label, value, mono, children }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '7px 0', borderBottom: '1px solid var(--border)',
+    }}>
+      <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{label}</span>
+      {children || (
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', fontFamily: mono ? 'var(--font-mono)' : 'inherit' }}>
+          {value || '—'}
+        </span>
+      )}
+    </div>
   );
 }

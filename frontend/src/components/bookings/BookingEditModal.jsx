@@ -1,10 +1,38 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { Avatar } from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
+import { SourceBadge } from "../ui/SourceBadge";
 import { fmt } from "../../utils/helpers";
 
+const COLS = [
+  { key: "delegate_payment_status", label: "Pmt Status",   width: 180, type: "select", options: ["", "Pending", "Paid", "Cancelled", "Refunded", "Credit Pending (Free)", "Credit Pending (Paid)", "Credit Transferred", "Paid (Transferred)"] },
+  { key: "_booking_code",           label: "Booking Code", width: 130, invoiceLevel: true },
+  { key: "_request_date",           label: "Request Date", width: 130, type: "date",   invoiceLevel: true, readOnly: true },
+  { key: "_invoice_date",           label: "Invoice Date", width: 130, type: "date",   invoiceLevel: true },
+  { key: "_full_name",              label: "Name",         width: 160, virtual: "name" },
+  { key: "position",                label: "Job Title",    width: 180 },
+  { key: "_company_name",           label: "Company",      width: 180, invoiceLevel: true },
+  { key: "email",                   label: "Email",        width: 240, type: "email" },
+  { key: "phone_number",            label: "Direct Line",  width: 160, mono: true },
+  { key: "attendance",              label: "Attendance",   width: 80,  type: "checkbox" },
+  { key: "delegate_payment_type",   label: "Pmt Type",     width: 140, type: "select", options: ["", "Bank", "Stripe"] },
+  { key: "delegate_payment_date",   label: "Pmt Date",     width: 150, type: "date" },
+];
+
+const BLANK_DELEGATE = () => ({
+  first_name: "", last_name: "",
+  email: "", phone_number: "", position: "",
+  job_title_legacy: "",
+  ticket_package: "", sponsorship_level: "",
+  attendance: "Pending", dietary_requirements: "", notes: "",
+  delegate_payment_status: null, delegate_payment_type: null, delegate_payment_date: null,
+});
+
+/* ═══════════════════════════════════════════════════════════
+   BookingEditModal
+═══════════════════════════════════════════════════════════ */
 export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -16,17 +44,57 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
     if (!invoiceId) return;
     setLoading(true);
     try {
-      const [inv, evs] = await Promise.all([
-        invoicesApi.get(invoiceId),
-        eventsApi.list({ page_size: 100 }),
-      ]);
+      const inv = await invoicesApi.get(invoiceId);
       setForm({
-        department: "", city: "", country: "", dietary_requirements: "",
-        amount: "", currency: "USD", tax: "", notes: "",
-        ...inv,
+        id:             inv.id,
+        invoice_number: inv.invoice_number || "",
+        event_code:     inv.event_code     || "",
+        event_name:     inv.event_name     || "",
+        booking_code:   inv.booking_code   || "",
+        invoice_date:   inv.invoice_date   || null,
+        paid_free:      inv.paid_free      || "Paid",
+        payment_status:       inv.payment_status       || "Pending",
+        payment_type:         inv.payment_type         || "",
+        payment_date:         inv.payment_date         || null,
+        payment_due_date:     inv.payment_due_date     || null,
+        reference:            inv.reference            || "",
+        add_ons:              inv.add_ons              || "",
+        currency:             inv.currency             || "USD",
+        discount:             inv.discount             ?? "",
+        discount_code:        inv.discount_code        || "",
+        pre_tax_amount:       inv.pre_tax_amount       ?? "",
+        tax_amount:           inv.tax_amount           ?? "",
+        total_amount:         inv.total_amount         ?? "",
+        add_ons_total_amount: inv.add_ons_total_amount ?? "",
+        company_name:           inv.company_name           || "",
+        accounts_contact_email: inv.accounts_contact_email || "",
+        sales_executive: inv.sales_executive != null ? String(inv.sales_executive) : "",
+        team_leader:     inv.team_leader     != null ? String(inv.team_leader)     : "",
+        source:    inv.source    || "manual",
+        form_name: inv.form_name || "",
+        form_url:  inv.form_url  || "",
+        notes:     inv.notes     || "",
+        delegates: (inv.delegates || []).map(d => ({
+          id:                      d.id,
+          first_name:              d.first_name              || "",
+          last_name:               d.last_name               || "",
+          email:                   d.email                   || "",
+          phone_number:            d.phone_number            || "",
+          position:                d.position                || "",
+          job_title_legacy:        "",
+          ticket_package:          d.ticket_package          || "",
+          sponsorship_level:       d.sponsorship_level       || "",
+          attendance:              d.attendance              || "Pending",
+          dietary_requirements:    d.dietary_requirements    || "",
+          notes:                   d.notes                   || "",
+          delegate_payment_status: d.delegate_payment_status ?? null,
+          delegate_payment_type:   d.delegate_payment_type   ?? null,
+          delegate_payment_date:   d.delegate_payment_date   ?? null,
+        })),
+        created_at: inv.created_at,
+        updated_at: inv.updated_at,
       });
-      setEvents(evs.results || []);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load booking details");
       onClose();
     } finally {
@@ -36,11 +104,29 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    eventsApi.list({ page_size: 500 }).then(r => setEvents(r.results || [])).catch(() => {});
+  }, []);
+
+  const set = (f, v) => setForm(p => ({ ...p, [f]: v }));
+  const setDelegate = (idx, field, value) => setForm(p => {
+    const next = [...p.delegates];
+    next[idx] = { ...next[idx], [field]: value };
+    return { ...p, delegates: next };
+  });
+  const addDelegate = () => setForm(p => ({ ...p, delegates: [...p.delegates, BLANK_DELEGATE()] }));
+  const removeDelegate = idx => setForm(p => ({ ...p, delegates: p.delegates.filter((_, i) => i !== idx) }));
+
   const handleUpdate = async () => {
     setSaving(true);
     try {
-      await invoicesApi.update(form.id, form);
-      toast.success("Booking updated successfully");
+      const payload = { ...form };
+      if (payload.discount === "" || payload.discount === null) payload.discount = "0";
+      for (const f of ["pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount"]) {
+        if (payload[f] === "") payload[f] = null;
+      }
+      await invoicesApi.update(form.id, payload);
+      toast.success("Booking updated");
       onSaved();
       onClose();
     } catch (err) {
@@ -62,393 +148,468 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
     }
   };
 
-  const handleDelegateChange = (idx, field, value) => {
-    const next = [...form.delegates];
-    next[idx] = { ...next[idx], [field]: value };
-    setForm((f) => ({ ...f, delegates: next }));
-  };
-
-  const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
-
   if (!invoiceId || loading || !form) return null;
 
   const d0 = form.delegates?.[0] || {};
-  const delegateName = d0.full_name || `${d0.first_name || ""} ${d0.last_name || ""}`.trim() || "—";
-  const netTotal = form.amount && form.tax
-    ? (parseFloat(form.amount) * (1 - parseFloat(form.discount || 0) / 100) * (1 + parseFloat(form.tax) / 100)).toFixed(2)
-    : form.amount || "";
+  const leadName = [d0.first_name, d0.last_name].filter(Boolean).join(" ") || "—";
+
+  const invoiceCtx = {
+    request_date:     fmt.dateInput(form.created_at),
+    payment_due_date: form.payment_due_date,
+    company_name:     form.company_name,
+    paid_free:        form.paid_free,
+    invoice_date:     form.invoice_date,
+    booking_code:     form.booking_code,
+    payment_status:   form.payment_status,
+    payment_type:     form.payment_type,
+    payment_date:     form.payment_date,
+  };
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(15,12,8,0.55)",
-        backdropFilter: "blur(4px)",
-        zIndex: 1100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{
-        width: "100%",
-        maxWidth: 940,
-        maxHeight: "calc(100vh - 48px)",
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 14,
-        display: "flex",
-        flexDirection: "column",
-        boxShadow: "0 24px 80px rgba(20,20,15,0.18)",
-        overflow: "hidden",
-      }}>
+    <Overlay onClose={onClose}>
+      <div style={modalBox}>
 
-        {/* ── Modal header ── */}
-        <div style={{
-          padding: "22px 32px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          flexShrink: 0,
-        }}>
-          <Avatar name={delegateName} size={52} />
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <span style={{
-                fontFamily: "var(--font-serif)",
-                fontStyle: "italic",
-                fontSize: 26,
-                fontWeight: 400,
-                color: "var(--text)",
-              }}>
-                Edit booking
-              </span>
-              <StatusBadge status={form.payment_status} />
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", flexWrap: "wrap", gap: "0 6px" }}>
-              <span style={{ fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 500 }}>
-                {form.invoice_number}
-              </span>
-              <Sep />
-              <span>{delegateName}</span>
-              <Sep />
-              <span>{form.company_name || "—"}</span>
-              <Sep />
-              <span>{form.event_code || "—"}</span>
+        {/* ── HEADER ── */}
+        <div style={headerWrap}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <Avatar name={leadName} size={32} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                <span style={headerTitle}>Edit Booking</span>
+                <StatusBadge status={form.payment_status} />
+                <SourceBadge source={form.source} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
+                <span style={metaChip}>{form.invoice_number || "—"}</span>
+                <MetaDot />
+                <span style={metaText}>{form.event_code || "—"}</span>
+                <MetaDot />
+                <span style={metaText}>{leadName}</span>
+                <MetaDot />
+                <span style={metaText}>{form.company_name || "—"}</span>
+              </div>
             </div>
           </div>
-
-          <button
-            onClick={onClose}
-            style={{
-              width: 32, height: 32, borderRadius: 7,
-              background: "var(--surface-alt)",
-              border: "1px solid var(--border)",
-              color: "var(--text-dim)",
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18, lineHeight: 1,
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
+          <button onClick={onClose} style={closeBtn}>✕</button>
         </div>
 
-        {/* ── Modal body (scrolls) ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
-
-          {/* Section 1 — Booking */}
-          <FormSection
-            title="Booking"
-            desc="Which event and what kind of pass."
-          >
-            <Field label="Invoice number" span={2}>
-              <MInput mono value={form.invoice_number} onChange={(v) => set("invoice_number", v)} />
-            </Field>
-            <Field label="Booking code" span={2}>
-              <MInput value={form.booking_code} onChange={(v) => set("booking_code", v)} />
-            </Field>
-            <Field label="Status" span={2}>
-              <MSelect
-                value={form.payment_status}
-                onChange={(v) => set("payment_status", v)}
-                options={["Pending", "Paid", "Cancelled", "Refunded", "Free"]}
-              />
-            </Field>
-
-            <Field label="Event" span={3}>
-              <MSelect
+        {/* ── INVOICE INFORMATION ── */}
+        <div style={sectionWrap}>
+          <SectionLabel>Invoice Information</SectionLabel>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+            <FGroup label="Event Code" req>
+              <EventCodePicker
                 value={form.event_code}
-                onChange={(v) => set("event_code", v)}
-                options={events.map((e) => ({ value: e.event_code, label: `${e.event_code} — ${e.name}` }))}
-              />
-            </Field>
-            <Field label="Booking type" span={3}>
-              <MSelect
-                value={form.ticket_tier || form.paid_free}
-                onChange={(v) => set("ticket_tier", v)}
-                options={["Standard", "VIP", "Free", "Complimentary", "Sponsorship"]}
-              />
-            </Field>
-
-            <Field label="Request date" span={2}>
-              <MInput type="date" value={fmt.dateInput(form.created_at)} onChange={(v) => set("created_at", v)} />
-            </Field>
-            <Field label="Invoice date" span={2}>
-              <MInput type="date" value={fmt.dateInput(form.invoice_date)} onChange={(v) => set("invoice_date", v)} />
-            </Field>
-            <Field label="Paid date" span={2} hint="Not paid yet">
-              <MInput type="date" value={fmt.dateInput(form.payment_date)} onChange={(v) => set("payment_date", v)} />
-            </Field>
-          </FormSection>
-
-          {/* Section 2 — Delegate */}
-          <FormSection
-            title="Delegate"
-            desc="The person attending. They'll receive all confirmation emails."
-          >
-            <Field label="Full name" span={3}>
-              <MInput
-                value={d0.full_name || `${d0.first_name || ""} ${d0.last_name || ""}`.trim()}
-                onChange={(v) => {
-                  const sp = v.indexOf(" ");
-                  const f = sp === -1 ? v : v.slice(0, sp);
-                  const l = sp === -1 ? "" : v.slice(sp + 1);
-                  handleDelegateChange(0, "full_name", v);
-                  handleDelegateChange(0, "first_name", f);
-                  handleDelegateChange(0, "last_name", l);
+                events={events}
+                onChange={(code, ev) => {
+                  set("event_code", code);
+                  set("event_name", ev?.name || "");
                 }}
               />
-            </Field>
-            <Field label="Job title" span={3}>
-              <MInput value={d0.position || ""} onChange={(v) => handleDelegateChange(0, "position", v)} />
-            </Field>
-
-            <Field label="Company" span={3}>
-              <MInput value={form.company_name || ""} onChange={(v) => set("company_name", v)} />
-            </Field>
-            <Field label="Department" span={3}>
-              <MInput value={form.department || ""} onChange={(v) => set("department", v)} />
-            </Field>
-
-            <Field label="Email" span={3}>
-              <MInput type="email" value={d0.email || ""} onChange={(v) => handleDelegateChange(0, "email", v)} />
-            </Field>
-            <Field label="Direct line" span={3}>
-              <MInput mono value={d0.phone_number || ""} onChange={(v) => handleDelegateChange(0, "phone_number", v)} />
-            </Field>
-
-            <Field label="City" span={2}>
-              <MInput value={form.city || ""} onChange={(v) => set("city", v)} />
-            </Field>
-            <Field label="Country" span={2}>
-              <MInput value={form.country || ""} onChange={(v) => set("country", v)} />
-            </Field>
-            <Field label="Dietary requirements" span={2} hint="Shown to catering team">
-              <MInput value={form.dietary_requirements || ""} onChange={(v) => set("dietary_requirements", v)} />
-            </Field>
-          </FormSection>
-
-          {/* Section 3 — Payment */}
-          <FormSection
-            title="Payment"
-            desc="Amounts, taxes, and who's responsible internally."
-            last
-          >
-            <Field label="Amount" span={2}>
-              <MInput mono value={form.amount || ""} onChange={(v) => set("amount", v)} />
-            </Field>
-            <Field label="Currency" span={1}>
-              <MSelect value={form.currency || "USD"} onChange={(v) => set("currency", v)}
-                options={["USD", "GBP", "EUR", "AED", "SGD", "INR"]} />
-            </Field>
-            <Field label="Discount %" span={1}>
-              <MInput mono value={form.discount || ""} onChange={(v) => set("discount", v)} />
-            </Field>
-            <Field label="Tax %" span={1}>
-              <MInput mono value={form.tax || ""} onChange={(v) => set("tax", v)} />
-            </Field>
-            <Field label="Net total" span={1} hint="Auto-calculated">
-              <MInput mono value={netTotal} readOnly />
-            </Field>
-
-            <Field label="Payment method" span={2}>
-              <MSelect value={form.payment_type || ""} onChange={(v) => set("payment_type", v)}
-                options={["", "Bank", "Stripe"]} />
-            </Field>
-            <Field label="Reference / PO" span={2}>
-              <MInput value={form.reference || ""} onChange={(v) => set("reference", v)} />
-            </Field>
-            <Field label="Assigned executive" span={2}>
-              <MInput value={form.sales_executive_name || ""} readOnly />
-            </Field>
-
-            <Field label="Notes" span={6} hint="Internal — not shown to delegate">
-              <textarea
-                value={form.notes || ""}
-                onChange={(e) => set("notes", e.target.value)}
-                style={{
-                  width: "100%",
-                  minHeight: 64,
-                  padding: "9px 12px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  background: "var(--surface)",
-                  color: "var(--text)",
-                  fontSize: 13,
-                  fontFamily: "var(--font-sans)",
-                  lineHeight: 1.5,
-                  outline: "none",
-                  resize: "vertical",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--accent)";
-                  e.target.style.boxShadow = "0 0 0 3px var(--accent-soft)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "var(--border)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-            </Field>
-          </FormSection>
+            </FGroup>
+            <FGroup label="Event Name">
+              <FInput value={form.event_name} readOnly />
+            </FGroup>
+          </div>
+          <div style={{ marginTop: 10, maxWidth: "50%" }}>
+            <FGroup label="Invoice Number">
+              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} />
+            </FGroup>
+          </div>
         </div>
 
-        {/* ── Modal footer ── */}
-        <div style={{
-          padding: "14px 32px",
-          background: "var(--surface-alt)",
-          borderTop: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexShrink: 0,
-        }}>
-          <button onClick={handleDelete} style={dangerTextBtn}>Delete booking</button>
-
-          <span style={{ flex: 1, fontSize: 11, color: "var(--text-faint)", textAlign: "center" }}>
-            Last edited by {form.sales_executive_name || "—"}
-          </span>
-
-          <button onClick={onClose} style={ghostBtn}>Cancel</button>
-          <button onClick={handleUpdate} disabled={saving} style={primaryBtn}>
-            {saving ? "Saving…" : "Save changes"}
-          </button>
+        {/* ── DELEGATE DETAILS ── */}
+        <div style={delegateWrap}>
+          <DelegateHeader count={form.delegates.length} onAdd={addDelegate} />
+          <div style={{ overflowX: "auto" }}>
+            <DelegateTable
+              delegates={form.delegates}
+              invoiceCtx={invoiceCtx}
+              onSetInvoice={set}
+              onRowChange={setDelegate}
+              onRemoveRow={removeDelegate}
+            />
+          </div>
         </div>
+
+        {/* ── FOOTER ── */}
+        <div style={footerWrap}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <button onClick={handleDelete} style={btnDelete}>Delete booking</button>
+            <span style={footerMeta}>
+              {form.delegates.length} delegate{form.delegates.length !== 1 ? "s" : ""}
+              {form.updated_at && (
+                <span style={{ marginLeft: 8, opacity: 0.7 }}>
+                  · Modified {new Date(form.updated_at).toLocaleDateString("en-GB")}
+                </span>
+              )}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onClose} style={btnOutline}>Cancel</button>
+            <button onClick={handleUpdate} disabled={saving} style={btnPrimary}>
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+
       </div>
-    </div>
+    </Overlay>
   );
 }
 
 
-/* ─── Layout helpers ─── */
+/* ═══════════════════════════════════════════════════════════
+   Delegate sub-components
+═══════════════════════════════════════════════════════════ */
 
-function Sep() {
-  return <span style={{ color: "var(--border-strong)" }}>·</span>;
-}
-
-function FormSection({ title, desc, children, last }) {
+function DelegateHeader({ count, onAdd }) {
   return (
     <div style={{
-      display: "grid",
-      gridTemplateColumns: "220px 1fr",
-      gap: 32,
-      paddingBottom: 24,
-      marginBottom: last ? 0 : 24,
-      borderBottom: last ? "none" : "1px solid var(--border)",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "7px 16px",
+      background: BG_ALT,
+      borderBottom: `1px solid ${BORDER}`,
     }}>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{desc}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <span style={sectionLabelStyle}>Delegate Details</span>
+        <span style={countBadge}>{count}</span>
       </div>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(6, 1fr)",
-        gap: 14,
-        alignContent: "start",
-      }}>
-        {children}
-      </div>
+      <button onClick={onAdd} style={addDelegateBtn}>+ Add Delegate</button>
     </div>
   );
 }
 
-function Field({ label, hint, span = 6, children }) {
+function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRemoveRow }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 5, gridColumn: `span ${span}` }}>
-      <span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500, letterSpacing: "0.02em" }}>
-        {label}
-      </span>
-      {children}
-      {hint && <span style={{ fontSize: 10, color: "var(--text-faint)" }}>{hint}</span>}
-    </label>
+    <table style={{ borderCollapse: "collapse", tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+      <thead>
+        <tr style={{ background: BG_ALT, position: "sticky", top: 0, zIndex: 3 }}>
+          <th style={th({ width: 36 })} />
+          <th style={th({ width: 50 })}>#</th>
+          {COLS.map(c => <th key={c.key} style={th({ width: c.width })}>{c.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {delegates.map((d, idx) => (
+          <DelegateRow
+            key={d.id ?? `new-${idx}`}
+            idx={idx}
+            delegate={d}
+            invoiceCtx={invoiceCtx}
+            onSetInvoice={onSetInvoice}
+            onChange={(field, val) => onRowChange(idx, field, val)}
+            onRemove={delegates.length > 1 ? () => onRemoveRow(idx) : null}
+          />
+        ))}
+      </tbody>
+    </table>
   );
 }
 
-function MInput({ value, onChange, type = "text", mono, readOnly, placeholder, hint }) {
-  const [focused, setFocused] = useState(false);
+function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemove }) {
+  return (
+    <tr style={{ background: idx % 2 === 0 ? "#fff" : BG_ALT }}>
+      <td style={{ ...tdCell, textAlign: "center", width: 36, padding: 0 }}>
+        {onRemove && (
+          <button onClick={onRemove} style={removeDelegateBtn} title="Remove delegate">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        )}
+      </td>
+      <td style={tdNum}>{idx + 1}</td>
+      {COLS.map(c => {
+        if (c.key === "_request_date") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput type="date" value={fmt.dateInput(invoiceCtx.request_date)} readOnly />
+            </td>
+          );
+        }
+        if (c.key === "_booking_code") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} />
+            </td>
+          );
+        }
+        if (c.key === "_invoice_date") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput type="date" value={fmt.dateInput(invoiceCtx.invoice_date || "")} onChange={v => onSetInvoice("invoice_date", v)} />
+            </td>
+          );
+        }
+        if (c.key === "_company_name") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput value={invoiceCtx.company_name || ""} onChange={v => onSetInvoice("company_name", v)} />
+            </td>
+          );
+        }
+        if (c.virtual === "name") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <NameCellInput delegate={delegate} onChange={onChange} />
+            </td>
+          );
+        }
+        if (c.type === "checkbox") {
+          return (
+            <td key={c.key} style={{ ...tdCell, textAlign: "center" }}>
+              <input
+                type="checkbox"
+                checked={delegate[c.key] === "Attended"}
+                onChange={e => onChange(c.key, e.target.checked ? "Attended" : "Pending")}
+                style={{ width: 14, height: 14, cursor: "pointer", accentColor: "var(--accent)" }}
+              />
+            </td>
+          );
+        }
+        if (c.key === "delegate_payment_status") {
+          const eff = delegate.delegate_payment_status || invoiceCtx.payment_status || "";
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect value={eff} onChange={v => onChange(c.key, v || null)} options={c.options} />
+            </td>
+          );
+        }
+        if (c.key === "delegate_payment_type") {
+          const eff = delegate.delegate_payment_type || invoiceCtx.payment_type || "";
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect value={eff} onChange={v => onChange(c.key, v || null)} options={c.options} />
+            </td>
+          );
+        }
+        if (c.key === "delegate_payment_date") {
+          const eff = fmt.dateInput(delegate.delegate_payment_date || invoiceCtx.payment_date || "");
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput type="date" value={eff} onChange={v => onChange(c.key, v || null)} />
+            </td>
+          );
+        }
+        if (c.type === "select") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect value={delegate[c.key] ?? ""} onChange={v => onChange(c.key, v)} options={c.options} />
+            </td>
+          );
+        }
+        return (
+          <td key={c.key} style={tdCell}>
+            <CellInput type={c.type || "text"} mono={c.mono}
+              value={delegate[c.key] ?? ""} onChange={v => onChange(c.key, v)} />
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Event Code rich picker
+═══════════════════════════════════════════════════════════ */
+
+function EventCodePicker({ value, events, onChange }) {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+
+  const selected = events.find(e => e.event_code === value);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const q = search.toLowerCase();
+  const filtered = q
+    ? events.filter(e =>
+        e.event_code.toLowerCase().includes(q) ||
+        (e.name  || "").toLowerCase().includes(q) ||
+        (e.city  || "").toLowerCase().includes(q))
+    : events;
+
+  const chevron = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")";
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setSearch(""); }}
+        style={{
+          width: "100%", height: 38, padding: "0 32px 0 10px",
+          border: `1px solid ${open ? "var(--accent)" : BORDER}`,
+          borderRadius: 4, background: "#fff",
+          display: "flex", alignItems: "center", gap: 8,
+          cursor: "pointer", textAlign: "left",
+          boxShadow: open ? "0 0 0 2px var(--accent-soft)" : "none",
+          transition: "border-color .12s, box-shadow .12s",
+          boxSizing: "border-box", fontFamily: "var(--font-sans)",
+          backgroundImage: chevron,
+          backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
+          overflow: "hidden",
+        }}
+      >
+        {selected ? (
+          <>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
+              color: "var(--accent)", background: "rgba(64,81,137,.1)",
+              padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              {selected.event_code}
+            </span>
+            <span style={{ fontSize: 12.5, color: TEXT_DIM, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {selected.name}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 13, color: TEXT_FAINT }}>— select event —</span>
+        )}
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: "#fff", border: `1px solid ${BORDER}`,
+          borderRadius: 6, boxShadow: "0 4px 20px rgba(0,0,0,.13)",
+          zIndex: 200, overflow: "hidden",
+        }}>
+          {/* Search bar */}
+          <div style={{ padding: "8px 10px", borderBottom: `1px solid ${BORDER}` }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search code, name or city…"
+              style={{
+                width: "100%", height: 30, padding: "0 8px",
+                border: `1px solid ${BORDER}`, borderRadius: 4,
+                fontSize: 12, fontFamily: "var(--font-sans)", color: TEXT,
+                outline: "none", boxSizing: "border-box", background: "#fff",
+              }}
+            />
+          </div>
+
+          {/* List */}
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "14px 12px", fontSize: 12, color: TEXT_FAINT, textAlign: "center" }}>
+                No events found
+              </div>
+            ) : filtered.map(ev => {
+              const isActive = ev.event_code === value;
+              return (
+                <div
+                  key={ev.event_code}
+                  onClick={() => { onChange(ev.event_code, ev); setOpen(false); setSearch(""); }}
+                  style={{
+                    padding: "8px 12px", cursor: "pointer",
+                    background: isActive ? "rgba(64,81,137,.07)" : "#fff",
+                    borderBottom: `1px solid ${BORDER}`,
+                  }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#f8fafc"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(64,81,137,.07)" : "#fff"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
+                      color: "var(--accent)", background: "rgba(64,81,137,.1)",
+                      padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0,
+                    }}>
+                      {ev.event_code}
+                    </span>
+                    <span style={{ fontSize: 12.5, fontWeight: 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {ev.name}
+                    </span>
+                    {isActive && (
+                      <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>✓</span>
+                    )}
+                  </div>
+                  {(ev.event_date || ev.city) && (
+                    <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 3, display: "flex", gap: 6 }}>
+                      {ev.event_date && <span>{fmt.date(ev.event_date)}</span>}
+                      {ev.event_date && ev.city && <span>·</span>}
+                      {ev.city && <span>{ev.city}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Form-level inputs
+═══════════════════════════════════════════════════════════ */
+
+function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, compact }) {
+  const [f, setF] = useState(false);
+  const h = compact ? 34 : 38;
   return (
     <input
       type={type}
       value={value ?? ""}
       readOnly={readOnly}
-      placeholder={placeholder || hint}
-      onChange={(e) => onChange?.(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      placeholder={placeholder}
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => setF(false)}
       style={{
-        height: 36,
-        padding: "0 12px",
-        border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: 8,
-        background: readOnly ? "var(--surface-alt)" : "var(--surface)",
-        color: readOnly ? "var(--text-dim)" : "var(--text)",
-        fontSize: 13,
+        width: "100%", height: h, padding: "0 10px",
+        border: `1px solid ${f ? "var(--accent)" : BORDER}`,
+        borderRadius: 4,
+        background: readOnly ? BG_ALT : "#fff",
+        color: readOnly ? TEXT_DIM : TEXT,
+        fontSize: compact ? 12 : 13,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
         outline: "none",
-        width: "100%",
-        boxShadow: focused ? "0 0 0 3px var(--accent-soft)" : "none",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
         cursor: readOnly ? "default" : "text",
-        transition: "border-color .15s, box-shadow .15s",
+        transition: "border-color .12s, box-shadow .12s",
+        boxSizing: "border-box",
       }}
     />
   );
 }
 
-function MSelect({ value, onChange, options }) {
-  const [focused, setFocused] = useState(false);
+function FSelect({ value, onChange, options, compact }) {
+  const [f, setF] = useState(false);
+  const h = compact ? 34 : 38;
   return (
     <select
       value={value ?? ""}
-      onChange={(e) => onChange?.(e.target.value)}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => setF(false)}
       style={{
-        height: 36,
-        padding: "0 28px 0 12px",
-        border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
-        borderRadius: 8,
-        background: "var(--surface)",
-        color: "var(--text)",
-        fontSize: 13,
-        fontFamily: "var(--font-sans)",
-        outline: "none",
-        width: "100%",
-        appearance: "none",
-        cursor: "pointer",
-        boxShadow: focused ? "0 0 0 3px var(--accent-soft)" : "none",
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5853' stroke-width='1.3' fill='none'/%3E%3C/svg%3E\")",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 10px center",
-        transition: "border-color .15s, box-shadow .15s",
+        width: "100%", height: h, padding: "0 26px 0 10px",
+        border: `1px solid ${f ? "var(--accent)" : BORDER}`,
+        borderRadius: 4, background: "#fff", color: TEXT,
+        fontSize: compact ? 12 : 13, fontFamily: "var(--font-sans)",
+        outline: "none", appearance: "none", cursor: "pointer",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+        backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
+        transition: "border-color .12s, box-shadow .12s",
+        boxSizing: "border-box",
       }}
     >
-      {options.map((o) => {
+      {options.map(o => {
         const val = typeof o === "string" ? o : o.value;
         const lbl = typeof o === "string" ? o : o.label;
         return <option key={val} value={val}>{lbl || "(none)"}</option>;
@@ -457,24 +618,428 @@ function MSelect({ value, onChange, options }) {
   );
 }
 
-/* ─── Footer button styles ─── */
+function FGroup({ label, req, compact, children }) {
+  return (
+    <div style={{ marginBottom: compact ? 6 : 0 }}>
+      <label style={{
+        display: "block",
+        fontSize: 10.5, fontWeight: 600, color: TEXT_DIM,
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        marginBottom: 4,
+      }}>
+        {label}{req && <span style={{ color: "var(--danger)", marginLeft: 2 }}>*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
 
-const dangerTextBtn = {
+
+/* ═══════════════════════════════════════════════════════════
+   Table cell inputs
+═══════════════════════════════════════════════════════════ */
+
+function NameCellInput({ delegate, onChange }) {
+  const computed = [delegate.first_name, delegate.last_name].filter(Boolean).join(" ");
+  const [val, setVal] = useState(computed);
+  const [f, setF] = useState(false);
+
+  useEffect(() => {
+    if (!f) setVal(computed);
+  }, [computed]);
+
+  return (
+    <input
+      type="text"
+      value={val}
+      placeholder="First Last"
+      spellCheck={false}
+      autoComplete="off"
+      onChange={e => {
+        const v = e.target.value;
+        setVal(v);
+        const sp = v.indexOf(" ");
+        if (sp === -1) {
+          onChange("first_name", v);
+          onChange("last_name", "");
+        } else {
+          onChange("first_name", v.slice(0, sp));
+          onChange("last_name", v.slice(sp + 1));
+        }
+      }}
+      onFocus={() => setF(true)}
+      onBlur={() => {
+        setF(false);
+        const parts = val.trim().split(/\s+/);
+        const fn = parts[0] || "";
+        const ln = parts.slice(1).join(" ");
+        onChange("first_name", fn);
+        onChange("last_name", ln);
+        setVal([fn, ln].filter(Boolean).join(" "));
+      }}
+      style={{
+        width: "100%", height: 32, padding: "0 6px",
+        border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
+        borderRadius: 3,
+        background: f ? "#fff" : "transparent",
+        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        outline: "none",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        cursor: "text",
+        transition: "border-color .1s, background .1s",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
+function CellInput({ value, onChange, type = "text", mono, readOnly, placeholder }) {
+  const [f, setF] = useState(false);
+  return (
+    <input
+      type={type}
+      value={value ?? ""}
+      readOnly={readOnly}
+      placeholder={placeholder ?? ""}
+      spellCheck={false}
+      autoComplete="off"
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => setF(false)}
+      style={{
+        width: "100%", height: 32, padding: "0 6px",
+        border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
+        borderRadius: 3,
+        background: readOnly ? "transparent" : (f ? "#fff" : "transparent"),
+        color: readOnly ? TEXT_DIM : TEXT,
+        fontSize: 12,
+        fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
+        outline: "none",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        cursor: readOnly ? "default" : "text",
+        transition: "border-color .1s, background .1s",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
+function CellSelect({ value, onChange, options }) {
+  const [f, setF] = useState(false);
+  return (
+    <select
+      value={value ?? ""}
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => setF(false)}
+      style={{
+        width: "100%", height: 32, padding: "0 18px 0 6px",
+        border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
+        borderRadius: 3,
+        background: f ? "#fff" : "transparent",
+        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        outline: "none", appearance: "none", cursor: "pointer",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        backgroundImage: f
+          ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none'/%3E%3C/svg%3E\")"
+          : "none",
+        backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
+        transition: "border-color .1s, background .1s",
+        boxSizing: "border-box",
+      }}
+    >
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+function CellSelectOverride({ value, onChange, options }) {
+  const [f, setF] = useState(false);
+  const isEmpty = !value;
+  return (
+    <select
+      value={value ?? ""}
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => setF(false)}
+      style={{
+        width: "100%", height: 32, padding: "0 18px 0 6px",
+        border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
+        borderRadius: 3,
+        background: f ? "#fff" : "transparent",
+        color: isEmpty ? TEXT_FAINT : TEXT,
+        fontStyle: isEmpty ? "italic" : "normal",
+        fontSize: 12, fontFamily: "var(--font-sans)",
+        outline: "none", appearance: "none", cursor: "pointer",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        backgroundImage: f
+          ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none'/%3E%3C/svg%3E\")"
+          : "none",
+        backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
+        transition: "border-color .1s, background .1s",
+        boxSizing: "border-box",
+      }}
+    >
+      <option value="">Inherited</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+function CellDateOverride({ value, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState(false);
+  const isEmpty = !value;
+  if (!editing && isEmpty) {
+    return (
+      <div
+        onClick={() => setEditing(true)}
+        style={{
+          width: "100%", height: 32, padding: "0 6px",
+          display: "flex", alignItems: "center",
+          color: TEXT_FAINT, fontSize: 12, fontStyle: "italic",
+          cursor: "text", boxSizing: "border-box",
+        }}
+      >
+        Inherited
+      </div>
+    );
+  }
+  return (
+    <input
+      type="date"
+      autoFocus={editing && isEmpty}
+      value={value ?? ""}
+      onChange={e => onChange?.(e.target.value)}
+      onFocus={() => setF(true)}
+      onBlur={() => { setF(false); if (!value) setEditing(false); }}
+      style={{
+        width: "100%", height: 32, padding: "0 6px",
+        border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
+        borderRadius: 3,
+        background: f ? "#fff" : "transparent",
+        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        outline: "none",
+        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        cursor: "text",
+        transition: "border-color .1s, background .1s",
+        boxSizing: "border-box",
+      }}
+    />
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Layout atoms
+═══════════════════════════════════════════════════════════ */
+
+function Overlay({ onClose, children }) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 1100,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "16px 0",
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+      <span style={sectionLabelStyle}>{children}</span>
+      <div style={{ flex: 1, height: 1, background: BORDER }} />
+    </div>
+  );
+}
+
+function MetaDot() {
+  return <span style={{ color: TEXT_FAINT, fontSize: 10, lineHeight: 1 }}>·</span>;
+}
+
+function AdminDivider() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 8px" }}>
+      <span style={{ fontSize: 9.5, fontWeight: 700, color: TEXT_FAINT, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>
+        Financial — Admin Only
+      </span>
+      <div style={{ flex: 1, height: 1, background: BORDER, opacity: 0.5 }} />
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Design tokens
+═══════════════════════════════════════════════════════════ */
+
+const BORDER     = "var(--border)";
+const BG_ALT     = "var(--surface-alt)";
+const TEXT       = "var(--text)";
+const TEXT_DIM   = "var(--text-dim)";
+const TEXT_FAINT = "var(--text-faint)";
+
+
+/* ═══════════════════════════════════════════════════════════
+   Style objects
+═══════════════════════════════════════════════════════════ */
+
+const modalBox = {
+  width: "98%",
+  maxWidth: 1650,
+  maxHeight: "92vh",
+  background: "#fff",
+  border: `1px solid ${BORDER}`,
+  borderRadius: 10,
+  boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
+  overflowY: "auto",
+};
+
+const headerWrap = {
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  padding: "11px 20px",
+  borderBottom: `1px solid ${BORDER}`,
+  background: "#fff",
+  position: "sticky", top: 0, zIndex: 20,
+};
+
+const headerTitle = {
+  fontSize: 15, fontWeight: 700, color: TEXT,
+  fontFamily: "var(--font-sans)", letterSpacing: "-0.01em",
+};
+
+const metaChip = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11, fontWeight: 600,
+  color: "var(--accent)",
+};
+
+const metaText = {
+  fontSize: 11, color: TEXT_DIM,
+};
+
+const helperText = {
+  display: "block",
+  fontSize: 10.5, color: TEXT_FAINT,
+  marginTop: 3, marginBottom: 10,
+};
+
+const closeBtn = {
+  width: 28, height: 28, borderRadius: 5,
+  background: "transparent", border: `1px solid ${BORDER}`,
+  color: TEXT_DIM, cursor: "pointer",
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  fontSize: 12, flexShrink: 0, fontFamily: "var(--font-sans)",
+};
+
+const sectionWrap = {
+  padding: "14px 20px 12px",
+  borderBottom: `1px solid ${BORDER}`,
+};
+
+const sectionLabelStyle = {
+  fontSize: 10, fontWeight: 700, color: TEXT_DIM,
+  textTransform: "uppercase", letterSpacing: "0.07em",
+  whiteSpace: "nowrap",
+};
+
+const delegateWrap = {
+  borderBottom: `1px solid ${BORDER}`,
+};
+
+const footerWrap = {
+  display: "flex", alignItems: "center", justifyContent: "space-between",
+  padding: "10px 20px",
+  background: "#fff",
+  position: "sticky", bottom: 0, zIndex: 20,
+  borderTop: `1px solid ${BORDER}`,
+};
+
+const footerMeta = {
+  fontSize: 12, color: TEXT_FAINT,
+};
+
+const btnOutline = {
+  height: 36, padding: "0 16px", borderRadius: 5,
+  background: "#fff", border: `1px solid ${BORDER}`,
+  color: TEXT, fontSize: 12.5, fontWeight: 500,
+  cursor: "pointer", fontFamily: "inherit",
+};
+
+const btnPrimary = {
+  height: 36, padding: "0 18px", borderRadius: 5,
+  background: "var(--accent)", border: "none",
+  color: "#fff", fontSize: 12.5, fontWeight: 500,
+  cursor: "pointer", fontFamily: "inherit",
+};
+
+const btnDelete = {
   background: "none", border: "none",
   color: "var(--danger)", fontSize: 12, fontWeight: 500,
-  cursor: "pointer", fontFamily: "inherit", padding: "4px 0",
+  cursor: "pointer", fontFamily: "inherit", padding: 0,
 };
 
-const ghostBtn = {
-  background: "var(--surface)", border: "1px solid var(--border)",
-  color: "var(--text)", fontSize: 12, fontWeight: 500,
-  padding: "7px 14px", borderRadius: 7,
+const removeDelegateBtn = {
+  width: 22, height: 22, borderRadius: 4,
+  background: "none", border: "none",
+  color: "var(--danger)", fontSize: 15, lineHeight: 1,
   cursor: "pointer", fontFamily: "inherit",
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  opacity: 0.7,
 };
 
-const primaryBtn = {
-  background: "var(--accent)", border: "none",
-  color: "#fff", fontSize: 12, fontWeight: 500,
-  padding: "7px 14px", borderRadius: 7,
+const addDelegateBtn = {
+  height: 30, padding: "0 12px", borderRadius: 4,
+  background: "#fff", border: `1px solid var(--accent)`,
+  color: "var(--accent)", fontSize: 11.5, fontWeight: 500,
   cursor: "pointer", fontFamily: "inherit",
+  display: "inline-flex", alignItems: "center",
+};
+
+const countBadge = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  minWidth: 20, height: 20, borderRadius: 10,
+  background: "var(--accent)", color: "#fff",
+  fontSize: 10, fontWeight: 700, padding: "0 5px",
+};
+
+const grid3 = {
+  display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px",
+};
+
+const th = (extra = {}) => ({
+  padding: "0 8px", height: 32,
+  textAlign: "left", verticalAlign: "middle",
+  fontSize: 10, fontWeight: 700, color: TEXT_DIM,
+  fontFamily: "var(--font-sans)", letterSpacing: "0.05em",
+  textTransform: "uppercase",
+  borderBottom: `2px solid ${BORDER}`,
+  borderRight: `1px solid ${BORDER}`,
+  whiteSpace: "nowrap",
+  background: BG_ALT,
+  userSelect: "none",
+  ...extra,
+});
+
+const tdCell = {
+  padding: "2px 2px",
+  borderBottom: `1px solid ${BORDER}`,
+  borderRight: `1px solid ${BORDER}`,
+  verticalAlign: "middle",
+};
+
+const tdNum = {
+  padding: "0 8px", textAlign: "center",
+  fontSize: 11, color: TEXT_DIM, fontWeight: 500,
+  borderBottom: `1px solid ${BORDER}`,
+  borderRight: `1px solid ${BORDER}`,
+  verticalAlign: "middle",
+  background: BG_ALT, userSelect: "none",
+  minWidth: 50,
 };

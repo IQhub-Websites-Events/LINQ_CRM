@@ -1,4 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
+import { Avatar } from '../ui/Avatar';
 
 export function TeamCard({ team, members }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -75,15 +76,7 @@ export function TeamCard({ team, members }) {
             {members.map((member) => (
               <div key={member.id} className="team-member-item">
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: "50%",
-                    background: "var(--surface-alt)",
-                    color: "var(--text-dim)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 10, fontWeight: 600, flexShrink: 0,
-                  }}>
-                    {(member.full_name || member.username || "?")[0].toUpperCase()}
-                  </div>
+                  <Avatar name={member.full_name || member.username || "?"} size={28} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {member.full_name || member.username}

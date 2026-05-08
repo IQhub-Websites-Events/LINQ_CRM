@@ -16,11 +16,15 @@ from django.utils import timezone
 
 class BookEvent(models.Model):
     class PaymentStatus(models.TextChoices):
-        PENDING   = "Pending",   "Pending"
-        PAID      = "Paid",      "Paid"
-        CANCELLED = "Cancelled", "Cancelled"
-        REFUNDED  = "Refunded",  "Refunded"
-        FREE      = "Free",      "Free"
+        PENDING              = "Pending",              "Pending"
+        PAID                 = "Paid",                 "Paid"
+        CANCELLED            = "Cancelled",            "Cancelled"
+        REFUNDED             = "Refunded",             "Refunded"
+        FREE                 = "Free",                 "Free"
+        CREDIT_PENDING_FREE  = "Credit Pending (Free)",  "Credit Pending (Free)"
+        CREDIT_PENDING_PAID  = "Credit Pending (Paid)",  "Credit Pending (Paid)"
+        CREDIT_TRANSFERRED   = "Credit Transferred",     "Credit Transferred"
+        PAID_TRANSFERRED     = "Paid (Transferred)",     "Paid (Transferred)"
 
     class PaymentType(models.TextChoices):
         STRIPE = "Stripe", "Stripe"
@@ -34,6 +38,10 @@ class BookEvent(models.Model):
         SGD   = "SGD",   "SGD"
         INR   = "INR",   "INR"
         OTHER = "OTHER", "OTHER"
+
+    class Source(models.TextChoices):
+        MANUAL  = "manual",  "Manual"
+        WEBSITE = "website", "Website"
 
     # ── Identifiers ────────────────────────────────────────────────────────────
     invoice_number  = models.CharField(max_length=100, unique=True, db_index=True)
@@ -66,14 +74,25 @@ class BookEvent(models.Model):
 
     # ── Financial (Zoho field mapping) ─────────────────────────────────────────
 
-    discount       = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    currency       = models.CharField(max_length=10, choices=Currency.choices, default=Currency.USD)
-    ticket_tier    = models.CharField(max_length=20, blank=True, default="")
-    delegate_count = models.PositiveIntegerField(default=1)
+    discount             = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_code        = models.CharField(max_length=100, blank=True, default="")
+    pre_tax_amount       = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    tax_amount           = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    total_amount         = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    add_ons_total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    currency             = models.CharField(max_length=10, choices=Currency.choices, default=Currency.USD)
+    ticket_tier          = models.CharField(max_length=20, blank=True, default="")
+    delegate_count       = models.PositiveIntegerField(default=1)
+
+    # ── Website intake metadata ────────────────────────────────────────────────
+    source    = models.CharField(max_length=20, choices=Source.choices, default=Source.MANUAL, db_index=True)
+    form_name = models.CharField(max_length=255, blank=True, default="")
+    form_url  = models.CharField(max_length=500, blank=True, default="")
+    packages  = models.JSONField(default=list, blank=True)
 
     # ── Payment ────────────────────────────────────────────────────────────────
     payment_status = models.CharField(
-        max_length=20, choices=PaymentStatus.choices,
+        max_length=30, choices=PaymentStatus.choices,
         default=PaymentStatus.PENDING, db_index=True,
     )
     payment_date     = models.DateField(null=True, blank=True)
@@ -122,6 +141,36 @@ class BookEvent(models.Model):
             .filter(role=User.Role.SALES, assigned_events__event_code=event_code)
             .first()
         )
+
+class WebhookLog(models.Model):
+    class Status(models.TextChoices):
+        SUCCESS   = "success",   "Success"
+        FAILED    = "failed",    "Failed"
+        DUPLICATE = "duplicate", "Duplicate"
+
+    source_ip      = models.GenericIPAddressField(null=True, blank=True)
+    payload        = models.JSONField(default=dict)
+    headers        = models.JSONField(default=dict)
+    response       = models.JSONField(default=dict)
+    status         = models.CharField(max_length=20, choices=Status.choices, default=Status.SUCCESS)
+    http_status    = models.PositiveIntegerField(default=200)
+    invoice_number = models.CharField(max_length=100, blank=True, default="")
+    event_code     = models.CharField(max_length=50, blank=True, default="")
+    error_message  = models.TextField(blank=True, default="")
+    created_at     = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "webhook_logs"
+        ordering = ["-created_at"]
+        indexes  = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["invoice_number"]),
+        ]
+
+    def __str__(self):
+        return f"[{self.status}] {self.invoice_number or '—'} @ {self.created_at:%Y-%m-%d %H:%M}"
+
 
 class SyncLog(models.Model):
     class Status(models.TextChoices):

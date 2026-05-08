@@ -5,14 +5,13 @@ import { StatusBadge } from "../ui/Badge";
 import { Avatar } from "../ui/Avatar";
 import { Pager } from "../ui/Table";
 import { fmt } from "../../utils/helpers";
-import { BookingDetailPanel } from "./BookingDetailPanel";
 import { BookingEditModal } from "./BookingEditModal";
 import { AddBookingModal } from "./AddBookingModal";
 import { DatePopup } from "./DatePopup";
 
 const PAGE_SIZE = 50;
 
-export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChange }) {
+export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const toast = useToast();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,8 +23,6 @@ export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChan
   const [search, setSearch] = useState("");
   const [events, setEvents] = useState([]);
 
-  const [selectedBooking, setSelectedBooking] = useState(null);
-  const [activeInvId, setActiveInvId] = useState(navItemId || null);
   const [editInvId, setEditInvId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [datePopup, setDatePopup] = useState(null);
@@ -67,23 +64,6 @@ export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChan
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
     setPage(1);
-  };
-
-  const openDrawer = async (bookEventId) => {
-    setActiveInvId(bookEventId);
-    try {
-      const res = await invoicesApi.get(bookEventId);
-      setSelectedBooking(res);
-    } catch {
-      toast.error("Failed to load booking details");
-    }
-  };
-
-  const closeDrawer = () => { setSelectedBooking(null); setActiveInvId(null); };
-
-  const handleStatusClick = (inv, e) => {
-    if (inv.payment_status === "Paid") { openDrawer(inv.id); return; }
-    setDatePopup({ invId: inv.id, anchor: e.currentTarget.getBoundingClientRect(), invoice: inv });
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -204,10 +184,7 @@ export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChan
                   <DelegateRow
                     key={row.id}
                     delegate={row}
-                    onOpen={() => openDrawer(row.book_event_id)}
                     onEdit={() => setEditInvId(row.book_event_id)}
-                    onStatusClick={handleStatusClick}
-                    isActive={activeInvId === row.book_event_id}
                   />
                 ))
               )}
@@ -219,8 +196,6 @@ export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChan
           <Pager page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
         </div>
       </div>
-
-      <BookingDetailPanel booking={selectedBooking} onClose={closeDrawer} />
 
       <BookingEditModal
         invoiceId={editInvId}
@@ -255,30 +230,30 @@ export function BookingsTable({ navItemId, statusFilter = "Pending", onTotalChan
 }
 
 
-const DelegateRow = memo(({ delegate, onOpen, onEdit, isActive }) => {
+const DelegateRow = memo(({ delegate, onEdit }) => {
   const amount = delegate.net_total ?? delegate.amount ?? null;
   const currency = delegate.currency || "USD";
 
   return (
     <tr
-      onClick={onOpen}
+      onClick={onEdit}
       style={{
         height: 44,
         borderTop: "1px solid var(--border)",
-        background: isActive ? "var(--accent-soft)" : "transparent",
+        background: "transparent",
         cursor: "pointer",
         transition: "background 0.1s",
         fontSize: 13,
       }}
-      onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = "var(--surface-alt)"; }}
-      onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+      onMouseOver={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
+      onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
     >
       <td style={{ ...cell, width: 32 }}>
         <input type="checkbox" style={{ accentColor: "var(--accent)" }} onClick={(e) => e.stopPropagation()} />
       </td>
 
       <td style={cell}>
-        <StatusBadge status={delegate.payment_status} />
+        <StatusBadge status={delegate.effective_payment_status || delegate.payment_status} />
       </td>
 
       <td style={cell}>

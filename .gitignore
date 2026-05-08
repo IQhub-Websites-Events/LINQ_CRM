@@ -1,6 +1,8 @@
 # ── Credentials & Secrets ──────────────────────────────────────────────────
 /config/credentials/
 backend/credentials/
+backend/CREDENTIALS.md
+CREDENTIALS.md
 *.pem
 *.key
 *.p12

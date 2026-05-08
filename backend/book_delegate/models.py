@@ -36,14 +36,21 @@ class BookDelegate(models.Model):
     last_name        = models.CharField(max_length=150, blank=True, default="")
     email            = models.EmailField(db_index=True)
     phone_number     = models.CharField(max_length=50, blank=True, default="")
-    position         = models.CharField(max_length=150, blank=True, default="")
-    attendance       = models.CharField(
+    position          = models.CharField(max_length=150, blank=True, default="")
+    ticket_package    = models.CharField(max_length=100, blank=True, default="")
+    sponsorship_level = models.CharField(max_length=100, blank=True, default="")
+    attendance        = models.CharField(
         max_length=20, choices=Attendance.choices,
         default=Attendance.PENDING, db_index=True,
     )
     delegate_number = models.IntegerField(default=1)
     dietary_requirements = models.CharField(max_length=255, blank=True, default="")
     notes            = models.TextField(blank=True, default="")
+
+    # Per-delegate payment overrides (null = inherit from invoice)
+    delegate_payment_status = models.CharField(max_length=50, blank=True, null=True, default=None)
+    delegate_payment_type   = models.CharField(max_length=50, blank=True, null=True, default=None)
+    delegate_payment_date   = models.DateField(blank=True, null=True, default=None)
     created_at       = models.DateTimeField(default=timezone.now)
     updated_at       = models.DateTimeField(auto_now=True)
 

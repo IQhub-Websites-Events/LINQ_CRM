@@ -1,7 +1,14 @@
 const STATUS_MAP = {
-  paid:    { c: "var(--success)", bg: "var(--success-soft)", l: "Paid" },
-  pending: { c: "var(--warn)",    bg: "var(--warn-soft)",    l: "Pending" },
-  overdue: { c: "var(--danger)",  bg: "var(--danger-soft)",  l: "Overdue" },
+  paid:                    { c: "var(--success)", bg: "var(--success-soft)", l: "Paid" },
+  pending:                 { c: "var(--warn)",    bg: "var(--warn-soft)",    l: "Pending" },
+  overdue:                 { c: "var(--danger)",  bg: "var(--danger-soft)",  l: "Overdue" },
+  cancelled:               { c: "var(--danger)",  bg: "var(--danger-soft)",  l: "Cancelled" },
+  refunded:                { c: "#94a3b8",         bg: "#f1f5f9",             l: "Refunded" },
+  free:                    { c: "#3b82f6",         bg: "#eff6ff",             l: "Free" },
+  "credit pending (free)": { c: "#a855f7",         bg: "#faf5ff",             l: "Credit Pending (Free)" },
+  "credit pending (paid)": { c: "#a855f7",         bg: "#faf5ff",             l: "Credit Pending (Paid)" },
+  "credit transferred":    { c: "#06b6d4",         bg: "#ecfeff",             l: "Credit Transferred" },
+  "paid (transferred)":    { c: "var(--success)", bg: "var(--success-soft)", l: "Paid (Transferred)" },
 };
 
 export function StatusBadge({ status }) {
@@ -11,16 +18,21 @@ export function StatusBadge({ status }) {
     <span style={{
       display: "inline-flex",
       alignItems: "center",
-      gap: 6,
+      gap: 5,
       fontSize: 11,
-      fontWeight: 500,
+      fontWeight: 600,
       color: s.c,
+      background: s.bg,
+      border: `1px solid ${s.c}22`,
+      borderRadius: 999,
+      padding: "3px 9px",
+      whiteSpace: "nowrap",
+      letterSpacing: "0.01em",
     }}>
       <span style={{
-        width: 7, height: 7,
+        width: 6, height: 6,
         borderRadius: "50%",
         background: s.c,
-        boxShadow: `0 0 0 3px ${s.bg}`,
         flexShrink: 0,
       }} />
       {s.l}
