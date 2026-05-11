@@ -12,13 +12,14 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import RBACMixin, IsSalesOrAdmin, IsAdminRole
-from .authentication import ApiKeyAuthentication, HasApiKey
+from .authentication import ApiKeyAuthentication, OriginAuthentication, HasApiKey
 from .models import BookEvent, WebhookLog
 from .serializers import (
     BookEventListSerializer, BookEventDetailSerializer,
     PaymentUpdateSerializer, WebsiteBookingSerializer,
 )
 from .filters import BookEventFilter
+from webhooks.utils import unwrap_payload
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
 
     @action(
         detail=False, methods=["post"], url_path="create_from_website",
-        authentication_classes=[ApiKeyAuthentication, TokenAuthentication, SessionAuthentication],
+        authentication_classes=[ApiKeyAuthentication, OriginAuthentication, TokenAuthentication, SessionAuthentication],
         permission_classes=[HasApiKey | IsSalesOrAdmin],
     )
     def create_from_website(self, request):
@@ -128,7 +129,8 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             if k.startswith("HTTP_") and k != "HTTP_X_API_KEY"
         }
 
-        ser = WebsiteBookingSerializer(data=request.data)
+        payload = unwrap_payload(request.data)
+        ser = WebsiteBookingSerializer(data=payload)
         if not ser.is_valid():
             log = WebhookLog.objects.create(
                 source_ip=source_ip, payload=request.data, headers=safe_headers,

@@ -24,6 +24,7 @@ const COLS = [
   { key: "_full_name",              label: "Name",         width: 160, virtual: "name" },
   { key: "position",                label: "Job Title",    width: 180 },
   { key: "_company_name",           label: "Company",      width: 180, invoiceLevel: true },
+  { key: "_accounts_contact_email", label: "Accounts Email", width: 220, invoiceLevel: true },
   { key: "email",                   label: "Email",        width: 240, type: "email" },
   { key: "phone_number",            label: "Direct Line",  width: 160, mono: true },
   { key: "attendance",              label: "Attendance",   width: 80,  type: "checkbox" },
@@ -164,15 +165,16 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const leadName = [d0.first_name, d0.last_name].filter(Boolean).join(" ") || "—";
 
   const invoiceCtx = {
-    request_date:     fmt.dateInput(form.created_at),
-    payment_due_date: form.payment_due_date,
-    company_name:     form.company_name,
-    paid_free:        form.paid_free,
-    invoice_date:     form.invoice_date,
-    booking_code:     form.booking_code,
-    payment_status:   form.payment_status,
-    payment_type:     form.payment_type,
-    payment_date:     form.payment_date,
+    request_date:           fmt.dateInput(form.created_at),
+    payment_due_date:       form.payment_due_date,
+    company_name:           form.company_name,
+    accounts_contact_email: form.accounts_contact_email,
+    paid_free:              form.paid_free,
+    invoice_date:           form.invoice_date,
+    booking_code:           form.booking_code,
+    payment_status:         form.payment_status,
+    payment_type:           form.payment_type,
+    payment_date:           form.payment_date,
   };
 
   return (
@@ -349,6 +351,13 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
           return (
             <td key={c.key} style={tdCell}>
               <CellInput value={invoiceCtx.company_name || ""} onChange={v => onSetInvoice("company_name", v)} />
+            </td>
+          );
+        }
+        if (c.key === "_accounts_contact_email") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput type="email" value={invoiceCtx.accounts_contact_email || ""} onChange={v => onSetInvoice("accounts_contact_email", v)} />
             </td>
           );
         }
@@ -844,7 +853,8 @@ function Overlay({ onClose, children }) {
         position: "fixed", inset: 0, zIndex: 1100,
         background: "rgba(0,0,0,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "16px 0",
+        padding: "32px 16px",
+        overflowY: "auto",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -896,12 +906,13 @@ const TEXT_FAINT = "var(--text-faint)";
 const modalBox = {
   width: "98%",
   maxWidth: 1650,
-  maxHeight: "92vh",
+  maxHeight: "calc(100vh - 64px)",
   background: "#fff",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
   overflowY: "auto",
+  flexShrink: 0,
 };
 
 const headerWrap = {

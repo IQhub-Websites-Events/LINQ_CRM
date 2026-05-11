@@ -48,9 +48,30 @@ class ApiKeyAuthentication(BaseAuthentication):
         return "X-API-KEY"
 
 
+
+class OriginAuthentication(BaseAuthentication):
+    """
+    Allows requests without an API key if the Origin or Referer matches
+    settings.CORS_ALLOWED_ORIGINS.
+    """
+    def authenticate(self, request):
+        origin = request.META.get("HTTP_ORIGIN", "") or request.META.get("HTTP_REFERER", "")
+        if not origin:
+            return None
+
+        from urllib.parse import urlparse
+        domain = urlparse(origin).netloc.split(":")[0]
+        
+        allowed = [urlparse(o).netloc.split(":")[0] for o in getattr(settings, "CORS_ALLOWED_ORIGINS", [])]
+        
+        if domain in allowed:
+            return (_API_KEY_USER, f"origin:{domain}")
+        
+        return None
+
 class HasApiKey(BasePermission):
-    """Passes only for requests authenticated with ApiKeyAuthentication."""
-    message = "Valid X-API-KEY header required."
+    """Passes for requests authenticated with ApiKeyAuthentication or OriginAuthentication."""
+    message = "Valid X-API-KEY header or authorised Origin required."
 
     def has_permission(self, request, view):
         return isinstance(request.user, ApiKeyUser)

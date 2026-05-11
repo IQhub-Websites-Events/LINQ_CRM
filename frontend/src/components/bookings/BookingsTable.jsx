@@ -149,32 +149,40 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         overflow: "hidden",
       }}>
         <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+          <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <tr style={{ background: "var(--surface-alt)" }}>
                 <Th style={{ width: 32 }}>
                   <input type="checkbox" style={{ accentColor: "var(--accent)" }} />
                 </Th>
-                <SortTh sortKey="payment_status" current={sortKey} dir={sortDir} onSort={handleSort}>Status</SortTh>
-                <SortTh sortKey="invoice__invoice_number" current={sortKey} dir={sortDir} onSort={handleSort}>Invoice</SortTh>
-                <Th>Event</Th>
-                <Th>Type</Th>
-                <SortTh sortKey="full_name" current={sortKey} dir={sortDir} onSort={handleSort}>Delegate</SortTh>
-                <Th>Company</Th>
-                <SortTh sortKey="invoice__invoice_date" current={sortKey} dir={sortDir} onSort={handleSort}>Invoice date</SortTh>
+                <SortTh sortKey="payment_status" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 130 }}>Status</SortTh>
+                <SortTh sortKey="invoice__invoice_number" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
+                <Th style={{ minWidth: 80 }}>Event</Th>
+                <Th style={{ minWidth: 130 }}>Booking Code</Th>
+                <SortTh sortKey="created_at" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Request Date</SortTh>
+                <SortTh sortKey="invoice__invoice_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Invoice Date</SortTh>
+                <SortTh sortKey="full_name" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 180 }}>Name</SortTh>
+                <SortTh sortKey="position" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 160 }}>Job Title</SortTh>
+                <Th style={{ minWidth: 180 }}>Company</Th>
+                <Th style={{ minWidth: 200 }}>Accounts Email</Th>
+                <Th style={{ minWidth: 200 }}>Email</Th>
+                <Th style={{ minWidth: 140 }}>Direct Line</Th>
+                <SortTh sortKey="attendance" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 100 }}>Attendance</SortTh>
+                <Th style={{ minWidth: 110 }}>Pmt Type</Th>
+                <SortTh sortKey="effective_payment_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Pmt Date</SortTh>
                 <Th style={{ width: 110 }} />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="17" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     Loading…
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan="10" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="17" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     No records match the current filters.
                   </td>
                 </tr>
@@ -253,12 +261,7 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
       </td>
 
       <td style={cell}>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "var(--accent)",
-        }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500, color: "var(--accent)" }}>
           {delegate.invoice_number || "—"}
         </span>
       </td>
@@ -271,22 +274,33 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
 
       <td style={cell}>
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-          {delegate.ticket_tier || delegate.paid_free || "—"}
+          {delegate.booking_code || "—"}
+        </span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+          {delegate.created_at ? fmt.dateShort(delegate.created_at.slice(0, 10)) : "—"}
+        </span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+          {fmt.dateShort(delegate.invoice_date) || "—"}
         </span>
       </td>
 
       <td style={cell}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Avatar name={delegate.full_name || ""} size={26} />
-          <div>
-            <div style={{ fontWeight: 500, color: "var(--text)", lineHeight: 1.3 }}>
-              {delegate.full_name || "—"}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-faint)", lineHeight: 1.2 }}>
-              {delegate.email}
-            </div>
-          </div>
+          <span style={{ fontWeight: 500, color: "var(--text)" }}>
+            {delegate.full_name || "—"}
+          </span>
         </div>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{delegate.position || "—"}</span>
       </td>
 
       <td style={cell}>
@@ -294,7 +308,35 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
       </td>
 
       <td style={cell}>
-        <span style={{ color: "var(--text-dim)" }}>{fmt.dateShort(delegate.invoice_date) || "—"}</span>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{delegate.accounts_contact_email || "—"}</span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{delegate.email || "—"}</span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12, fontFamily: "var(--font-mono)" }}>
+          {delegate.phone_number || "—"}
+        </span>
+      </td>
+
+      <td style={{ ...cell, textAlign: "center" }}>
+        {delegate.attendance === "Attended"
+          ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success, #16a34a)" }}>Yes</span>
+          : <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No</span>}
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+          {delegate.effective_payment_type || "—"}
+        </span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+          {fmt.dateShort(delegate.effective_payment_date) || "—"}
+        </span>
       </td>
 
       <td style={{ ...cell, width: 110 }}>

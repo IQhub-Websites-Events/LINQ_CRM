@@ -7,3 +7,5 @@ export { usersApi }     from "./users";
 export { searchApi }    from "./search";
 export { teamApi }      from "./team";
 export { teamsApi }     from "./teams";
+export { webhooksApi }   from "./webhooks";
+export { googleSyncApi } from "./googleSync";

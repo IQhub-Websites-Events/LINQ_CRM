@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { eventsApi, usersApi } from "../api";
+import { eventsApi, usersApi, teamsApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -23,6 +23,7 @@ export function EventsPage() {
   const [modal,  setModal]      = useState(null); // null | { mode, data }
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
+  const [teams, setTeams] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "asc");
   const { page, setPage }        = usePagination();
 
@@ -39,6 +40,10 @@ export function EventsPage() {
   // Fetch sales users for dropdown
   useFetch(() => isAdmin ? usersApi.list({ role: "sales", page_size: 200 }) : Promise.resolve(null), [isAdmin], {
     onSuccess: (r) => setSalesUsers(r?.results || []),
+  });
+
+  useFetch(() => teamsApi.list({ page_size: 200 }), [], {
+    onSuccess: (r) => setTeams(r?.results || r || []),
   });
 
   const openCreate = () => setModal({ mode: "create", data: { 
@@ -250,40 +255,59 @@ export function EventsPage() {
                 </select>
               </FormField>
               <FormField label="Speaker Sales Team">
-                <Input value={modal.data.speaker_sales_team || ""} onChange={(v) => setField("speaker_sales_team", v)} />
+                <TeamSelect value={modal.data.speaker_sales_team || ""} onChange={(v) => setField("speaker_sales_team", v)} teams={teams} />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="SpEx Team">
-                <Input value={modal.data.spex_team || ""} onChange={(v) => setField("spex_team", v)} />
+                <TeamSelect value={modal.data.spex_team || ""} onChange={(v) => setField("spex_team", v)} teams={teams} />
               </FormField>
               <FormField label="Tele Marketing Team">
-                <Input value={modal.data.tele_marketing_team || ""} onChange={(v) => setField("tele_marketing_team", v)} />
+                <TeamSelect value={modal.data.tele_marketing_team || ""} onChange={(v) => setField("tele_marketing_team", v)} teams={teams} />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Market Research Team">
-                <Input value={modal.data.market_research_team || ""} onChange={(v) => setField("market_research_team", v)} />
+                <TeamSelect value={modal.data.market_research_team || ""} onChange={(v) => setField("market_research_team", v)} teams={teams} />
               </FormField>
               <FormField label="Content Check">
-                <Input value={modal.data.content_check || ""} onChange={(v) => setField("content_check", v)} />
+                <TeamSelect value={modal.data.content_check || ""} onChange={(v) => setField("content_check", v)} teams={teams} />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Marketing Check">
-                <Input value={modal.data.marketing_check || ""} onChange={(v) => setField("marketing_check", v)} />
+                <TeamSelect value={modal.data.marketing_check || ""} onChange={(v) => setField("marketing_check", v)} teams={teams} />
               </FormField>
               <FormField label="Sales Check">
-                <Input value={modal.data.sales_check || ""} onChange={(v) => setField("sales_check", v)} />
+                <TeamSelect value={modal.data.sales_check || ""} onChange={(v) => setField("sales_check", v)} teams={teams} />
               </FormField>
             </div>
           </div>
         )}
       </Modal>
     </div>
+  );
+}
+
+function TeamSelect({ value, onChange, teams }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        width: "100%", background: "#fff", border: "1px solid #e2e8f0",
+        borderRadius: 7, padding: "7px 10px", fontSize: 13, color: "#1e293b",
+        fontFamily: "inherit", outline: "none", cursor: "pointer",
+      }}
+    >
+      <option value="">— Unassigned —</option>
+      {teams.map((t) => (
+        <option key={t.id} value={t.name}>{t.name}</option>
+      ))}
+    </select>
   );
 }
 

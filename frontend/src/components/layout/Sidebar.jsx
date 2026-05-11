@@ -13,6 +13,7 @@ const BuildingIcon = () => <Svg><path d="M2 13V4a1 1 0 011-1h8a1 1 0 011 1v9M2 1
 const ChartIcon = () => <Svg><rect x="1" y="8" width="3" height="5" /><rect x="5.5" y="5" width="3" height="8" /><rect x="10" y="2" width="3" height="11" /></Svg>;
 const UsersIcon = () => <Svg><path d="M9 12v-1a3 3 0 00-3-3H4a3 3 0 00-3 3v1" /><circle cx="5.5" cy="4" r="2.5" /><path d="M12 12v-1a3 3 0 00-2-2.5M9.5 1.5a2.5 2.5 0 010 5" /></Svg>;
 const WebhookIcon = () => <Svg><path d="M2 7c0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5" /><path d="M7 7l-2 4h4l-2 4" /></Svg>;
+const SyncIcon = () => <Svg><path d="M2 7A5 5 0 0112 5" /><path d="M12 7A5 5 0 012 9" /><path d="M12 3l1 2-2 1M2 11l-1 2 2 1" /></Svg>;
 
 const NAV = [
   {
@@ -36,9 +37,10 @@ const NAV = [
 ];
 
 const ADMIN_NAV = [
-  { id: "users", label: "Users", Icon: UsersIcon },
-  { id: "teams-management", label: "Teams", Icon: UsersIcon },
-  { id: "webhook-logs", label: "Webhooks", Icon: WebhookIcon },
+  { id: "users",            label: "Users",        Icon: UsersIcon   },
+  { id: "teams-management", label: "Teams",        Icon: UsersIcon   },
+  { id: "webhook-logs",     label: "Webhooks",     Icon: WebhookIcon },
+  { id: "google-sync",      label: "Sync Ops",     Icon: SyncIcon    },
 ];
 
 const sectionLabel = {

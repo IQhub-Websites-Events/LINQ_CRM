@@ -18,7 +18,7 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000",
+    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com",
 ).split(",")
 CORS_ALLOW_CREDENTIALS = True
 
@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     "events",
     "book_event",
     "book_delegate",
+    "webhooks",
+    "google_sync",
 ]
 
 MIDDLEWARE = [
@@ -151,7 +153,8 @@ LOGGING = {
 }
 
 # ── Website Integration ───────────────────────────────────────────────────────
-WEBSITE_API_KEY = os.environ.get("WEBSITE_API_KEY", "")
+WEBSITE_API_KEY     = os.environ.get("WEBSITE_API_KEY", "")
+WEBHOOK_SECRET_KEY  = os.environ.get("WEBHOOK_SECRET_KEY", "")
 
 # ── Google Sheets Sync ────────────────────────────────────────────────────────
 # Look for credentials relative to project root

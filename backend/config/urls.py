@@ -5,7 +5,6 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
-from rest_framework.authtoken import views as token_views
 
 from accounts.views import UserViewSet, CustomAuthToken, TeamViewSet
 from companies.views import CompanyViewSet
@@ -27,6 +26,8 @@ router.register(r"delegates", BookDelegateViewSet, basename="delegates")
 urlpatterns = [
     path("admin/",               admin.site.urls),
     path("api/",                 include(router.urls)),
+    path("api/webhooks/",        include("webhooks.urls")),
+    path("api/google-sync/",     include("google_sync.urls")),
     path("api/search/",          GlobalSearchView.as_view(),    name="global-search"),
     path("api/stats/dashboard/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path("api/auth/token/",      CustomAuthToken.as_view(), name="api-token"),

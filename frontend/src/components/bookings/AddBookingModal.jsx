@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { fmt, today } from "../../utils/helpers";
@@ -22,6 +22,7 @@ const COLS = [
   { key: "position", label: "Job Title", width: 180 },
   { key: "_company_name", label: "Company", width: 180, invoiceLevel: true },
   { key: "email", label: "Email", width: 240, type: "email" },
+  { key: "_accounts_contact_email", label: "Accounts Email", width: 220, invoiceLevel: true },
   { key: "phone_number", label: "Direct Line", width: 160, mono: true },
   { key: "attendance", label: "Attendance", width: 80, type: "checkbox" },
   { key: "delegate_payment_type", label: "Pmt Type", width: 140, type: "select", options: ["", "Bank", "Stripe"] },
@@ -98,6 +99,7 @@ export function AddBookingModal({ onClose, onSaved }) {
     request_date: today(),
     payment_due_date: form.payment_due_date,
     company_name: form.company_name,
+    accounts_contact_email: form.accounts_contact_email,
     paid_free: form.paid_free,
     invoice_date: form.invoice_date,
     booking_code: form.booking_code,
@@ -112,38 +114,27 @@ export function AddBookingModal({ onClose, onSaved }) {
 
         {/* ── HEADER ── */}
         <div style={headerWrap}>
-          <span style={headerTitle}>Add Booking</span>
-          <button onClick={onClose} style={closeBtn}>✕</button>
-        </div>
-
-        {/* ── INVOICE INFORMATION ── */}
-        <div style={sectionWrap}>
-          <SectionLabel>Invoice Information</SectionLabel>
-          <div style={grid3}>
-            <FGroup label="Invoice Number" req>
-              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} placeholder="INV-XXXX" />
-            </FGroup>
-            <FGroup label="Event Code" req>
-              <FSelect
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={headerTitle}>Add Booking</span>
+            <button onClick={onClose} style={closeBtn}>✕</button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.55fr", gap: "0 12px", marginTop: 12 }}>
+            <FGroup label="Event Code" req compact>
+              <EventCodePicker
                 value={form.event_code}
-                onChange={v => {
-                  const ev = events.find(x => x.event_code === v);
-                  set("event_code", v);
+                events={events}
+                compact
+                onChange={(code, ev) => {
+                  set("event_code", code);
                   set("event_name", ev?.name || "");
                 }}
-                options={[{ value: "", label: "— select event —" }, ...events.map(e => ({ value: e.event_code, label: e.event_code }))]}
               />
             </FGroup>
-            <FGroup label="Invoice Date">
-              <FInput type="date" value={fmt.dateInput(form.invoice_date)} onChange={v => set("invoice_date", v)} />
+            <FGroup label="Event Name" compact>
+              <FInput value={form.event_name} readOnly compact />
             </FGroup>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0 16px", marginTop: 10 }}>
-            <FGroup label="Event Name">
-              <FInput value={form.event_name} onChange={v => set("event_name", v)} placeholder="Auto-filled from event" />
-            </FGroup>
-            <FGroup label="Booking Code">
-              <FSelect value={form.booking_code} onChange={v => set("booking_code", v)} options={BOOKING_CODES} />
+            <FGroup label="Invoice Number" req compact>
+              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} placeholder="INV-XXXX" compact />
             </FGroup>
           </div>
         </div>
@@ -271,6 +262,13 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             </td>
           );
         }
+        if (c.key === "_accounts_contact_email") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellInput type="email" value={invoiceCtx.accounts_contact_email || ""} onChange={v => onSetInvoice("accounts_contact_email", v)} />
+            </td>
+          );
+        }
         if (c.virtual === "name") {
           return (
             <td key={c.key} style={tdCell}>
@@ -337,6 +335,111 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
    Form-level inputs (Invoice / Payment sections)
 ═══════════════════════════════════════════════════════════ */
 
+function EventCodePicker({ value, events, onChange, compact }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef(null);
+  const selected = events.find(e => e.event_code === value);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const q = search.toLowerCase();
+  const filtered = q
+    ? events.filter(e =>
+        e.event_code.toLowerCase().includes(q) ||
+        (e.name || "").toLowerCase().includes(q) ||
+        (e.city || "").toLowerCase().includes(q))
+    : events;
+
+  const chevron = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")";
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setSearch(""); }}
+        style={{
+          width: "100%", height: compact ? 34 : 38, padding: "0 32px 0 10px",
+          border: `1px solid ${open ? "var(--accent)" : BORDER}`,
+          borderRadius: 4, background: "#fff",
+          display: "flex", alignItems: "center", gap: 8,
+          cursor: "pointer", textAlign: "left",
+          boxShadow: open ? "0 0 0 2px var(--accent-soft)" : "none",
+          transition: "border-color .12s, box-shadow .12s",
+          boxSizing: "border-box", fontFamily: "var(--font-sans)",
+          backgroundImage: chevron,
+          backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
+          overflow: "hidden",
+        }}
+      >
+        {selected ? (
+          <>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "rgba(64,81,137,.1)", padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0 }}>
+              {selected.event_code}
+            </span>
+            <span style={{ fontSize: 12.5, color: TEXT_DIM, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {selected.name}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 13, color: TEXT_FAINT }}>— select event —</span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 6, boxShadow: "0 4px 20px rgba(0,0,0,.13)", zIndex: 200, overflow: "hidden" }}>
+          <div style={{ padding: "8px 10px", borderBottom: `1px solid ${BORDER}` }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search code, name or city…"
+              style={{ width: "100%", height: 30, padding: "0 8px", border: `1px solid ${BORDER}`, borderRadius: 4, fontSize: 12, fontFamily: "var(--font-sans)", color: TEXT, outline: "none", boxSizing: "border-box", background: "#fff" }}
+            />
+          </div>
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "14px 12px", fontSize: 12, color: TEXT_FAINT, textAlign: "center" }}>No events found</div>
+            ) : filtered.map(ev => {
+              const isActive = ev.event_code === value;
+              return (
+                <div
+                  key={ev.event_code}
+                  onClick={() => { onChange(ev.event_code, ev); setOpen(false); setSearch(""); }}
+                  style={{ padding: "8px 12px", cursor: "pointer", background: isActive ? "rgba(64,81,137,.07)" : "#fff", borderBottom: `1px solid ${BORDER}` }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#f8fafc"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(64,81,137,.07)" : "#fff"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "rgba(64,81,137,.1)", padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {ev.event_code}
+                    </span>
+                    <span style={{ fontSize: 12.5, fontWeight: 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {ev.name}
+                    </span>
+                    {isActive && <span style={{ marginLeft: "auto", flexShrink: 0, fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>✓</span>}
+                  </div>
+                  {(ev.event_date || ev.city) && (
+                    <div style={{ fontSize: 11, color: TEXT_DIM, marginTop: 3, display: "flex", gap: 6 }}>
+                      {ev.event_date && <span>{fmt.date(ev.event_date)}</span>}
+                      {ev.event_date && ev.city && <span>·</span>}
+                      {ev.city && <span>{ev.city}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, compact }) {
   const [f, setF] = useState(false);
   const h = compact ? 34 : 38;
@@ -364,37 +467,6 @@ function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, c
         boxSizing: "border-box",
       }}
     />
-  );
-}
-
-function FSelect({ value, onChange, options, compact }) {
-  const [f, setF] = useState(false);
-  const h = compact ? 34 : 38;
-  return (
-    <select
-      value={value ?? ""}
-      onChange={e => onChange?.(e.target.value)}
-      onFocus={() => setF(true)}
-      onBlur={() => setF(false)}
-      style={{
-        width: "100%", height: h, padding: "0 26px 0 10px",
-        border: `1px solid ${f ? "var(--accent)" : BORDER}`,
-        borderRadius: 4, background: "#fff", color: TEXT,
-        fontSize: compact ? 12 : 13, fontFamily: "var(--font-sans)",
-        outline: "none", appearance: "none", cursor: "pointer",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
-        backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
-        transition: "border-color .12s, box-shadow .12s",
-        boxSizing: "border-box",
-      }}
-    >
-      {options.map(o => {
-        const val = typeof o === "string" ? o : o.value;
-        const lbl = typeof o === "string" ? o : o.label;
-        return <option key={val} value={val}>{lbl || "(none)"}</option>;
-      })}
-    </select>
   );
 }
 
@@ -543,7 +615,8 @@ function Overlay({ onClose, children }) {
         position: "fixed", inset: 0, zIndex: 1100,
         background: "rgba(0,0,0,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "16px 0",
+        padding: "32px 16px",
+        overflowY: "auto",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -552,14 +625,6 @@ function Overlay({ onClose, children }) {
   );
 }
 
-function SectionLabel({ children }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-      <span style={sectionLabelStyle}>{children}</span>
-      <div style={{ flex: 1, height: 1, background: BORDER }} />
-    </div>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════
    Design tokens
@@ -579,17 +644,18 @@ const TEXT_FAINT = "var(--text-faint)";
 const modalBox = {
   width: "98%",
   maxWidth: 1650,
-  maxHeight: "92vh",
+  maxHeight: "calc(100vh - 64px)",
   background: "#fff",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
   overflowY: "auto",
+  flexShrink: 0,
 };
 
 const headerWrap = {
-  display: "flex", alignItems: "center", justifyContent: "space-between",
-  padding: "12px 20px",
+  display: "flex", flexDirection: "column",
+  padding: "11px 20px 14px",
   borderBottom: `1px solid ${BORDER}`,
   background: "#fff",
   position: "sticky", top: 0, zIndex: 20,
@@ -608,10 +674,6 @@ const closeBtn = {
   fontSize: 12, flexShrink: 0, fontFamily: "var(--font-sans)",
 };
 
-const sectionWrap = {
-  padding: "14px 20px 12px",
-  borderBottom: `1px solid ${BORDER}`,
-};
 
 const sectionLabelStyle = {
   fontSize: 10, fontWeight: 700, color: TEXT_DIM,
@@ -665,9 +727,6 @@ const countBadge = {
   fontSize: 10, fontWeight: 700, padding: "0 5px",
 };
 
-const grid3 = {
-  display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 16px",
-};
 
 const th = (extra = {}) => ({
   padding: "0 8px", height: 32,
