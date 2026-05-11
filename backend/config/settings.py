@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "book_delegate",
     "webhooks",
     "google_sync",
+    "reports",
 ]
 
 MIDDLEWARE = [

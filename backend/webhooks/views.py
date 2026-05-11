@@ -42,69 +42,77 @@ class WebhookIngestionView(APIView):
     permission_classes     = [AllowAny]
 
     def post(self, request):
-        recv_at = timezone.now()
-        ip      = extract_ip(request)
-        hdrs    = safe_headers(request.META)
+        try:
+            recv_at = timezone.now()
+            ip      = extract_ip(request)
+            hdrs    = safe_headers(request.META)
 
-        api_key_obj, auth_err = authenticate_request(request)
+            api_key_obj, auth_err = authenticate_request(request)
 
-        if auth_err:
-            WebhookLog.objects.create(
-                ip_address=ip, payload=request.data, headers=hdrs,
-                response={"error": auth_err},
-                status=WebhookLog.Status.FAILED,
-                http_status=401,
-                error_message=auth_err,
-                processing_status=WebhookLog.ProcessingStatus.ERROR,
+            if auth_err:
+                WebhookLog.objects.create(
+                    ip_address=ip, payload=request.data, headers=hdrs,
+                    response={"error": auth_err},
+                    status=WebhookLog.Status.FAILED,
+                    http_status=401,
+                    error_message=auth_err,
+                    processing_status=WebhookLog.ProcessingStatus.ERROR,
+                    received_at=recv_at,
+                )
+                return Response({"success": False, "error": auth_err}, status=status.HTTP_401_UNAUTHORIZED)
+
+            raw_payload    = request.data if isinstance(request.data, dict) else {}
+            payload        = unwrap_payload(raw_payload)
+            invoice_number = payload.get("InvoiceNumber", "")
+            event_code     = payload.get("Eventcode", "")
+            event_name     = payload.get("Eventname", "")
+            source         = (
+                request.META.get("HTTP_X_WEBHOOK_SOURCE", "")
+                or (api_key_obj.name if api_key_obj else "legacy-secret")
+            )
+
+            log = WebhookLog.objects.create(
+                api_key=api_key_obj,
+                source=source,
+                ip_address=ip,
+                request_method="POST",
+                payload=request.data,
+                headers=hdrs,
+                response={},
+                status=WebhookLog.Status.RECEIVED,
+                http_status=202,
+                invoice_number=invoice_number,
+                event_code=event_code,
+                event_name=event_name,
+                processing_status=WebhookLog.ProcessingStatus.PENDING,
                 received_at=recv_at,
             )
-            return Response({"success": False, "error": auth_err}, status=status.HTTP_401_UNAUTHORIZED)
 
-        raw_payload    = request.data if isinstance(request.data, dict) else {}
-        payload        = unwrap_payload(raw_payload)
-        invoice_number = payload.get("InvoiceNumber", "")
-        event_code     = payload.get("Eventcode", "")
-        event_name     = payload.get("Eventname", "")
-        source         = (
-            request.META.get("HTTP_X_WEBHOOK_SOURCE", "")
-            or (api_key_obj.name if api_key_obj else "legacy-secret")
-        )
+            processor       = WebhookProcessor(log)
+            success, result = processor.process()
 
-        log = WebhookLog.objects.create(
-            api_key=api_key_obj,
-            source=source,
-            ip_address=ip,
-            request_method="POST",
-            payload=request.data,
-            headers=hdrs,
-            response={},
-            status=WebhookLog.Status.RECEIVED,
-            http_status=202,
-            invoice_number=invoice_number,
-            event_code=event_code,
-            event_name=event_name,
-            processing_status=WebhookLog.ProcessingStatus.PENDING,
-            received_at=recv_at,
-        )
+            log.refresh_from_db()
+            resp_body = {"success": success, "log_id": log.id, **result}
+            log.response = resp_body
+            log.save(update_fields=["response"])
 
-        processor       = WebhookProcessor(log)
-        success, result = processor.process()
+            if success:
+                resp_status = status.HTTP_201_CREATED if result.get("db_action") == "inserted" else status.HTTP_200_OK
+            elif log.status == WebhookLog.Status.DUPLICATE:
+                resp_status = status.HTTP_409_CONFLICT
+            elif log.http_status == 400:
+                resp_status = status.HTTP_400_BAD_REQUEST
+            else:
+                resp_status = status.HTTP_500_INTERNAL_SERVER_ERROR
 
-        log.refresh_from_db()
-        resp_body = {"success": success, "log_id": log.id, **result}
-        log.response = resp_body
-        log.save(update_fields=["response"])
-
-        if success:
-            resp_status = status.HTTP_201_CREATED if result.get("db_action") == "inserted" else status.HTTP_200_OK
-        elif log.status == WebhookLog.Status.DUPLICATE:
-            resp_status = status.HTTP_409_CONFLICT
-        elif log.http_status == 400:
-            resp_status = status.HTTP_400_BAD_REQUEST
-        else:
-            resp_status = status.HTTP_500_INTERNAL_SERVER_ERROR
-
-        return Response(resp_body, status=resp_status)
+            return Response(resp_body, status=resp_status)
+        except Exception as e:
+            logger.exception("CRITICAL Webhook Ingestion Failure")
+            return Response({
+                "success": False, 
+                "error": "Internal Server Error",
+                "detail": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ── Webhook Logs ──────────────────────────────────────────────────────────────

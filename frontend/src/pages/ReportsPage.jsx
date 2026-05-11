@@ -1,147 +1,1086 @@
-import { useEffect, useState } from "react";
-import { searchApi } from "../api";
+/**
+ * ReportsPage.jsx
+ * ─────────────────
+ * Enterprise Google Sheets reporting module.
+ *
+ * Tabs:
+ *   Overview      — KPI summary from existing CRM stats
+ *   Sheet Registry — CRUD for GoogleSheetSource records + sync controls
+ *   Report Data    — Browse/search rows from any synced sheet
+ *   Sync Logs      — Per-source sync history
+ *   Documentation  — Markdown viewer for the complete reference doc
+ */
+import { useState, useEffect, useCallback, useRef } from "react";
+import { reportsApi, searchApi } from "../api";
+import { useToast } from "../contexts/ToastContext";
 import { fmt } from "../utils/helpers";
 
+
+// ─── Status color palettes ────────────────────────────────────────────────────
+const SYNC_COLORS = {
+  never:   { bg: "#f1f5f9", c: "#94a3b8" },
+  idle:    { bg: "#f1f5f9", c: "#64748b" },
+  syncing: { bg: "#fef3c7", c: "#d97706", pulse: true },
+  success: { bg: "var(--success-soft)", c: "var(--success)" },
+  partial: { bg: "#fff7ed", c: "#ea580c" },
+  failed:  { bg: "var(--danger-soft)",  c: "var(--danger)"  },
+};
+
+const LOG_COLORS = {
+  running: { bg: "#fef3c7", c: "#d97706" },
+  success: { bg: "var(--success-soft)", c: "var(--success)" },
+  partial: { bg: "#fff7ed", c: "#ea580c" },
+  failed:  { bg: "var(--danger-soft)",  c: "var(--danger)"  },
+};
+
+
+// ─── Page shell ───────────────────────────────────────────────────────────────
+
 export function ReportsPage() {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("overview");
+
+  const TABS = [
+    ["overview",  "Overview"],
+    ["registry",  "Sheet Registry"],
+    ["data",      "Report Data"],
+    ["logs",      "Sync Logs"],
+    ["docs",      "Documentation"],
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
+      <div style={{ padding: "24px 28px 0", flexShrink: 0 }}>
+        <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 4 }}>CRM › Insights</div>
+        <h1 style={{
+          margin: 0, fontFamily: "var(--font-serif)",
+          fontWeight: 500, fontSize: 38, lineHeight: 1,
+          letterSpacing: "-0.01em", color: "var(--text)",
+        }}>
+          Reports.
+        </h1>
+        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-dim)" }}>
+          Centralised reporting platform — 40–50 Google Sheets, live data, real-time sync.
+        </p>
+
+        <div style={{ display: "flex", marginTop: 20, borderBottom: "1px solid var(--border)" }}>
+          {TABS.map(([id, label]) => (
+            <button key={id} onClick={() => setTab(id)} style={{
+              padding: "8px 16px", fontSize: 13, fontWeight: 500,
+              fontFamily: "inherit", background: "none", border: "none",
+              borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent",
+              color: tab === id ? "var(--accent)" : "var(--text-dim)",
+              cursor: "pointer", marginBottom: -1,
+            }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "overview"  && <OverviewTab />}
+      {tab === "registry"  && <RegistryTab />}
+      {tab === "data"      && <DataTab />}
+      {tab === "logs"      && <SyncLogsTab />}
+      {tab === "docs"      && <DocsTab />}
+    </div>
+  );
+}
+
+
+// ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
+
+function OverviewTab() {
+  const [stats, setStats]         = useState(null);
+  const [sources, setSources]     = useState([]);
+  const [loadingStats, setLS]     = useState(true);
+  const [loadingSrc, setLSrc]     = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
-    searchApi.stats().then(setStats).finally(() => setLoading(false));
-  }, []);
+    searchApi.stats().then(setStats).catch(() => {}).finally(() => setLS(false));
+    reportsApi.sources.list({ page_size: 50 })
+      .then(r => setSources(r.results || r))
+      .catch(() => toast.error("Failed to load sheet sources"))
+      .finally(() => setLSrc(false));
+  }, [toast]);
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>Loading…</div>;
-  if (!stats) return <div style={{ padding: 40, textAlign: "center", color: "#94a3b8" }}>No data</div>;
+  const totalSources  = sources.length;
+  const activeSources = sources.filter(s => s.is_active).length;
+  const syncedToday   = sources.filter(s => {
+    if (!s.last_synced_at) return false;
+    return new Date(s.last_synced_at).toDateString() === new Date().toDateString();
+  }).length;
+  const failedSources = sources.filter(s => s.sync_status === "failed").length;
 
-  const { events: ev, invoices: inv, delegates: del, top_events_by_revenue: topEv = [] } = stats;
+  const inv = stats?.invoices || {};
+  const ev  = stats?.events   || {};
+  const topEv = stats?.top_events_by_revenue || [];
   const maxRev = topEv[0]?.revenue || 1;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "20px" }}>
-      <div style={{ marginBottom: "20px" }}>
-        <h4 style={{ margin: 0, fontSize: 18, color: "#495057", textTransform: "uppercase", fontWeight: 700 }}>Reports & Analytics</h4>
-        <p style={{ margin: "4px 0 0", fontSize: 13, color: "#878a99" }}>Comprehensive overview of events, revenue, and delegate statistics.</p>
+    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px 28px" }}>
+      {/* Sheet source KPIs */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
+          Google Sheets Platform
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+          <StatCard label="Total Sources" value={loadingSrc ? "…" : totalSources} color="var(--accent)" />
+          <StatCard label="Active Sources" value={loadingSrc ? "…" : activeSources} color="var(--success)" />
+          <StatCard label="Synced Today" value={loadingSrc ? "…" : syncedToday} color="#2563eb" />
+          <StatCard label="Failed Sources" value={loadingSrc ? "…" : failedSources} color={failedSources > 0 ? "var(--danger)" : "var(--text-faint)"} />
+        </div>
       </div>
 
-      <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-        {/* KPIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 20, marginBottom: 20 }}>
-          <KpiCard
-            label="Pending Invoices"
-            value={inv?.pending || 0}
-            sub={fmt.currency(inv?.revenue_pending)}
-            icon={<svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></svg>}
-            color="warning"
-          />
+      {/* CRM KPIs */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
+          CRM Summary
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+          <StatCard label="Total Revenue" value={loadingStats ? "…" : fmt.currency(inv.revenue_paid)} sub="Paid bookings" color="var(--success)" />
+          <StatCard label="Pending Revenue" value={loadingStats ? "…" : fmt.currency(inv.revenue_pending)} sub="Awaiting payment" color="#d97706" />
+          <StatCard label="Total Bookings" value={loadingStats ? "…" : (inv.total || 0)} sub={`${inv.paid || 0} paid`} color="var(--accent)" />
+          <StatCard label="Active Events" value={loadingStats ? "…" : ((ev.live || 0) + (ev.upcoming || 0))} sub={`${ev.total || 0} total`} color="#7c3aed" />
+        </div>
+      </div>
+
+      {/* Bottom grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        {/* Revenue by event */}
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Top Events by Revenue</div>
+          {topEv.length === 0
+            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No paid revenue yet</div>
+            : topEv.slice(0, 6).map((e) => (
+              <div key={e.event_code} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{e.event_code}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>{fmt.currency(e.revenue)}</span>
+                </div>
+                <div style={{ height: 5, background: "var(--surface-alt)", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 3, background: "var(--accent)", width: `${Math.round(e.revenue / maxRev * 100)}%`, transition: "width .4s" }} />
+                </div>
+              </div>
+            ))
+          }
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          {/* Revenue by event */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div className="card-header" style={{ border: "none", padding: 0, marginBottom: 20 }}>
-              <h5 style={{ margin: 0 }}>Revenue by Event</h5>
-            </div>
-            {topEv.length === 0 ? (
-              <p style={{ color: "#94a3b8", fontSize: 13 }}>No paid revenue yet</p>
-            ) : topEv.map((e) => (
-              <div key={e.event_code} style={{ marginBottom: 15 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "#495057" }}>{e.event_code}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--vz-primary)" }}>{fmt.currency(e.revenue)}</span>
+        {/* Sheet source status */}
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Sheet Source Status</div>
+          {loadingSrc
+            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading…</div>
+            : sources.length === 0
+            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No sheet sources configured yet. Add one in Sheet Registry.</div>
+            : sources.slice(0, 8).map(s => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{s.name}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)" }}>{s.worksheet_name} · {s.records_count} rows</div>
                 </div>
-                <div style={{ height: 6, background: "#f3f3f9", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{
-                    height: "100%",
-                    borderRadius: 4,
-                    background: "var(--vz-primary)",
-                    width: `${Math.round(e.revenue / maxRev * 100)}%`,
-                    transition: "width .4s ease"
-                  }} />
-                </div>
+                <StatusChip status={s.sync_status} colors={SYNC_COLORS} />
               </div>
-            ))}
-          </div>
-
-          {/* Status breakdown */}
-          <div className="card" style={{ padding: "20px" }}>
-            <div className="card-header" style={{ border: "none", padding: 0, marginBottom: 20 }}>
-              <h5 style={{ margin: 0 }}>Invoice & Event Summary</h5>
-            </div>
-
-            <div style={{ display: "grid", gap: 15, marginBottom: 25 }}>
-              {[
-                ["Paid", inv?.paid || 0, "var(--vz-success)"],
-                ["Pending", inv?.pending || 0, "var(--vz-warning)"],
-                ["Cancelled", inv?.cancelled || 0, "var(--vz-danger)"],
-              ].map(([label, count, color]) => (
-                <div key={label}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ fontSize: 13, color: "#495057" }}>{label}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{count} ({inv?.total ? Math.round(count / inv.total * 100) : 0}%)</span>
-                  </div>
-                  <div style={{ height: 12, background: "#f3f3f9", borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%",
-                      background: color,
-                      width: inv?.total ? `${Math.max(count > 0 ? 5 : 0, Math.round(count / inv.total * 100))}%` : "0%",
-                      transition: "width .4s ease"
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ borderTop: "1px solid #e9ebec", paddingTop: 20 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 12, color: "#878a99", marginBottom: 4 }}>Live</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{ev?.live || 0}</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 12, color: "#878a99", marginBottom: 4 }}>Upcoming</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{ev?.upcoming || 0}</div>
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 12, color: "#878a99", marginBottom: 4 }}>Total</div>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{ev?.total || 0}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+            ))
+          }
         </div>
       </div>
     </div>
   );
 }
 
-function KpiCard({ label, value, sub, icon, color }) {
-  const colors = {
-    primary: { bg: "rgba(64, 81, 137, 0.1)", text: "var(--vz-primary)" },
-    success: { bg: "rgba(10, 179, 156, 0.1)", text: "var(--vz-success)" },
-    warning: { bg: "rgba(247, 184, 75, 0.1)", text: "var(--vz-warning)" },
-    info: { bg: "rgba(41, 156, 219, 0.1)", text: "var(--vz-info)" },
-  }[color] || { bg: "#f3f3f9", text: "#495057" };
+function StatCard({ label, value, sub, color }) {
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px" }}>
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || "var(--text)", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+
+// ─── SHEET REGISTRY TAB ───────────────────────────────────────────────────────
+
+function RegistryTab() {
+  const toast = useToast();
+  const [sources, setSources]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [syncing, setSyncing]     = useState(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [creating, setCreating]   = useState(false);
+  const [editing, setEditing]     = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {};
+      if (search)     params.search     = search;
+      if (typeFilter) params.sheet_type = typeFilter;
+      const res = await reportsApi.sources.list(params);
+      setSources(res.results || res);
+    } catch {
+      toast.error("Failed to load sheet sources");
+    } finally {
+      setLoading(false);
+    }
+  }, [search, typeFilter, toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSync = async (source) => {
+    setSyncing(source.id);
+    try {
+      const log = await reportsApi.sources.sync(source.id);
+      if (log.status === "success") toast.success(`"${source.name}" synced — ${log.records_processed} rows`);
+      else if (log.status === "partial") toast.warn?.(`"${source.name}" synced with ${log.records_failed} failures`);
+      else toast.error(`"${source.name}" sync failed: ${log.error_message?.slice(0, 80)}`);
+      load();
+    } catch {
+      toast.error("Sync request failed");
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    try {
+      const res = await reportsApi.sources.syncAll();
+      toast.success(`Sync all complete — ${res.success} succeeded, ${res.failed} failed`);
+      load();
+    } catch {
+      toast.error("Sync all failed");
+    } finally {
+      setSyncingAll(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await reportsApi.sources.delete(id);
+      toast.success("Sheet source deleted");
+      setConfirmDelete(null);
+      load();
+    } catch {
+      toast.error("Delete failed");
+    }
+  };
+
+  const SHEET_TYPES = ["", "bookings", "events", "delegates", "revenue", "pipeline", "custom"];
+
+  const COLS = [
+    { label: "Name",      w: 180 },
+    { label: "Tab",       w: 130 },
+    { label: "Type",      w: 100 },
+    { label: "Status",    w: 110 },
+    { label: "Records",   w: 80  },
+    { label: "Freq",      w: 80  },
+    { label: "Last Sync", w: 160 },
+    { label: "",          w: 200 },
+  ];
 
   return (
-    <div className="card" style={{ padding: "20px", display: "flex", justifyContent: "space-between" }}>
-      <div>
-        <h6 style={{ margin: "0 0 12px", color: "#878a99", textTransform: "uppercase", fontSize: 13, fontWeight: 600 }}>{label}</h6>
-        <h3 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 700 }}>{value}</h3>
-        {sub && <div style={{ fontSize: 13, color: "#878a99" }}>{sub}</div>}
+    <>
+      {/* Toolbar */}
+      <div style={{ padding: "12px 28px 14px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+        {SHEET_TYPES.map(t => (
+          <button key={t} onClick={() => setTypeFilter(t)} style={{
+            padding: "5px 11px", borderRadius: 7, fontSize: 11, fontWeight: 500,
+            fontFamily: "inherit", textTransform: "capitalize", cursor: "pointer",
+            border: `1px solid ${typeFilter === t ? "var(--accent)" : "var(--border)"}`,
+            background: typeFilter === t ? "var(--accent-soft)" : "var(--surface)",
+            color: typeFilter === t ? "var(--accent)" : "var(--text-dim)",
+          }}>
+            {t || "All"}
+          </button>
+        ))}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", height: 30, marginLeft: "auto" }}>
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4"/><path d="M9 9l2 2"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sources…" style={{ border: "none", outline: "none", fontSize: 12, background: "none", color: "var(--text)", fontFamily: "inherit", width: 160 }} />
+        </div>
+
+        <button onClick={() => load()} style={toolBtn} title="Refresh">↺</button>
+        <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{sources.length} sources</span>
+
+        <button onClick={handleSyncAll} disabled={syncingAll} style={{ ...toolBtn, borderColor: "var(--accent)", color: "var(--accent)", opacity: syncingAll ? 0.6 : 1 }}>
+          {syncingAll ? "Syncing…" : "⟳ Sync All"}
+        </button>
+
+        <button onClick={() => setCreating(true)} style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+          + Add Sheet
+        </button>
       </div>
-      <div style={{
-        width: 48,
-        height: 48,
-        borderRadius: 8,
-        background: colors.bg,
-        color: colors.text,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}>
-        {icon}
+
+      {/* Table */}
+      <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
+            <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                <tr style={{ background: "var(--surface-alt)" }}>
+                  {COLS.map(({ label, w }) => (
+                    <th key={label + w} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-dim)", textAlign: "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", minWidth: w }}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading
+                  ? <tr><td colSpan={COLS.length} style={emptyCell}>Loading…</td></tr>
+                  : sources.length === 0
+                  ? <tr><td colSpan={COLS.length} style={emptyCell}>No sheet sources yet. Click "+ Add Sheet" to connect a Google Sheet.</td></tr>
+                  : sources.map(src => (
+                    <SourceRow
+                      key={src.id}
+                      source={src}
+                      syncing={syncing === src.id}
+                      onSync={() => handleSync(src)}
+                      onEdit={() => setEditing(src)}
+                      onDelete={() => setConfirmDelete(src)}
+                    />
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {creating && <SourceModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
+      {editing  && <SourceModal source={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete Sheet Source"
+          message={`Delete "${confirmDelete.name}"? All synced rows will also be deleted.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(confirmDelete.id)}
+          onClose={() => setConfirmDelete(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function SourceRow({ source: s, syncing, onSync, onEdit, onDelete }) {
+  return (
+    <tr style={{ borderTop: "1px solid var(--border)", fontSize: 13 }}
+      onMouseOver={e => e.currentTarget.style.background = "var(--surface-alt)"}
+      onMouseOut={e => e.currentTarget.style.background = "transparent"}
+    >
+      <td style={cell}>
+        <div style={{ fontWeight: 500, color: "var(--text)" }}>{s.name}</div>
+        {s.description && <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>{s.description.slice(0, 60)}</div>}
+      </td>
+      <td style={cell}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>{s.worksheet_name}</span>
+      </td>
+      <td style={cell}>
+        <span style={{ fontSize: 11, textTransform: "capitalize", color: "var(--text-dim)" }}>{s.sheet_type}</span>
+      </td>
+      <td style={cell}><StatusChip status={s.sync_status} colors={SYNC_COLORS} /></td>
+      <td style={{ ...cell, textAlign: "center" }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)" }}>{s.records_count.toLocaleString()}</span>
+      </td>
+      <td style={cell}>
+        <span style={{ fontSize: 11, textTransform: "capitalize", color: "var(--text-dim)" }}>{s.sync_frequency}</span>
+      </td>
+      <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>
+        {s.last_synced_at ? new Date(s.last_synced_at).toLocaleString() : "Never"}
+      </td>
+      <td style={cell} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onSync} disabled={syncing} style={{ ...actionBtn, borderColor: syncing ? "var(--border)" : "var(--accent)", color: syncing ? "var(--text-faint)" : "var(--accent)" }}>
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+          <button onClick={onEdit}   style={actionBtn}>Edit</button>
+          <button onClick={onDelete} style={{ ...actionBtn, borderColor: "var(--danger)", color: "var(--danger)" }}>Delete</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+
+// ─── REPORT DATA TAB ──────────────────────────────────────────────────────────
+
+function DataTab() {
+  const toast = useToast();
+  const [sources, setSources]     = useState([]);
+  const [selectedSrc, setSelectedSrc] = useState(null);
+  const [rows, setRows]           = useState([]);
+  const [columns, setColumns]     = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+  const [search, setSearch]       = useState("");
+
+  useEffect(() => {
+    reportsApi.sources.list({ page_size: 100 })
+      .then(r => setSources(r.results || r))
+      .catch(() => toast.error("Failed to load sources"));
+  }, [toast]);
+
+  const loadRows = useCallback(async () => {
+    if (!selectedSrc) return;
+    setLoading(true);
+    try {
+      const params = { page, page_size: 50 };
+      if (search) params.search = search;
+      const res = await reportsApi.sources.rows(selectedSrc.id, params);
+      const data = res.results || res;
+      setRows(data);
+      setTotal(res.count || data.length);
+      // Derive columns from first row
+      if (data.length > 0) {
+        setColumns(Object.keys(data[0].processed_data || {}));
+      }
+    } catch {
+      toast.error("Failed to load rows");
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedSrc, page, search, toast]);
+
+  useEffect(() => { loadRows(); }, [loadRows]);
+
+  const totalPages = Math.max(1, Math.ceil(total / 50));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, padding: "12px 28px 28px" }}>
+      {/* Source selector + search */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <select
+          value={selectedSrc?.id || ""}
+          onChange={e => {
+            const src = sources.find(s => String(s.id) === e.target.value);
+            setSelectedSrc(src || null);
+            setPage(1);
+            setSearch("");
+            setColumns([]);
+            setRows([]);
+          }}
+          style={{ ...inputStyle, width: 260, height: 32, padding: "0 10px" }}
+        >
+          <option value="">— Select a sheet source —</option>
+          {sources.map(s => (
+            <option key={s.id} value={s.id}>{s.name} ({s.records_count} rows)</option>
+          ))}
+        </select>
+
+        {selectedSrc && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", height: 32 }}>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4"/><path d="M9 9l2 2"/></svg>
+              <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search rows…" style={{ border: "none", outline: "none", fontSize: 12, background: "none", color: "var(--text)", fontFamily: "inherit", width: 180 }} />
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{total.toLocaleString()} rows</span>
+          </>
+        )}
+      </div>
+
+      {!selectedSrc ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontSize: 13 }}>
+          Select a sheet source above to browse its data.
+        </div>
+      ) : (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1 }}>
+            <div style={{ flex: 1, overflow: "auto" }}>
+              {loading ? (
+                <div style={emptyCell}>Loading…</div>
+              ) : rows.length === 0 ? (
+                <div style={emptyCell}>No rows found. Sync the sheet first.</div>
+              ) : (
+                <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
+                  <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                    <tr style={{ background: "var(--surface-alt)" }}>
+                      <th style={thStyle}>#</th>
+                      {columns.map(col => <th key={col} style={{ ...thStyle, minWidth: 140 }}>{col}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(row => (
+                      <tr key={row.id} style={{ borderTop: "1px solid var(--border)", fontSize: 12 }}
+                        onMouseOver={e => e.currentTarget.style.background = "var(--surface-alt)"}
+                        onMouseOut={e => e.currentTarget.style.background = "transparent"}
+                      >
+                        <td style={{ ...cell, color: "var(--text-faint)", fontSize: 11 }}>{row.row_number}</td>
+                        {columns.map(col => (
+                          <td key={col} style={{ ...cell, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {String(row.processed_data?.[col] ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div style={{ borderTop: "1px solid var(--border)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtn}>← Prev</button>
+              <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Page {page} of {totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={pageBtn}>Next →</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── SYNC LOGS TAB ────────────────────────────────────────────────────────────
+
+function SyncLogsTab() {
+  const toast = useToast();
+  const [logs, setLogs]           = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [sources, setSources]     = useState([]);
+  const [srcFilter, setSrcFilter] = useState("");
+  const [stFilter, setStFilter]   = useState("");
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+
+  useEffect(() => {
+    reportsApi.sources.list({ page_size: 100 })
+      .then(r => setSources(r.results || r))
+      .catch(() => {});
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { page, page_size: 50 };
+      if (srcFilter) params.source = srcFilter;
+      if (stFilter)  params.status = stFilter;
+      const res = await reportsApi.syncLogs.list(params);
+      setLogs(res.results || []);
+      setTotal(res.count || 0);
+    } catch {
+      toast.error("Failed to load sync logs");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, srcFilter, stFilter, toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / 50));
+  const STATUSES = ["", "running", "success", "partial", "failed"];
+
+  return (
+    <>
+      <div style={{ padding: "12px 28px 14px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+        <select value={srcFilter} onChange={e => { setSrcFilter(e.target.value); setPage(1); }} style={{ ...inputStyle, width: 220, height: 30, padding: "0 8px" }}>
+          <option value="">All Sources</option>
+          {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+
+        {STATUSES.map(st => (
+          <button key={st} onClick={() => { setStFilter(st); setPage(1); }} style={{
+            padding: "5px 11px", borderRadius: 7, fontSize: 11, fontWeight: 500,
+            fontFamily: "inherit", textTransform: "capitalize", cursor: "pointer",
+            border: `1px solid ${stFilter === st ? "var(--accent)" : "var(--border)"}`,
+            background: stFilter === st ? "var(--accent-soft)" : "var(--surface)",
+            color: stFilter === st ? "var(--accent)" : "var(--text-dim)",
+          }}>
+            {st || "All"}
+          </button>
+        ))}
+
+        <button onClick={() => load()} style={toolBtn} title="Refresh">↺</button>
+        <span style={{ fontSize: 11, color: "var(--text-faint)", marginLeft: "auto" }}>{total} logs</span>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
+            <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                <tr style={{ background: "var(--surface-alt)" }}>
+                  {[
+                    { label: "Status",    w: 100 },
+                    { label: "Source",    w: 180 },
+                    { label: "Started",   w: 160 },
+                    { label: "Duration",  w: 90  },
+                    { label: "Processed", w: 90  },
+                    { label: "Created",   w: 80  },
+                    { label: "Updated",   w: 80  },
+                    { label: "Failed",    w: 70  },
+                    { label: "Triggered", w: 120 },
+                  ].map(({ label, w }) => (
+                    <th key={label} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-dim)", textAlign: "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", minWidth: w }}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading
+                  ? <tr><td colSpan={9} style={emptyCell}>Loading…</td></tr>
+                  : logs.length === 0
+                  ? <tr><td colSpan={9} style={emptyCell}>No sync logs yet.</td></tr>
+                  : logs.map(log => (
+                    <tr key={log.id} style={{ borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                      <td style={cell}><StatusChip status={log.status} colors={LOG_COLORS} /></td>
+                      <td style={cell}><span style={{ fontSize: 12, color: "var(--text)" }}>{log.source_name || "—"}</span></td>
+                      <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{new Date(log.started_at).toLocaleString()}</td>
+                      <td style={{ ...cell, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+                        {log.duration_seconds != null ? `${log.duration_seconds}s` : "—"}
+                      </td>
+                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12 }}>{log.records_processed}</td>
+                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>+{log.records_created}</td>
+                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "#2563eb" }}>↑{log.records_updated}</td>
+                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: log.records_failed > 0 ? "var(--danger)" : "var(--text-faint)" }}>
+                        {log.records_failed > 0 ? `✕${log.records_failed}` : "—"}
+                      </td>
+                      <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{log.triggered_by || "—"}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ borderTop: "1px solid var(--border)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={pageBtn}>← Prev</button>
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>Page {page} of {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={pageBtn}>Next →</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+// ─── DOCUMENTATION TAB ───────────────────────────────────────────────────────
+
+function DocsTab() {
+  const toast = useToast();
+  const [files, setFiles]       = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [content, setContent]   = useState("");
+  const [loading, setLoading]   = useState(false);
+
+  useEffect(() => {
+    reportsApi.docs.list()
+      .then(setFiles)
+      .catch(() => toast.error("Failed to load documentation files"));
+  }, [toast]);
+
+  const openDoc = async (filename) => {
+    if (selected === filename) return;
+    setSelected(filename);
+    setLoading(true);
+    try {
+      const res = await reportsApi.docs.get(filename);
+      setContent(res.content || "");
+    } catch {
+      toast.error("Failed to load document");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flex: 1, minHeight: 0, padding: "12px 28px 28px", gap: 16 }}>
+      {/* Sidebar file list */}
+      <div style={{ width: 260, flexShrink: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "12px 14px 8px", fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", borderBottom: "1px solid var(--border)" }}>
+          Documentation Files
+        </div>
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          {files.length === 0
+            ? <div style={{ padding: "20px 14px", fontSize: 12, color: "var(--text-faint)" }}>No docs yet.</div>
+            : files.map(f => (
+              <button key={f.filename} onClick={() => openDoc(f.filename)} style={{
+                width: "100%", textAlign: "left", padding: "9px 14px",
+                fontSize: 12, fontFamily: "inherit", cursor: "pointer",
+                background: selected === f.filename ? "var(--accent-soft)" : "none",
+                color: selected === f.filename ? "var(--accent)" : "var(--text-dim)",
+                border: "none", borderLeft: selected === f.filename ? "2px solid var(--accent)" : "2px solid transparent",
+              }}>
+                <div style={{ fontWeight: 500 }}>{f.filename.replace(".md", "").replace(/_/g, " ")}</div>
+                <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>{f.filename}</div>
+              </button>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Markdown viewer */}
+      <div style={{ flex: 1, minWidth: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {!selected ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontSize: 13 }}>
+            Select a document from the list to view it.
+          </div>
+        ) : loading ? (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontSize: 13 }}>
+            Loading…
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px" }}>
+            <MarkdownRenderer content={content} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+function MarkdownRenderer({ content }) {
+  if (!content) return null;
+
+  const lines = content.split("\n");
+  const elements = [];
+  let i = 0;
+  let inTable = false;
+  let tableRows = [];
+  let inCodeBlock = false;
+  let codeLines = [];
+  let codeLang = "";
+
+  const flushTable = () => {
+    if (tableRows.length < 2) { tableRows = []; inTable = false; return; }
+    const header = tableRows[0].split("|").map(c => c.trim()).filter(Boolean);
+    const body   = tableRows.slice(2); // skip separator row
+    elements.push(
+      <div key={`tbl-${i}`} style={{ overflowX: "auto", marginBottom: 16 }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
+          <thead>
+            <tr style={{ background: "var(--surface-alt)" }}>
+              {header.map((h, hi) => <th key={hi} style={{ padding: "7px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((row, ri) => {
+              const cells = row.split("|").map(c => c.trim()).filter(Boolean);
+              return (
+                <tr key={ri} style={{ borderTop: "1px solid var(--border)" }}>
+                  {cells.map((c, ci) => <td key={ci} style={{ padding: "7px 12px", color: "var(--text-dim)", fontSize: 12 }}>{c}</td>)}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+    tableRows = [];
+    inTable = false;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Code block
+    if (line.startsWith("```")) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeLang = line.slice(3).trim();
+        codeLines = [];
+      } else {
+        elements.push(
+          <pre key={`code-${i}`} style={{ margin: "0 0 16px", padding: "12px 14px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-dim)", overflowX: "auto", whiteSpace: "pre", lineHeight: 1.6 }}>
+            {codeLines.join("\n")}
+          </pre>
+        );
+        inCodeBlock = false;
+        codeLines = [];
+      }
+      i++; continue;
+    }
+    if (inCodeBlock) { codeLines.push(line); i++; continue; }
+
+    // Table row
+    if (line.startsWith("|")) {
+      if (!inTable) inTable = true;
+      tableRows.push(line);
+      i++; continue;
+    } else if (inTable) {
+      flushTable();
+    }
+
+    // Headings
+    if (line.startsWith("#### ")) { elements.push(<h4 key={i} style={{ margin: "20px 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{line.slice(5)}</h4>); i++; continue; }
+    if (line.startsWith("### "))  { elements.push(<h3 key={i} style={{ margin: "24px 0 10px", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{line.slice(4)}</h3>); i++; continue; }
+    if (line.startsWith("## "))   { elements.push(<h2 key={i} style={{ margin: "28px 0 12px", fontSize: 18, fontWeight: 700, color: "var(--text)", borderBottom: "1px solid var(--border)", paddingBottom: 6 }}>{line.slice(3)}</h2>); i++; continue; }
+    if (line.startsWith("# "))    { elements.push(<h1 key={i} style={{ margin: "0 0 16px", fontSize: 22, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-serif)" }}>{line.slice(2)}</h1>); i++; continue; }
+
+    // HR
+    if (line.match(/^---+$/)) { elements.push(<hr key={i} style={{ border: "none", borderTop: "1px solid var(--border)", margin: "20px 0" }} />); i++; continue; }
+
+    // Empty line
+    if (!line.trim()) { elements.push(<div key={i} style={{ height: 8 }} />); i++; continue; }
+
+    // Blockquote
+    if (line.startsWith("> ")) {
+      elements.push(<blockquote key={i} style={{ margin: "0 0 12px", padding: "8px 14px", background: "var(--surface-alt)", borderLeft: "3px solid var(--accent)", borderRadius: "0 6px 6px 0", fontSize: 12, color: "var(--text-dim)" }}>{line.slice(2)}</blockquote>);
+      i++; continue;
+    }
+
+    // List item
+    if (line.match(/^[\-\*] /)) {
+      elements.push(<div key={i} style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4, paddingLeft: 16, display: "flex", gap: 8 }}><span style={{ flexShrink: 0, color: "var(--accent)" }}>•</span>{line.slice(2)}</div>);
+      i++; continue;
+    }
+    if (line.match(/^\d+\. /)) {
+      const text = line.replace(/^\d+\. /, "");
+      const num  = line.match(/^(\d+)\./)?.[1] || "•";
+      elements.push(<div key={i} style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4, paddingLeft: 16, display: "flex", gap: 8 }}><span style={{ flexShrink: 0, minWidth: 16, color: "var(--accent)", fontWeight: 600 }}>{num}.</span>{text}</div>);
+      i++; continue;
+    }
+
+    // Paragraph
+    const rendered = line
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/`(.+?)`/g, `<code style="font-family:var(--font-mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px;border:1px solid var(--border)">$1</code>`);
+    elements.push(<p key={i} style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-dim)", lineHeight: 1.7 }} dangerouslySetInnerHTML={{ __html: rendered }} />);
+    i++;
+  }
+
+  if (inTable) flushTable();
+
+  return <div>{elements}</div>;
+}
+
+
+// ─── Source Create/Edit Modal ─────────────────────────────────────────────────
+
+function SourceModal({ source, onClose, onSaved }) {
+  const toast = useToast();
+  const isEdit = !!source;
+  const [form, setForm] = useState({
+    name: source?.name || "",
+    description: source?.description || "",
+    sheet_url: source?.sheet_url || "",
+    sheet_id: source?.sheet_id || "",
+    worksheet_name: source?.worksheet_name || "Sheet1",
+    sheet_type: source?.sheet_type || "custom",
+    sync_enabled: source?.sync_enabled ?? true,
+    sync_frequency: source?.sync_frequency || "manual",
+    notes: source?.notes || "",
+  });
+  const [saving, setSaving]       = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [worksheets, setWorksheets] = useState([]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const detectWorksheets = async () => {
+    const urlOrId = form.sheet_url || form.sheet_id;
+    if (!urlOrId) { toast.error("Enter a Sheet URL or ID first"); return; }
+    setDetecting(true);
+    try {
+      const res = await reportsApi.sources.listWorksheets({ sheet_url: urlOrId });
+      if (res.worksheets) {
+        setWorksheets(res.worksheets);
+        toast.success(`Found ${res.worksheets.length} tabs`);
+      } else {
+        toast.error(res.error || "Could not list worksheets");
+      }
+    } catch {
+      toast.error("Failed to detect worksheets");
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (isEdit) {
+        await reportsApi.sources.update(source.id, form);
+        toast.success("Source updated");
+      } else {
+        await reportsApi.sources.create(form);
+        toast.success(`"${form.name}" created`);
+      }
+      onSaved();
+    } catch {
+      toast.error(isEdit ? "Update failed" : "Create failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "min(600px, 100%)", maxHeight: "calc(100vh - 80px)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{isEdit ? `Edit: ${source.name}` : "Add Google Sheet Source"}</span>
+          <button onClick={onClose} style={closeBtn}>✕</button>
+        </div>
+
+        <form onSubmit={submit} style={{ overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label="Name *">
+              <input required value={form.name} onChange={e => set("name", e.target.value)} style={inputStyle} placeholder="e.g. Summit Bookings 2025" />
+            </Field>
+            <Field label="Type">
+              <select value={form.sheet_type} onChange={e => set("sheet_type", e.target.value)} style={{ ...inputStyle, height: 34 }}>
+                {["bookings","events","delegates","revenue","pipeline","attendance","custom"].map(t => (
+                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Google Sheet URL" hint="Paste the full Google Sheets URL — the Sheet ID will be extracted automatically">
+            <input value={form.sheet_url} onChange={e => set("sheet_url", e.target.value)} style={inputStyle} placeholder="https://docs.google.com/spreadsheets/d/…" />
+          </Field>
+
+          <Field label="Worksheet / Tab Name">
+            <div style={{ display: "flex", gap: 8 }}>
+              {worksheets.length > 0 ? (
+                <select value={form.worksheet_name} onChange={e => set("worksheet_name", e.target.value)} style={{ ...inputStyle, flex: 1, height: 34 }}>
+                  {worksheets.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              ) : (
+                <input value={form.worksheet_name} onChange={e => set("worksheet_name", e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="Sheet1" />
+              )}
+              <button type="button" onClick={detectWorksheets} disabled={detecting} style={{ ...toolBtn, whiteSpace: "nowrap" }}>
+                {detecting ? "Detecting…" : "Detect Tabs"}
+              </button>
+            </div>
+          </Field>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <Field label="Sync Frequency">
+              <select value={form.sync_frequency} onChange={e => set("sync_frequency", e.target.value)} style={{ ...inputStyle, height: 34 }}>
+                {[["manual","Manual Only"],["hourly","Every Hour"],["daily","Daily"],["weekly","Weekly"]].map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Sync Enabled">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingTop: 6, fontSize: 13, color: "var(--text-dim)" }}>
+                <input type="checkbox" checked={form.sync_enabled} onChange={e => set("sync_enabled", e.target.checked)} />
+                {form.sync_enabled ? "Enabled" : "Disabled"}
+              </label>
+            </Field>
+          </div>
+
+          <Field label="Description">
+            <textarea value={form.description} onChange={e => set("description", e.target.value)} style={{ ...inputStyle, minHeight: 56, resize: "vertical" }} placeholder="What data does this sheet contain?" />
+          </Field>
+
+          <Field label="Notes">
+            <textarea value={form.notes} onChange={e => set("notes", e.target.value)} style={{ ...inputStyle, minHeight: 48, resize: "vertical" }} placeholder="Admin notes…" />
+          </Field>
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+            <button type="button" onClick={onClose} style={pageBtn}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding: "6px 16px", borderRadius: 7, border: "1px solid var(--accent)", background: "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 500, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Source"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
+
+function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onClose }) {
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, width: "min(400px,100%)", padding: 24 }}>
+        <div style={{ fontWeight: 600, fontSize: 15, color: "var(--text)", marginBottom: 10 }}>{title}</div>
+        <p style={{ fontSize: 13, color: "var(--text-dim)", margin: "0 0 20px" }}>{message}</p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={pageBtn}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: "6px 16px", borderRadius: 7, border: `1px solid ${danger ? "var(--danger)" : "var(--accent)"}`, background: danger ? "var(--danger)" : "var(--accent)", color: "#fff", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Shared components ────────────────────────────────────────────────────────
+
+function StatusChip({ status, colors }) {
+  const sc = colors[status] || { bg: "#f1f5f9", c: "#64748b" };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 6, background: sc.bg, color: sc.c, textTransform: "capitalize", whiteSpace: "nowrap" }}>
+      {sc.pulse && <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc.c, flexShrink: 0, animation: "pulse 1.2s infinite" }} />}
+      {!sc.pulse && <span style={{ width: 6, height: 6, borderRadius: "50%", background: sc.c, flexShrink: 0 }} />}
+      {status}
+    </span>
+  );
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <div>
+      <label style={{ fontSize: 12, fontWeight: 500, color: "var(--text)", display: "block", marginBottom: 5 }}>{label}</label>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+
+// ─── Shared styles ────────────────────────────────────────────────────────────
+
+const cell = {
+  padding: "10px 14px", color: "var(--text)",
+  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+};
+
+const thStyle = {
+  padding: "10px 14px", fontSize: 10, fontWeight: 500,
+  textTransform: "uppercase", letterSpacing: "0.05em",
+  color: "var(--text-dim)", textAlign: "left",
+  borderBottom: "1px solid var(--border)", whiteSpace: "nowrap",
+};
+
+const emptyCell = {
+  textAlign: "center", padding: "48px 0",
+  color: "var(--text-faint)", fontSize: 13,
+};
+
+const actionBtn = {
+  fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "transparent",
+  color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+};
+
+const closeBtn = {
+  fontSize: 14, lineHeight: 1, padding: "4px 8px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "transparent",
+  color: "var(--text-faint)", cursor: "pointer", fontFamily: "inherit",
+};
+
+const pageBtn = {
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderRadius: 6, padding: "4px 10px",
+  fontSize: 11, color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit",
+};
+
+const toolBtn = {
+  padding: "5px 10px", borderRadius: 7, border: "1px solid var(--border)",
+  background: "var(--surface)", color: "var(--text-dim)", fontSize: 11,
+  cursor: "pointer", fontFamily: "inherit",
+};
+
+const inputStyle = {
+  width: "100%", padding: "7px 10px",
+  border: "1px solid var(--border)", borderRadius: 7,
+  background: "var(--bg)", color: "var(--text)",
+  fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
+};

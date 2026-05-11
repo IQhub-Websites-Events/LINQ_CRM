@@ -246,68 +246,83 @@ export function EventsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Sales Executive">
-                <select value={modal.data.sales_executive || ""} onChange={(e) => setField("sales_executive", e.target.value || null)}
-                  style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0",
-                    borderRadius: 7, padding: "7px 10px", fontSize: 13, color: "#1e293b",
-                    fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
-                  <option value="">— Unassigned —</option>
-                  {salesUsers.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-                </select>
+                <Select 
+                  value={modal.data.sales_executive ? String(modal.data.sales_executive) : ""} 
+                  onChange={(v) => setField("sales_executive", v || null)}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
               <FormField label="Speaker Sales Team">
-                <TeamSelect value={modal.data.speaker_sales_team || ""} onChange={(v) => setField("speaker_sales_team", v)} teams={teams} />
+                <Select 
+                  value={modal.data.speaker_sales_team || ""} 
+                  onChange={(v) => setField("speaker_sales_team", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="SpEx Team">
-                <TeamSelect value={modal.data.spex_team || ""} onChange={(v) => setField("spex_team", v)} teams={teams} />
+                <Select 
+                  value={modal.data.spex_team || ""} 
+                  onChange={(v) => setField("spex_team", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
               <FormField label="Tele Marketing Team">
-                <TeamSelect value={modal.data.tele_marketing_team || ""} onChange={(v) => setField("tele_marketing_team", v)} teams={teams} />
+                <Select 
+                  value={modal.data.tele_marketing_team || ""} 
+                  onChange={(v) => setField("tele_marketing_team", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Market Research Team">
-                <TeamSelect value={modal.data.market_research_team || ""} onChange={(v) => setField("market_research_team", v)} teams={teams} />
+                <Select 
+                  value={modal.data.market_research_team || ""} 
+                  onChange={(v) => setField("market_research_team", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
               <FormField label="Content Check">
-                <TeamSelect value={modal.data.content_check || ""} onChange={(v) => setField("content_check", v)} teams={teams} />
+                <Select 
+                  value={modal.data.content_check || ""} 
+                  onChange={(v) => setField("content_check", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Marketing Check">
-                <TeamSelect value={modal.data.marketing_check || ""} onChange={(v) => setField("marketing_check", v)} teams={teams} />
+                <Select 
+                  value={modal.data.marketing_check || ""} 
+                  onChange={(v) => setField("marketing_check", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
               <FormField label="Sales Check">
-                <TeamSelect value={modal.data.sales_check || ""} onChange={(v) => setField("sales_check", v)} teams={teams} />
+                <Select 
+                  value={modal.data.sales_check || ""} 
+                  onChange={(v) => setField("sales_check", v)}
+                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  placeholder="— Unassigned —"
+                />
               </FormField>
             </div>
           </div>
         )}
       </Modal>
     </div>
-  );
-}
-
-function TeamSelect({ value, onChange, teams }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        width: "100%", background: "#fff", border: "1px solid #e2e8f0",
-        borderRadius: 7, padding: "7px 10px", fontSize: 13, color: "#1e293b",
-        fontFamily: "inherit", outline: "none", cursor: "pointer",
-      }}
-    >
-      <option value="">— Unassigned —</option>
-      {teams.map((t) => (
-        <option key={t.id} value={t.name}>{t.name}</option>
-      ))}
-    </select>
   );
 }
 

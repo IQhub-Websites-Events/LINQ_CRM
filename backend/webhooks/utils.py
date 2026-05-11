@@ -10,7 +10,8 @@ from django.conf import settings
 
 def extract_ip(request) -> str:
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-    return forwarded or request.META.get("REMOTE_ADDR", "")
+    val = forwarded or request.META.get("REMOTE_ADDR", "")
+    return val if val else None
 
 
 def safe_headers(meta: dict) -> dict:
@@ -96,8 +97,19 @@ def authenticate_request(request):
         if origin:
             from urllib.parse import urlparse
             domain = urlparse(origin).netloc.split(":")[0]
-            allowed = [urlparse(o).netloc.split(":")[0] for o in getattr(settings, "CORS_ALLOWED_ORIGINS", [])]
-            if domain in allowed:
+            
+            # Ensure we strip spaces and handle potential empty strings in CORS list
+            raw_allowed = getattr(settings, "CORS_ALLOWED_ORIGINS", [])
+            if isinstance(raw_allowed, str):
+                raw_allowed = [s.strip() for s in raw_allowed.split(",") if s.strip()]
+            
+            allowed_domains = []
+            for o in raw_allowed:
+                netloc = urlparse(o.strip()).netloc
+                if netloc:
+                    allowed_domains.append(netloc.split(":")[0])
+            
+            if domain and domain in allowed_domains:
                 return None, None # Authenticated via domain whitelist
 
     # Both headers absent and origin not allowed
