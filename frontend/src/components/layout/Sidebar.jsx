@@ -31,7 +31,8 @@ const NAV = [
   {
     section: "Insights",
     items: [
-      { id: "reports", label: "Reports", Icon: ChartIcon },
+      { id: "reports",           label: "Reports",     Icon: ChartIcon   },
+      { id: "event-performance", label: "Performance", Icon: CalendarIcon },
     ],
   },
 ];

@@ -16,7 +16,8 @@ import { UsersPage } from "./pages/UsersPage";
 import { TeamPage } from "./pages/TeamPage";
 import { TeamsManagementPage } from "./pages/TeamsManagementPage";
 import { WebhookLogsPage } from "./pages/WebhookLogsPage";
-import { GoogleSyncPage }   from "./pages/GoogleSyncPage";
+import { GoogleSyncPage }         from "./pages/GoogleSyncPage";
+import { EventPerformancePage }   from "./pages/EventPerformancePage";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { searchApi } from "./api";
@@ -53,7 +54,8 @@ function AppShell() {
     companies: <CompaniesPage />,
     users: <UsersPage />,
     team: <TeamPage />,
-    "teams-management": <TeamsManagementPage />,
+    "teams-management":   <TeamsManagementPage />,
+    "event-performance":  <EventPerformancePage />,
     "webhook-logs": <WebhookLogsPage />,
     "google-sync":  <GoogleSyncPage />,
   };

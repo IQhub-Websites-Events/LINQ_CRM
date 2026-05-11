@@ -10,3 +10,4 @@ export { teamsApi }     from "./teams";
 export { webhooksApi }   from "./webhooks";
 export { googleSyncApi } from "./googleSync";
 export { reportsApi }    from "./reports";
+export { eventPerformanceApi } from "./eventPerformance";

@@ -3,18 +3,16 @@ Event Performance metrics engine.
 All metrics are computed live from BookEvent / BookDelegate / Event data.
 No denormalization — every number derives from the source of truth.
 """
+from __future__ import annotations
+
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import (
-    Count, Sum, Q, F, DecimalField, ExpressionWrapper,
-    Case, When, IntegerField, Value
-)
+from django.db.models import Count, Sum, Q, F, DecimalField, IntegerField, Value
 from django.db.models.functions import Coalesce
 
 from book_event.models import BookEvent
 from book_delegate.models import BookDelegate
-from events.models import Event
 
 PAID_STATUSES    = ["Paid"]
 PENDING_STATUSES = ["Pending"]
@@ -52,11 +50,11 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
             # Revenue
             total_revenue    = Coalesce(
                 Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),
-                Decimal("0"), output_field=DecimalField()
+                Value(Decimal("0")), output_field=DecimalField()
             ),
             pending_value    = Coalesce(
                 Sum("total_amount", filter=Q(payment_status__in=PENDING_STATUSES)),
-                Decimal("0"), output_field=DecimalField()
+                Value(Decimal("0")), output_field=DecimalField()
             ),
 
             # Payment timeline — paid counts
@@ -67,14 +65,14 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
             d21_paid         = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d21_start, payment_date__lte=today)),
 
             # Payment timeline — revenue
-            today_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=today)),     Decimal("0"), output_field=DecimalField()),
-            yesterday_revenue= Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=yesterday)), Decimal("0"), output_field=DecimalField()),
-            d7_revenue       = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d7_start,  payment_date__lte=today)), Decimal("0"), output_field=DecimalField()),
-            d14_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d14_start, payment_date__lte=today)), Decimal("0"), output_field=DecimalField()),
-            d21_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d21_start, payment_date__lte=today)), Decimal("0"), output_field=DecimalField()),
+            today_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=today)),     Value(Decimal("0")), output_field=DecimalField()),
+            yesterday_revenue= Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=yesterday)), Value(Decimal("0")), output_field=DecimalField()),
+            d7_revenue       = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d7_start,  payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
+            d14_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d14_start, payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
+            d21_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d21_start, payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
 
             # Delegate counts
-            total_delegates  = Coalesce(Sum("delegate_count"), 0, output_field=IntegerField()),
+            total_delegates  = Coalesce(Sum("delegate_count"), Value(0), output_field=IntegerField()),
         )
     )
 
@@ -155,26 +153,30 @@ def reps_performance(event_codes: list[str]) -> list[dict]:
         BookEvent.objects
         .filter(event_code__in=event_codes)
         .values(
-            rep_id      = F("sales_executive__id"),
-            rep_name    = F("sales_executive__full_name"),
-            rep_username= F("sales_executive__username"),
+            rep_id        = F("sales_executive__id"),
+            rep_first     = F("sales_executive__first_name"),
+            rep_last      = F("sales_executive__last_name"),
+            rep_username  = F("sales_executive__username"),
         )
         .annotate(
-            paid_bookings   = Count("id", filter=Q(payment_status__in=PAID_STATUSES)),
-            pending_bookings= Count("id", filter=Q(payment_status__in=PENDING_STATUSES)),
-            total_revenue   = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)), Decimal("0"), output_field=DecimalField()),
-            pending_value   = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PENDING_STATUSES)), Decimal("0"), output_field=DecimalField()),
+            paid_bookings    = Count("id", filter=Q(payment_status__in=PAID_STATUSES)),
+            pending_bookings = Count("id", filter=Q(payment_status__in=PENDING_STATUSES)),
+            total_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),    Value(Decimal("0")), output_field=DecimalField()),
+            pending_value    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PENDING_STATUSES)), Value(Decimal("0")), output_field=DecimalField()),
         )
         .order_by("-paid_bookings")
     )
-    return [
-        {
-            "rep_id":         r["rep_id"],
-            "rep_name":       r["rep_name"] or r["rep_username"] or "Unassigned",
-            "paid_bookings":  r["paid_bookings"],
+    rows = []
+    for r in qs:
+        first = r["rep_first"] or ""
+        last  = r["rep_last"]  or ""
+        full  = (first + " " + last).strip() or r["rep_username"] or "Unassigned"
+        rows.append({
+            "rep_id":           r["rep_id"],
+            "rep_name":         full,
+            "paid_bookings":    r["paid_bookings"],
             "pending_bookings": r["pending_bookings"],
-            "total_revenue":  float(r["total_revenue"] or 0),
-            "pending_value":  float(r["pending_value"]  or 0),
-        }
-        for r in qs
-    ]
+            "total_revenue":    float(r["total_revenue"] or 0),
+            "pending_value":    float(r["pending_value"]  or 0),
+        })
+    return rows

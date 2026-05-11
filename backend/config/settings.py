@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "webhooks",
     "google_sync",
     "reports",
+    "event_performance",
 ]
 
 MIDDLEWARE = [
