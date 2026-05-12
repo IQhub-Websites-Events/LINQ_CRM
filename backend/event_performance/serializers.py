@@ -66,10 +66,8 @@ class EventMetricsSerializer(serializers.Serializer):
     status              = serializers.CharField()
     sub_company         = serializers.CharField()
     city                = serializers.CharField()
-    capacity            = serializers.IntegerField()
-
-    # Booking counts
-    total_bookings      = serializers.IntegerField()
+    # Delegate counts
+    total_delegates     = serializers.IntegerField()
     paid_count          = serializers.IntegerField()
     pending_count       = serializers.IntegerField()
     free_count          = serializers.IntegerField()
@@ -91,8 +89,8 @@ class EventMetricsSerializer(serializers.Serializer):
     d14_revenue         = serializers.FloatField()
     d21_revenue         = serializers.FloatField()
 
-    # Delegates
-    total_delegates     = serializers.IntegerField()
+    # Invoice reference
+    total_invoices      = serializers.IntegerField()
     confirmed_delegates = serializers.IntegerField()
     noshow_delegates    = serializers.IntegerField()
 

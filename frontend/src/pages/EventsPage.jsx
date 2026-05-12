@@ -48,7 +48,7 @@ export function EventsPage() {
 
   const openCreate = () => setModal({ mode: "create", data: { 
     event_code: "", name: "", official_name: "", city: "", country: "",
-    venue: "", event_date: "", end_date: "", capacity: 500, sales_executive: null,
+    venue: "", event_date: "", end_date: "", sales_executive: null,
     speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
     content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
   } });
@@ -236,9 +236,6 @@ export function EventsPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Capacity">
-                <Input type="number" value={String(modal.data.capacity || 0)} onChange={(v) => setField("capacity", Number(v))} />
-              </FormField>
               <FormField label="Accepting Web Bookings">
                 <Select value={String(modal.data.accepting_web_bookings)} onChange={(v) => setField("accepting_web_bookings", v === 'true')} options={[{label:'Yes', value:'true'}, {label:'No', value:'false'}]} />
               </FormField>

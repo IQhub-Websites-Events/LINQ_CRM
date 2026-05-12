@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { fmt, today } from "../../utils/helpers";
@@ -14,7 +14,6 @@ const BOOKING_CODES = [
 ];
 
 const COLS = [
-  { key: "delegate_payment_status", label: "Pmt Status", width: 180, type: "select", options: ["", "Pending", "Paid", "Cancelled", "Refunded", "Credit Pending (Free)", "Credit Pending (Paid)", "Credit Transferred", "Paid (Transferred)"] },
   { key: "_booking_code", label: "Booking Code", width: 130, invoiceLevel: true },
   { key: "_request_date", label: "Request Date", width: 130, type: "date", invoiceLevel: true, readOnly: true },
   { key: "_invoice_date", label: "Invoice Date", width: 130, type: "date", invoiceLevel: true },
@@ -25,8 +24,6 @@ const COLS = [
   { key: "_accounts_contact_email", label: "Accounts Email", width: 220, invoiceLevel: true },
   { key: "phone_number", label: "Direct Line", width: 160, mono: true },
   { key: "attendance", label: "Attendance", width: 80, type: "checkbox" },
-  { key: "delegate_payment_type", label: "Pmt Type", width: 140, type: "select", options: ["", "Bank", "Stripe"] },
-  { key: "delegate_payment_date", label: "Pmt Date", width: 150, type: "date" },
 ];
 
 const BLANK_DELEGATE = () => ({
@@ -35,7 +32,6 @@ const BLANK_DELEGATE = () => ({
   job_title_legacy: "",
   ticket_package: "", sponsorship_level: "",
   attendance: "Pending", dietary_requirements: "", notes: "",
-  delegate_payment_status: "", delegate_payment_type: "", delegate_payment_date: null,
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -48,11 +44,8 @@ export function AddBookingModal({ onClose, onSaved }) {
 
   const [form, setForm] = useState({
     invoice_number: "", event_code: "", event_name: "", booking_code: "",
-    invoice_date: today(), paid_free: "Paid",
-    payment_status: "Pending", payment_type: "", payment_date: null,
-    payment_due_date: null, reference: "", add_ons: "",
-    currency: "USD", discount: "", discount_code: "",
-    pre_tax_amount: "", tax_amount: "", total_amount: "", add_ons_total_amount: "",
+    invoice_date: today(), payment_status: "Pending",
+    reference: "", add_ons: "",
     company_name: "", accounts_contact_email: "",
     sales_executive: "", team_leader: "",
     delegates: [BLANK_DELEGATE()],
@@ -79,12 +72,7 @@ export function AddBookingModal({ onClose, onSaved }) {
     if (!d0.email.trim()) { toast.error("First delegate email is required"); return; }
     setSaving(true);
     try {
-      const payload = { ...form };
-      if (payload.discount === "" || payload.discount === null) payload.discount = "0";
-      for (const f of ["pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount"]) {
-        if (payload[f] === "") payload[f] = null;
-      }
-      await invoicesApi.create(payload);
+      await invoicesApi.create(form);
       toast.success("Booking created");
       onSaved();
       onClose();
@@ -97,15 +85,10 @@ export function AddBookingModal({ onClose, onSaved }) {
 
   const invoiceCtx = {
     request_date: today(),
-    payment_due_date: form.payment_due_date,
     company_name: form.company_name,
     accounts_contact_email: form.accounts_contact_email,
-    paid_free: form.paid_free,
     invoice_date: form.invoice_date,
     booking_code: form.booking_code,
-    payment_status: form.payment_status,
-    payment_type: form.payment_type,
-    payment_date: form.payment_date,
   };
 
   return (
@@ -288,30 +271,6 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             </td>
           );
         }
-        if (c.key === "delegate_payment_status") {
-          const eff = delegate.delegate_payment_status || invoiceCtx.payment_status || "";
-          return (
-            <td key={c.key} style={tdCell}>
-              <CellSelect value={eff} onChange={v => onChange(c.key, v || null)} options={c.options} />
-            </td>
-          );
-        }
-        if (c.key === "delegate_payment_type") {
-          const eff = delegate.delegate_payment_type || invoiceCtx.payment_type || "";
-          return (
-            <td key={c.key} style={tdCell}>
-              <CellSelect value={eff} onChange={v => onChange(c.key, v || null)} options={c.options} />
-            </td>
-          );
-        }
-        if (c.key === "delegate_payment_date") {
-          const eff = fmt.dateInput(delegate.delegate_payment_date || invoiceCtx.payment_date || "");
-          return (
-            <td key={c.key} style={tdCell}>
-              <CellInput type="date" value={eff} onChange={v => onChange(c.key, v || null)} />
-            </td>
-          );
-        }
         if (c.type === "select") {
           return (
             <td key={c.key} style={tdCell}>
@@ -355,7 +314,7 @@ function EventCodePicker({ value, events, onChange, compact }) {
         (e.city || "").toLowerCase().includes(q))
     : events;
 
-  const chevron = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")";
+  const chevron = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -373,6 +332,7 @@ function EventCodePicker({ value, events, onChange, compact }) {
           boxSizing: "border-box", fontFamily: "var(--font-sans)",
           backgroundImage: chevron,
           backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
+          backgroundSize: "10px 6px",
           overflow: "hidden",
         }}
       >
@@ -591,9 +551,10 @@ function CellSelect({ value, onChange, options }) {
         outline: "none", appearance: "none", cursor: "pointer",
         boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
         backgroundImage: f
-          ? "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none'/%3E%3C/svg%3E\")"
+          ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
           : "none",
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
+        backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
       }}

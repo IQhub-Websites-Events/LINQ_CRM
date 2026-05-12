@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { eventPerformanceApi } from "../api/eventPerformance";
+import { EventPaymentActivityModule } from "../components/eventPerformance/EventPaymentActivityModule";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtCurrency = (n) =>
@@ -67,7 +68,6 @@ const COLS_OVERVIEW = [
   { key: "event_date",    label: "Date",      width: 90  },
   { key: "status",        label: "Status",    width: 96  },
   { key: "sub_company",   label: "Company",   width: 120, ellipsis: true },
-  { key: "capacity",      label: "Cap",       width: 60  },
   { key: "paid_count",    label: "Paid",      width: 60  },
   { key: "pending_count", label: "Pend",      width: 60  },
   { key: "free_count",    label: "Free",      width: 60  },
@@ -98,7 +98,6 @@ const COLS_HEALTH = [
   { key: "event_name",      label: "Event",    sticky: true, left: 90, width: 200, ellipsis: true },
   { key: "event_date",      label: "Date",     width: 90 },
   { key: "status",          label: "Status",   width: 96 },
-  { key: "capacity",        label: "Cap",      width: 60 },
   { key: "paid_count",      label: "Paid",     width: 60 },
   { key: "pending_count",   label: "Pending",  width: 70 },
   { key: "total_delegates", label: "Delegates",width: 80 },
@@ -199,12 +198,11 @@ function EventDetailDrawer({ code, onClose }) {
           {e && (
             <div style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
               {[
-                { label: "Capacity", value: e.capacity },
-                { label: "Paid",     value: e.paid_count },
-                { label: "Pending",  value: e.pending_count },
-                { label: "Revenue",  value: fmtCurrency(e.total_revenue) },
-                { label: "Pend £",   value: fmtCurrency(e.pending_value) },
-                { label: "Benchmark",value: e.benchmark + "%" },
+                { label: "Paid",      value: e.paid_count },
+                { label: "Pending",   value: e.pending_count },
+                { label: "Revenue",   value: fmtCurrency(e.total_revenue) },
+                { label: "Pend £",    value: fmtCurrency(e.pending_value) },
+                { label: "Benchmark", value: e.benchmark + "%" },
               ].map(({ label, value }) => (
                 <div key={label} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-faint)", fontWeight: 600 }}>{label}</div>
@@ -569,9 +567,10 @@ export function EventPerformancePage() {
       {/* View Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0, paddingLeft: 20 }}>
         {[
-          { id: "overview", label: "Overview" },
-          { id: "payments", label: "Payments Timeline" },
-          { id: "health",   label: "Health & Delegates" },
+          { id: "overview",          label: "Overview"          },
+          { id: "payments",          label: "Payments Timeline" },
+          { id: "health",            label: "Health & Delegates"},
+          { id: "payment-activity",  label: "Payment Activity"  },
         ].map(({ id, label }) => (
           <button
             key={id}
@@ -587,8 +586,15 @@ export function EventPerformancePage() {
         ))}
       </div>
 
-      {/* Table */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      {/* Payment Activity sub-module */}
+      {tab === "payment-activity" && (
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <EventPaymentActivityModule />
+        </div>
+      )}
+
+      {/* Table — hidden when payment-activity tab is active */}
+      <div style={{ flex: 1, overflow: "auto", display: tab === "payment-activity" ? "none" : undefined }}>
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>Loading…</div>
         ) : events.length === 0 ? (
@@ -656,7 +662,7 @@ export function EventPerformancePage() {
       </div>
 
       {/* Event Detail Drawer */}
-      {selectedCode && (
+      {selectedCode && tab !== "payment-activity" && (
         <EventDetailDrawer
           code={selectedCode}
           onClose={() => setSelectedCode(null)}

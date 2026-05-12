@@ -24,6 +24,7 @@ class Event(models.Model):
     event_code  = models.CharField(max_length=50, unique=True, db_index=True)
     name        = models.CharField(max_length=255)
     sub_company = models.CharField(max_length=50, choices=SubCompany.choices, default=SubCompany.CONFERENCES)
+    status      = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True)
     city        = models.CharField(max_length=100)
     country     = models.CharField(max_length=100, default="")
     venue       = models.CharField(max_length=255, blank=True, default="")

@@ -168,21 +168,19 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <Th style={{ minWidth: 200 }}>Email</Th>
                 <Th style={{ minWidth: 140 }}>Direct Line</Th>
                 <SortTh sortKey="attendance" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 100 }}>Attendance</SortTh>
-                <Th style={{ minWidth: 110 }}>Pmt Type</Th>
-                <SortTh sortKey="effective_payment_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Pmt Date</SortTh>
                 <Th style={{ width: 110 }} />
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="17" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="15" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     Loading…
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan="17" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="15" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     No records match the current filters.
                   </td>
                 </tr>
@@ -327,18 +325,6 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
           : <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No</span>}
       </td>
 
-      <td style={cell}>
-        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-          {delegate.effective_payment_type || "—"}
-        </span>
-      </td>
-
-      <td style={cell}>
-        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-          {fmt.dateShort(delegate.effective_payment_date) || "—"}
-        </span>
-      </td>
-
       <td style={{ ...cell, width: 110 }}>
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -438,9 +424,10 @@ const selectStyle = {
   outline: "none",
   cursor: "pointer",
   appearance: "none",
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.3' fill='none'/%3E%3C/svg%3E\")",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
   backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 8px center",
+  backgroundPosition: "right 10px center",
+  backgroundSize: "10px 6px",
 };
 
 const primaryBtnStyle = {

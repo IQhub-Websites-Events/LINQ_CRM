@@ -339,8 +339,10 @@ const selectStyle = {
   border: '1px solid var(--border)', borderRadius: 8,
   color: 'var(--text)', background: 'var(--surface)',
   fontFamily: 'inherit', outline: 'none', cursor: 'pointer', appearance: 'none',
-  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.3' fill='none'/%3E%3C/svg%3E\")",
-  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 10px center",
+  backgroundSize: "10px 6px",
 };
 
 const primaryBtnStyle = {

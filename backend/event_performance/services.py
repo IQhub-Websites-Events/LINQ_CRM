@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import Count, Sum, Q, F, DecimalField, IntegerField, Value
+from django.db.models import Count, Sum, Q, F, DecimalField, Value
 from django.db.models.functions import Coalesce
 
 from book_event.models import BookEvent
@@ -26,8 +26,13 @@ def _date_range(days_back: int) -> tuple[date, date]:
 
 def bulk_event_metrics(event_codes: list[str]) -> dict:
     """
-    Returns a dict keyed by event_code with all computed metrics.
-    Uses 2 annotated queries (bookings + delegates) — no N+1.
+    Returns a dict keyed by event_code (= Event.event_code = BookEvent.event_name).
+
+    All headcount metrics (paid_count, pending_count, timeline counts) are
+    delegate-based — each BookDelegate row counts as one person.
+    Revenue metrics remain invoice-based (BookEvent) since only invoices carry amounts.
+
+    Join key: BookEvent.event_name = BookDelegate.invoice.event_name = Event.event_code
     """
     today     = date.today()
     yesterday = today - timedelta(days=1)
@@ -35,90 +40,84 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
     d14_start = today - timedelta(days=14)
     d21_start = today - timedelta(days=21)
 
-    # ── Booking-level metrics ─────────────────────────────────────────────────
-    booking_qs = (
+    # ── Query 1: Revenue from invoices ────────────────────────────────────────
+    revenue_qs = (
         BookEvent.objects
-        .filter(event_code__in=event_codes)
-        .values("event_code")
+        .filter(event_name__in=event_codes)
+        .values("event_name")
         .annotate(
-            total_bookings   = Count("id"),
-            paid_count       = Count("id", filter=Q(payment_status__in=PAID_STATUSES)),
-            pending_count    = Count("id", filter=Q(payment_status__in=PENDING_STATUSES)),
-            free_count       = Count("id", filter=Q(payment_status__in=FREE_STATUSES)),
-            cancelled_count  = Count("id", filter=Q(payment_status__in=CANCELLED_STATUSES)),
-
-            # Revenue
-            total_revenue    = Coalesce(
-                Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),
-                Value(Decimal("0")), output_field=DecimalField()
-            ),
-            pending_value    = Coalesce(
-                Sum("total_amount", filter=Q(payment_status__in=PENDING_STATUSES)),
-                Value(Decimal("0")), output_field=DecimalField()
-            ),
-
-            # Payment timeline — paid counts
-            today_paid       = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date=today)),
-            yesterday_paid   = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date=yesterday)),
-            d7_paid          = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d7_start,  payment_date__lte=today)),
-            d14_paid         = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d14_start, payment_date__lte=today)),
-            d21_paid         = Count("id", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d21_start, payment_date__lte=today)),
-
-            # Payment timeline — revenue
-            today_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=today)),     Value(Decimal("0")), output_field=DecimalField()),
-            yesterday_revenue= Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=yesterday)), Value(Decimal("0")), output_field=DecimalField()),
+            total_invoices   = Count("id"),
+            total_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),    Value(Decimal("0")), output_field=DecimalField()),
+            pending_value    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PENDING_STATUSES)), Value(Decimal("0")), output_field=DecimalField()),
+            today_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=today)),                                Value(Decimal("0")), output_field=DecimalField()),
+            yesterday_revenue= Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date=yesterday)),                            Value(Decimal("0")), output_field=DecimalField()),
             d7_revenue       = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d7_start,  payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
             d14_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d14_start, payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
             d21_revenue      = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES, payment_date__gte=d21_start, payment_date__lte=today)), Value(Decimal("0")), output_field=DecimalField()),
-
-            # Delegate counts
-            total_delegates  = Coalesce(Sum("delegate_count"), Value(0), output_field=IntegerField()),
         )
     )
 
-    # ── Delegate-level metrics (attendance) ───────────────────────────────────
+    # ── Query 2: All headcounts from delegates ────────────────────────────────
+    # Every row = one delegate; payment status comes from the linked invoice.
     delegate_qs = (
         BookDelegate.objects
-        .filter(event_code__in=event_codes)
-        .values("event_code")
+        .filter(invoice__event_name__in=event_codes)
+        .values(base_code=F("invoice__event_name"))
         .annotate(
-            confirmed_delegates = Count("id", filter=Q(attendance="Confirmed")),
-            noshow_delegates    = Count("id", filter=Q(attendance="No-show")),
-            total_delegate_rows = Count("id"),
+            total_delegates    = Count("id"),
+            paid_count         = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES)),
+            pending_count      = Count("id", filter=Q(invoice__payment_status__in=PENDING_STATUSES)),
+            free_count         = Count("id", filter=Q(invoice__payment_status__in=FREE_STATUSES)),
+            cancelled_count    = Count("id", filter=Q(invoice__payment_status__in=CANCELLED_STATUSES)),
+            confirmed_delegates= Count("id", filter=Q(attendance="Confirmed")),
+            noshow_delegates   = Count("id", filter=Q(attendance="No-show")),
+
+            # Payment timeline — delegate counts
+            today_paid    = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date=today)),
+            yesterday_paid= Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date=yesterday)),
+            d7_paid       = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date__gte=d7_start,  invoice__payment_date__lte=today)),
+            d14_paid      = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date__gte=d14_start, invoice__payment_date__lte=today)),
+            d21_paid      = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date__gte=d21_start, invoice__payment_date__lte=today)),
         )
     )
 
     # ── Index results ─────────────────────────────────────────────────────────
-    booking_map  = {r["event_code"]: r for r in booking_qs}
-    delegate_map = {r["event_code"]: r for r in delegate_qs}
+    revenue_map  = {r["event_name"]: r for r in revenue_qs}
+    delegate_map = {r["base_code"]:  r for r in delegate_qs}
 
     result = {}
     for ec in event_codes:
-        b = booking_map.get(ec, {})
+        r = revenue_map.get(ec, {})
         d = delegate_map.get(ec, {})
 
-        paid_count = b.get("paid_count", 0) or 0
         result[ec] = {
-            "total_bookings":    b.get("total_bookings",   0) or 0,
-            "paid_count":        paid_count,
-            "pending_count":     b.get("pending_count",    0) or 0,
-            "free_count":        b.get("free_count",       0) or 0,
-            "cancelled_count":   b.get("cancelled_count",  0) or 0,
-            "total_revenue":     float(b.get("total_revenue",  0) or 0),
-            "pending_value":     float(b.get("pending_value",  0) or 0),
-            "today_paid":        b.get("today_paid",       0) or 0,
-            "yesterday_paid":    b.get("yesterday_paid",   0) or 0,
-            "d7_paid":           b.get("d7_paid",          0) or 0,
-            "d14_paid":          b.get("d14_paid",         0) or 0,
-            "d21_paid":          b.get("d21_paid",         0) or 0,
-            "today_revenue":     float(b.get("today_revenue",     0) or 0),
-            "yesterday_revenue": float(b.get("yesterday_revenue", 0) or 0),
-            "d7_revenue":        float(b.get("d7_revenue",        0) or 0),
-            "d14_revenue":       float(b.get("d14_revenue",       0) or 0),
-            "d21_revenue":       float(b.get("d21_revenue",       0) or 0),
-            "total_delegates":   b.get("total_delegates",  0) or 0,
+            # Counts — delegate-based
+            "total_delegates":     d.get("total_delegates",     0) or 0,
+            "paid_count":          d.get("paid_count",          0) or 0,
+            "pending_count":       d.get("pending_count",       0) or 0,
+            "free_count":          d.get("free_count",          0) or 0,
+            "cancelled_count":     d.get("cancelled_count",     0) or 0,
             "confirmed_delegates": d.get("confirmed_delegates", 0) or 0,
             "noshow_delegates":    d.get("noshow_delegates",    0) or 0,
+
+            # Timeline — delegate counts
+            "today_paid":          d.get("today_paid",    0) or 0,
+            "yesterday_paid":      d.get("yesterday_paid",0) or 0,
+            "d7_paid":             d.get("d7_paid",       0) or 0,
+            "d14_paid":            d.get("d14_paid",      0) or 0,
+            "d21_paid":            d.get("d21_paid",      0) or 0,
+
+            # Revenue — invoice-based (only invoices carry amounts)
+            "total_revenue":       float(r.get("total_revenue",       0) or 0),
+            "pending_value":       float(r.get("pending_value",       0) or 0),
+            "today_revenue":       float(r.get("today_revenue",       0) or 0),
+            "yesterday_revenue":   float(r.get("yesterday_revenue",   0) or 0),
+            "d7_revenue":          float(r.get("d7_revenue",          0) or 0),
+            "d14_revenue":         float(r.get("d14_revenue",         0) or 0),
+            "d21_revenue":         float(r.get("d21_revenue",         0) or 0),
+
+            # Invoice count for reference
+            "total_invoices":      r.get("total_invoices", 0) or 0,
         }
     return result
 
@@ -151,7 +150,7 @@ def reps_performance(event_codes: list[str]) -> list[dict]:
     """
     qs = (
         BookEvent.objects
-        .filter(event_code__in=event_codes)
+        .filter(event_name__in=event_codes)   # event_name = Event.event_code
         .values(
             rep_id        = F("sales_executive__id"),
             rep_first     = F("sales_executive__first_name"),

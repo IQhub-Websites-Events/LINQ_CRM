@@ -289,8 +289,10 @@ function MSelect({ value, onChange, options }) {
         fontSize: 13, fontFamily: 'var(--font-sans)',
         outline: 'none', width: '100%', appearance: 'none', cursor: 'pointer',
         boxShadow: focused ? '0 0 0 3px var(--accent-soft)' : 'none',
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5853' stroke-width='1.3' fill='none'/%3E%3C/svg%3E\")",
-        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5853' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 10px center",
+        backgroundSize: "10px 6px",
         transition: 'border-color .15s, box-shadow .15s',
       }}
     >

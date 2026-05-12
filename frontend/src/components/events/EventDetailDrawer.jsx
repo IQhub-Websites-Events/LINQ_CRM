@@ -46,8 +46,7 @@ export function EventDetailDrawer({ eventId, onClose }) {
               {event.end_date && <InfoItem label="End Date" value={fmt.date(event.end_date)} mono />}
               <InfoItem label="City"        value={event.city} />
               {event.venue && <InfoItem label="Venue" value={event.venue} span />}
-              <InfoItem label="Capacity" value={event.capacity?.toLocaleString()} mono />
-              <InfoItem label="Sales Executive" value={event.sales_executive_name || "—"} />
+<InfoItem label="Sales Executive" value={event.sales_executive_name || "—"} />
               <InfoItem label="Accepting Web Bookings" value={event.accepting_web_bookings ? "YES" : "NO"} />
             </InfoGrid>
           </InfoSection>

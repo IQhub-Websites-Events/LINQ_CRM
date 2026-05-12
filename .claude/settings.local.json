@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($filePath = \"C:\\\\Users\\\\harrison peck\\\\.claude\\\\projects\\\\c--Users-harrison-peck-Desktop-Harsh-linq-crm-fullstack-linqcrm-project\\\\468b05c4-b6b4-4cc1-91f0-7357956aea22\\\\tool-results\\\\mcp-claude_ai_Google_Drive-download_file_content-1778532930706.txt\"; $content = [System.IO.File]::ReadAllText\\($filePath, [System.Text.Encoding]::UTF8\\); $d = $content | ConvertFrom-Json; $csv = $d.content; $lines = $csv -split \"`n\"; Write-Output \"TITLE: $\\($d.title\\)\"; Write-Output \"TOTAL LINES: $\\($lines.Count\\)\"; Write-Output \"--- HEADER ---\"; Write-Output $lines[0]; Write-Output \"--- FIRST 5 DATA ROWS ---\"; for \\($i = 1; $i -le 5 -and $i -lt $lines.Count; $i++\\) { Write-Output $lines[$i] })"
+    ]
+  }
+}

@@ -24,7 +24,6 @@ def _build_event_row(event: Event, metrics: dict) -> dict:
         "status":              event.status,
         "sub_company":         event.sub_company,
         "city":                event.city,
-        "capacity":            event.capacity,
         **m,
         "benchmark":           health["benchmark"],
         "health":              health["health"],
