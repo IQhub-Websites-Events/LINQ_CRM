@@ -1,16 +1,15 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { eventsApi, usersApi, teamsApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
-import { SortableTh, Pager, EmptyState, Td } from "../components/ui/Table";
+import { SortableTh, EmptyState, Td } from "../components/ui/Table";
 import { EventStatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Input, Select, FormField } from "../components/ui/Input";
 import { useFetch } from "../hooks/useFetch";
 import { useSort } from "../hooks/useSort";
-import { usePagination } from "../hooks/usePagination";
 import { fmt } from "../utils/helpers";
 import { EVENT_STATUSES } from "../utils/constants";
 
@@ -21,22 +20,70 @@ export function EventsPage() {
   const { isAdmin } = useAuth();
   const [search, setSearch]     = useState("");
   const [status, setStatus]     = useState("");
-  const [modal,  setModal]      = useState(null); // null | { mode, data }
+  const [modal,  setModal]      = useState(null);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
   const [teams, setTeams] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "desc");
-  const { page, setPage }        = usePagination();
 
-  const { data, loading, refetch } = useFetch(
-    () => eventsApi.list({
+  // ── Infinite scroll state ────────────────────────────────────────────────
+  const [items,       setItems]       = useState([]);
+  const [page,        setPage]        = useState(1);
+  const [hasMore,     setHasMore]     = useState(true);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef(null);
+
+  // Fetch a page and accumulate
+  useEffect(() => {
+    let cancelled = false;
+    if (page === 1) {
+      setLoading(true);
+      setHasMore(true);
+    } else {
+      setLoadingMore(true);
+    }
+
+    eventsApi.list({
       page, page_size: PAGE_SIZE,
       ...(search ? { search } : {}),
       ...(status ? { status } : {}),
       ordering: sort.dir === "asc" ? sort.key : `-${sort.key}`,
-    }),
-    [page, search, status, sort.key, sort.dir]
-  );
+    }).then(data => {
+      if (cancelled) return;
+      const newItems = data?.results || [];
+      setItems(prev => page === 1 ? newItems : [...prev, ...newItems]);
+      setHasMore(!!data?.next);
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) { setLoading(false); setLoadingMore(false); }
+    });
+
+    return () => { cancelled = true; };
+  }, [page, search, status, sort.key, sort.dir]);
+
+  // IntersectionObserver — fires setPage(+1) when sentinel comes into view
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && hasMore && !loadingMore && !loading) {
+          setPage(p => p + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading]);
+
+  // Reset to page 1 on filter/sort change (setPage triggers the fetch effect)
+  const handleSearch = (v) => { setSearch(v); setPage(1); setItems([]); };
+  const handleStatus = (v) => { setStatus(v); setPage(1); setItems([]); };
+  const handleSort   = (key) => { sortToggle(key); setPage(1); setItems([]); };
+
+  // After create/update/delete — reload from scratch
+  const refetch = () => { setPage(1); setItems([]); };
 
   // Fetch sales users for dropdown
   useFetch(() => isAdmin ? usersApi.list({ role: "sales", page_size: 200 }) : Promise.resolve(null), [isAdmin], {
@@ -75,10 +122,6 @@ export function EventsPage() {
 
   const setField = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }));
 
-  const items = data?.results || [];
-  const total = data?.count || 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
@@ -98,11 +141,11 @@ export function EventsPage() {
             <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
               <circle cx="5" cy="5" r="4"/><path d="M9 9l2.5 2.5"/>
             </svg>
-            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            <input value={search} onChange={(e) => handleSearch(e.target.value)}
               placeholder="Search events..." style={{ background: "none", border: "none", outline: "none",
                 fontSize: 13, color: "#495057", width: "100%", fontFamily: "inherit" }} />
           </div>
-          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+          <select value={status} onChange={(e) => handleStatus(e.target.value)}
             style={{ background: "#fff", border: "1px solid #e9ebec", borderRadius: 4,
               padding: "8px 30px 8px 12px", fontSize: 13, color: "#495057", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
             <option value="">All Statuses</option>
@@ -115,14 +158,14 @@ export function EventsPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: "#f3f6f9" }}>
-              <SortableTh sortKey="event_code" sort={sort} onSort={sortToggle}>Code</SortableTh>
-              <SortableTh sortKey="name"        sort={sort} onSort={sortToggle}>Name</SortableTh>
-              <SortableTh sortKey="official_name" sort={sort} onSort={sortToggle}>Official Name</SortableTh>
-              <SortableTh sortKey="city"        sort={sort} onSort={sortToggle}>City</SortableTh>
-              <SortableTh sortKey="event_date"  sort={sort} onSort={sortToggle}>Date</SortableTh>
-              <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={sortToggle}>Web Bookings</SortableTh>
+              <SortableTh sortKey="event_code" sort={sort} onSort={handleSort}>Code</SortableTh>
+              <SortableTh sortKey="name"        sort={sort} onSort={handleSort}>Name</SortableTh>
+              <SortableTh sortKey="official_name" sort={sort} onSort={handleSort}>Official Name</SortableTh>
+              <SortableTh sortKey="city"        sort={sort} onSort={handleSort}>City</SortableTh>
+              <SortableTh sortKey="event_date"  sort={sort} onSort={handleSort}>Date</SortableTh>
+              <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={handleSort}>Web Bookings</SortableTh>
               <SortableTh noSort>Status</SortableTh>
-              <SortableTh sortKey="sales_executive" sort={sort} onSort={sortToggle}>Sales Executive</SortableTh>
+              <SortableTh sortKey="sales_executive" sort={sort} onSort={handleSort}>Sales Executive</SortableTh>
               <SortableTh noSort></SortableTh>
             </tr>
           </thead>
@@ -185,10 +228,21 @@ export function EventsPage() {
             ))}
           </tbody>
         </table>
+
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} style={{ height: 1 }} />
+        {loadingMore && (
+          <div style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+            Loading more…
+          </div>
+        )}
+        {!hasMore && items.length > 0 && (
+          <div style={{ padding: "14px", textAlign: "center", color: "#c0c4cc", fontSize: 12 }}>
+            All {items.length} events loaded
+          </div>
+        )}
         </div>
       </div>
-
-      <Pager page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
 
       <EventDetailDrawer
         eventId={selectedEventId}

@@ -242,38 +242,129 @@ function CurrentEditionTab({ edition, insights }) {
 
 // ── History Tab ───────────────────────────────────────────────────────────────
 
-function HistoryTab({ editions, growthTimeline }) {
+function HistoryTab({ editions }) {
   if (!editions?.length) {
     return <div style={{ color: "var(--text-faint)", padding: 24, fontSize: 12 }}>No historical editions found.</div>;
   }
 
+  // editions are sorted newest-first from the API
+  const currentEd  = editions.find(e => e.is_current) ?? editions[0];
+  const prevEd     = editions.find(e => !e.is_current);  // most recent past edition
+  const maxPaid    = Math.max(...editions.map(e => e.paid_count ?? 0), 1);
   const maxRevenue = Math.max(...editions.map(e => e.total_revenue ?? 0), 1);
+
+  const ticketDiff = prevEd
+    ? (currentEd.paid_count ?? 0) - (prevEd.paid_count ?? 0)
+    : null;
+  const ticketPct  = (prevEd?.paid_count > 0 && ticketDiff != null)
+    ? Math.round((ticketDiff / prevEd.paid_count) * 100)
+    : null;
 
   return (
     <div style={{ paddingBottom: 24 }}>
-      {/* Growth progression visual */}
-      {growthTimeline?.length > 1 && (
+
+      {/* ── Current vs Previous: tickets booked ── */}
+      {prevEd && (
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-            Revenue Progression
+            Tickets Booked — Current vs Previous Edition
           </div>
-          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 60 }}>
-            {growthTimeline.map((t, i) => {
-              const pct = maxRevenue > 0 ? Math.max(((t.total_revenue ?? 0) / maxRevenue) * 100, 4) : 4;
-              const isLast = i === growthTimeline.length - 1;
-              return (
-                <div key={t.year ?? i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                  <div style={{ fontSize: 8, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
-                    {fmtCurrency(t.total_revenue)}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 12, alignItems: "center" }}>
+            {/* Previous edition */}
+            <div style={{
+              background: "var(--surface-alt)", border: "1px solid var(--border)",
+              borderRadius: 8, padding: "12px 14px",
+            }}>
+              <div style={{ fontSize: 9, color: "var(--text-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+                Previous · {prevEd.year ?? "—"}{prevEd.city ? ` · ${prevEd.city}` : ""}
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "var(--text-dim)" }}>
+                  {prevEd.paid_count ?? 0}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>paid</span>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>
+                {prevEd.total_delegates ?? 0} total · {fmtCurrency(prevEd.total_revenue)}
+              </div>
+              <div style={{ marginTop: 8, background: "var(--border)", borderRadius: 3, height: 5 }}>
+                <div style={{ width: `${Math.round(((prevEd.paid_count ?? 0) / maxPaid) * 100)}%`, height: "100%", borderRadius: 3, background: "var(--text-dim)" }} />
+              </div>
+            </div>
+
+            {/* Delta arrow */}
+            <div style={{ textAlign: "center", minWidth: 60 }}>
+              {ticketPct != null && (
+                <>
+                  <div style={{
+                    fontSize: 18, fontWeight: 800,
+                    color: ticketPct >= 0 ? "var(--success)" : "var(--danger)",
+                  }}>
+                    {ticketPct >= 0 ? "▲" : "▼"}
                   </div>
                   <div style={{
-                    width: "100%", height: `${pct}%`, minHeight: 4, borderRadius: "3px 3px 0 0",
-                    background: isLast ? "var(--accent)" : "var(--border)",
-                    position: "relative",
+                    fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
+                    color: ticketPct >= 0 ? "var(--success)" : "var(--danger)",
+                  }}>
+                    {ticketPct >= 0 ? "+" : ""}{ticketPct}%
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>
+                    {ticketDiff >= 0 ? "+" : ""}{ticketDiff} tickets
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Current edition */}
+            <div style={{
+              background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.25)",
+              borderRadius: 8, padding: "12px 14px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <div style={{ fontSize: 9, color: "#6366f1", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Current · {currentEd.year ?? "—"}{currentEd.city ? ` · ${currentEd.city}` : ""}
+                </div>
+                <Badge label="CURRENT" style={{ bg: "rgba(99,102,241,0.15)", color: "#6366f1" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 28, fontWeight: 800, color: "#6366f1" }}>
+                  {currentEd.paid_count ?? 0}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-faint)" }}>paid</span>
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>
+                {currentEd.total_delegates ?? 0} total · {fmtCurrency(currentEd.total_revenue)}
+              </div>
+              <div style={{ marginTop: 8, background: "rgba(99,102,241,0.15)", borderRadius: 3, height: 5 }}>
+                <div style={{ width: `${Math.round(((currentEd.paid_count ?? 0) / maxPaid) * 100)}%`, height: "100%", borderRadius: 3, background: "#6366f1" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tickets booked bar chart across all editions ── */}
+      {editions.length > 1 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Tickets Booked by Edition
+          </div>
+          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 72 }}>
+            {/* Show ascending for chart readability (oldest → newest) */}
+            {[...editions].reverse().map((ed, i) => {
+              const paidPct = maxPaid > 0 ? Math.max(((ed.paid_count ?? 0) / maxPaid) * 100, 4) : 4;
+              return (
+                <div key={ed.event_code ?? i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                  <div style={{ fontSize: 8, color: ed.is_current ? "#6366f1" : "var(--text-faint)", fontFamily: "var(--font-mono)", fontWeight: ed.is_current ? 700 : 400 }}>
+                    {ed.paid_count ?? 0}
+                  </div>
+                  <div style={{
+                    width: "100%", height: `${paidPct}%`, minHeight: 4, borderRadius: "3px 3px 0 0",
+                    background: ed.is_current ? "#6366f1" : "var(--border)",
                     transition: "height 0.3s",
                   }} />
-                  <div style={{ fontSize: 9, color: isLast ? "var(--accent)" : "var(--text-faint)", fontWeight: isLast ? 700 : 400 }}>
-                    {t.year}
+                  <div style={{ fontSize: 9, color: ed.is_current ? "#6366f1" : "var(--text-faint)", fontWeight: ed.is_current ? 700 : 400 }}>
+                    {ed.year ?? "—"}
                   </div>
                 </div>
               );
@@ -282,18 +373,55 @@ function HistoryTab({ editions, growthTimeline }) {
         </div>
       )}
 
-      {/* Editions comparison table */}
+      {/* ── Revenue progression ── */}
+      {editions.length > 1 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Revenue by Edition
+          </div>
+          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 56 }}>
+            {[...editions].reverse().map((ed, i) => {
+              const revPct = maxRevenue > 0 ? Math.max(((ed.total_revenue ?? 0) / maxRevenue) * 100, 4) : 4;
+              return (
+                <div key={ed.event_code ?? i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                  <div style={{ fontSize: 8, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
+                    {fmtCurrency(ed.total_revenue)}
+                  </div>
+                  <div style={{
+                    width: "100%", height: `${revPct}%`, minHeight: 4, borderRadius: "3px 3px 0 0",
+                    background: ed.is_current ? "var(--accent)" : "var(--border)",
+                    transition: "height 0.3s",
+                  }} />
+                  <div style={{ fontSize: 9, color: ed.is_current ? "var(--accent)" : "var(--text-faint)", fontWeight: ed.is_current ? 700 : 400 }}>
+                    {ed.year ?? "—"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Full editions table ── */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {["Year", "City", "Status", "Paid", "Pending", "Delegates", "Revenue", "Growth", "Health"].map(h => (
+              {[
+                { h: "Year",      align: "left"  },
+                { h: "City",      align: "left"  },
+                { h: "Status",    align: "left"  },
+                { h: "Tickets",   align: "right" },
+                { h: "Pending",   align: "right" },
+                { h: "Delegates", align: "right" },
+                { h: "Paid",      align: "right" },
+                { h: "vs Prev",   align: "right" },
+                { h: "Health",    align: "right" },
+              ].map(({ h, align }) => (
                 <th key={h} style={{
-                  padding: "7px 10px", textAlign: h === "Year" ? "left" : "right",
+                  padding: "7px 10px", textAlign: align,
                   fontWeight: 600, fontSize: 10, textTransform: "uppercase",
-                  letterSpacing: "0.06em", color: "var(--text-faint)",
-                  whiteSpace: "nowrap",
-                  ...(h === "City" || h === "Status" ? { textAlign: "left" } : {}),
+                  letterSpacing: "0.06em", color: "var(--text-faint)", whiteSpace: "nowrap",
                 }}>{h}</th>
               ))}
             </tr>
@@ -309,22 +437,25 @@ function HistoryTab({ editions, growthTimeline }) {
                   style={{
                     borderBottom: "1px solid var(--border)",
                     background: ed.is_current
-                      ? "rgba(99,102,241,0.05)"
+                      ? "rgba(99,102,241,0.04)"
                       : idx % 2 === 0 ? "var(--surface)" : "var(--bg)",
                   }}
                 >
-                  <td style={{ padding: "8px 10px", fontFamily: "var(--font-mono)", fontWeight: ed.is_current ? 800 : 600, color: ed.is_current ? "var(--accent)" : "var(--text)" }}>
+                  <td style={{ padding: "8px 10px", fontFamily: "var(--font-mono)", fontWeight: ed.is_current ? 800 : 600, color: ed.is_current ? "#6366f1" : "var(--text)" }}>
                     {ed.year ?? "—"}
-                    {ed.is_current && <span style={{ marginLeft: 5, fontSize: 9, background: "var(--accent)", color: "#fff", borderRadius: 3, padding: "1px 4px", fontFamily: "inherit" }}>CURRENT</span>}
+                    {ed.is_current && <span style={{ marginLeft: 5, fontSize: 9, background: "#6366f1", color: "#fff", borderRadius: 3, padding: "1px 4px" }}>NOW</span>}
                   </td>
-                  <td style={{ padding: "8px 10px", color: "var(--text-dim)", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ed.city || "—"}</td>
+                  <td style={{ padding: "8px 10px", color: "var(--text-dim)", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ed.city || "—"}</td>
                   <td style={{ padding: "8px 10px" }}>
                     <Badge label={ed.status || "—"} style={STATUS_STYLE[ed.status] || {}} />
                   </td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#10b981", fontWeight: 600 }}>{ed.paid_count ?? 0}</td>
+                  {/* Tickets booked = paid_count */}
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#10b981", fontWeight: 700, fontSize: 13 }}>
+                    {ed.paid_count ?? 0}
+                  </td>
                   <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#f59e0b" }}>{ed.pending_count ?? 0}</td>
                   <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{ed.total_delegates ?? 0}</td>
-                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600 }}>{fmtCurrency(ed.total_revenue)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#10b981", fontWeight: 700 }}>{ed.paid_count ?? 0}</td>
                   <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: gc, fontWeight: 600 }}>
                     {fmtGrowth(ed.growth_pct)}
                   </td>
@@ -369,7 +500,7 @@ function RepsTab({ reps }) {
 
 // ── Main Drawer ───────────────────────────────────────────────────────────────
 
-export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
+export function MasterEventDrawer({ masterCode, currentEventCode, onClose, inline = false }) {
   const [data,      setData]      = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState("current");
@@ -410,8 +541,11 @@ export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 900 }} />
-      <div style={{
+      {!inline && <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 900 }} />}
+      <div style={inline ? {
+        background: "var(--surface)", display: "flex", flexDirection: "column",
+        borderTop: "2px solid var(--accent)", borderBottom: "1px solid var(--border)",
+      } : {
         position: "fixed", top: 0, right: 0, bottom: 0, width: 920,
         background: "var(--surface)", borderLeft: "1px solid var(--border)",
         display: "flex", flexDirection: "column", zIndex: 901, overflowY: "auto",
@@ -449,7 +583,7 @@ export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
                 </div>
               )}
             </div>
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", fontSize: 20, padding: 4, lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", fontSize: inline ? 12 : 20, padding: 4, lineHeight: 1, fontWeight: inline ? 500 : 400 }}>{inline ? "▲ Collapse" : "✕"}</button>
           </div>
 
           {/* Quick metric pills */}
@@ -476,7 +610,7 @@ export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0, paddingLeft: 24 }}>
           {[
             { id: "current",    label: "Current Performance" },
-            { id: "history",    label: "Edition History" },
+            { id: "history",    label: "Edition Comparison" },
             { id: "reps",       label: "Reps" },
             { id: "follow-ups", label: "Follow-Ups" },
             { id: "mailshots",  label: "Mailshots" },
@@ -497,7 +631,7 @@ export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
         </div>
 
         {/* ── Content ────────────────────────────────────────────────── */}
-        <div style={{ flex: 1, padding: "16px 24px", overflowY: "auto" }}>
+        <div style={{ padding: "16px 24px", ...(inline ? {} : { flex: 1, overflowY: "auto" }) }}>
           {loading && <div style={{ color: "var(--text-faint)", padding: "24px 0", textAlign: "center" }}>Loading…</div>}
 
           {!loading && tab === "current" && (
@@ -505,7 +639,7 @@ export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
           )}
 
           {!loading && tab === "history" && (
-            <HistoryTab editions={data?.editions} growthTimeline={data?.growth_timeline} />
+            <HistoryTab editions={data?.editions} />
           )}
 
           {!loading && tab === "reps" && <RepsTab reps={data?.reps} />}

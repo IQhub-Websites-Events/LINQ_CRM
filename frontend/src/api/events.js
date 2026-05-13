@@ -7,6 +7,13 @@ export const eventsApi = {
   get: (id) =>
     client.get(`/events/${id}/`).then((r) => r.data),
 
+  getByCode: (code) =>
+    client.get("/events/", { params: { event_code: code, page_size: 10 } })
+      .then((r) => {
+        const results = r.data?.results || [];
+        return results.find(ev => ev.event_code === code) || results[0] || null;
+      }),
+
   years: () =>
     client.get("/events/years/").then((r) => r.data),
 

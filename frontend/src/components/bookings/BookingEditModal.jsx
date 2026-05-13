@@ -57,6 +57,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const [events, setEvents] = useState([]);
+  const [assignedEvent, setAssignedEvent] = useState(null);
 
   const load = useCallback(async () => {
     if (!invoiceId) return;
@@ -121,6 +122,15 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
     eventsApi.list({ page_size: 500 }).then(r => setEvents(r.results || [])).catch(() => {});
   }, []);
 
+  // Fetch assigned persons from the Events module whenever event_code is known
+  useEffect(() => {
+    const code = form?.event_code;
+    if (!code) { setAssignedEvent(null); return; }
+    eventsApi.getByCode(code)
+      .then(ev => setAssignedEvent(ev || null))
+      .catch(() => setAssignedEvent(null));
+  }, [form?.event_code]);
+
   const set = (f, v) => setForm(p => ({ ...p, [f]: v }));
   const setDelegate = (idx, field, value) => setForm(p => {
     const next = [...p.delegates];
@@ -181,13 +191,22 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
         {/* ── HEADER ── */}
         <div style={headerWrap}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
               <Avatar name={leadName} size={32} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                   <span style={headerTitle}>Edit Booking</span>
                   <StatusBadge status={form.payment_status} />
                   <SourceBadge source={form.source} />
+                  {assignedEvent?.sales_executive_name && (
+                    <AssignedPill role="Sales Exec" name={assignedEvent.sales_executive_name} color="#405189" />
+                  )}
+                  {assignedEvent?.speaker_sales_team && (
+                    <AssignedPill role="Speaker Sales" name={assignedEvent.speaker_sales_team} color="#0ab39c" />
+                  )}
+                  {assignedEvent?.market_research_team && (
+                    <AssignedPill role="Market Research" name={assignedEvent.market_research_team} color="#f59e0b" />
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, flexWrap: "wrap" }}>
                   <span style={metaText}>{leadName}</span>
@@ -196,6 +215,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
                 </div>
               </div>
             </div>
+
             <button onClick={onClose} style={closeBtn}>✕</button>
           </div>
 
@@ -894,6 +914,37 @@ function SectionLabel({ children }) {
 
 function MetaDot() {
   return <span style={{ color: TEXT_FAINT, fontSize: 10, lineHeight: 1 }}>·</span>;
+}
+
+function AssignedPill({ role, name, color }) {
+  return (
+    <div style={{
+      display: "inline-flex", alignItems: "center", gap: 7,
+      background: `${color}12`,
+      border: `1px solid ${color}28`,
+      borderRadius: 20,
+      padding: "3px 10px 3px 6px",
+      maxWidth: 210,
+    }}>
+      <span style={{
+        width: 22, height: 22, borderRadius: "50%",
+        background: `${color}22`, border: `1px solid ${color}40`,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontSize: 9, fontWeight: 800, color, flexShrink: 0,
+        fontFamily: "var(--font-mono, monospace)",
+      }}>
+        {name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 9, fontWeight: 600, color, textTransform: "uppercase", letterSpacing: "0.06em", lineHeight: 1 }}>
+          {role}
+        </div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: "#343a40", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {name}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AdminDivider() {

@@ -121,6 +121,7 @@ class EventPerformanceViewSet(viewsets.ViewSet):
         for group in groups:
             event        = group["current"]
             all_events   = group["all_events"]
+            master_code  = group["master_code"]  # normalized: DDU, WSE, etc.
 
             # Aggregate numeric metrics across every edition in this master group
             m = {
@@ -152,9 +153,12 @@ class EventPerformanceViewSet(viewsets.ViewSet):
                 "total_invoices":      _sum_group(all_events, "total_invoices"),
             }
 
+            # Current-edition-only metrics (not summed across all editions)
+            curr_metrics = metrics.get(event.event_code, {})
+
             health = compute_health(m["paid_count"], event.capacity)
             rows.append({
-                "master_code":         event.event_code,
+                "master_code":         master_code,
                 "current_event_code":  event.event_code,
                 "current_event_name":  event.name,
                 "current_year":        event.event_date.year if event.event_date else None,
@@ -163,7 +167,12 @@ class EventPerformanceViewSet(viewsets.ViewSet):
                 "event_status":        event.status,
                 "sub_company":         event.sub_company or "",
                 "edition_count":       group["edition_count"],
+                # All-editions aggregated totals
                 **m,
+                # Current edition only (for single-edition display in drawer header)
+                "current_paid_count":     curr_metrics.get("paid_count", 0) or 0,
+                "current_total_revenue":  float(curr_metrics.get("total_revenue", 0) or 0),
+                "current_total_delegates": curr_metrics.get("total_delegates", 0) or 0,
                 "benchmark":  health["benchmark"],
                 "health":     health["health"],
                 "health_color": health["color"],

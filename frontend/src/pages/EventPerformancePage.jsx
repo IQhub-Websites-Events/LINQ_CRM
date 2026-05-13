@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { eventPerformanceApi } from "../api/eventPerformance";
 import { EventPaymentActivityModule } from "../components/eventPerformance/EventPaymentActivityModule";
 import { MasterEventDrawer } from "../components/eventPerformance/MasterEventDrawer";
@@ -172,7 +172,7 @@ export function EventPerformancePage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div>
             <h1 style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", margin: 0 }}>Event Performance</h1>
-            <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "2px 0 0" }}>Current active editions · live metrics from bookings, payments and delegates</p>
+            <p style={{ fontSize: 11, color: "var(--text-faint)", margin: "2px 0 0" }}>Current edition metrics · current vs previous edition comparison · all-time totals</p>
           </div>
           <button
             onClick={loadEvents}
@@ -185,8 +185,6 @@ export function EventPerformancePage() {
           <KPICard label="Master Events"  value={kpis.totalEvents}                 />
           <KPICard label="Paid Today"     value={kpis.todayPaid}    sub={fmtCurrency(kpis.todayRevenue) + " today"} />
           <KPICard label="Total Paid"     value={kpis.totalPaid}                   />
-          <KPICard label="Total Revenue"  value={fmtCurrency(kpis.totalRevenue)}   />
-          <KPICard label="Pending Value"  value={fmtCurrency(kpis.pendingValue)} sub={kpis.totalPending + " pending bookings"} />
         </div>
 
         {/* Filters */}
@@ -215,10 +213,10 @@ export function EventPerformancePage() {
       {/* View Tabs */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--surface)", flexShrink: 0, paddingLeft: 20 }}>
         {[
-          { id: "overview",          label: "Overview"          },
-          { id: "payments",          label: "Payments Timeline" },
-          { id: "health",            label: "Health & Delegates"},
-          { id: "payment-activity",  label: "Payment Activity"  },
+          { id: "overview",          label: "Overview"             },
+          { id: "payments",          label: "Payments Timeline"    },
+          { id: "health",            label: "Health & Delegates"   },
+          { id: "payment-activity",  label: "Payment Activity"     },
         ].map(({ id, label }) => (
           <button
             key={id}
@@ -274,49 +272,67 @@ export function EventPerformancePage() {
               </tr>
             </thead>
             <tbody>
-              {events.map((row, idx) => (
-                <tr
-                  key={row.master_code}
-                  onClick={() => setSelectedRow(row)}
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    background: idx % 2 === 0 ? "var(--surface)" : "var(--bg)",
-                    cursor: "pointer",
-                    transition: "background .1s",
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = "var(--surface-alt)"}
-                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "var(--surface)" : "var(--bg)"}
-                >
-                  {cols.map(col => (
-                    <td
-                      key={col.key}
+              {events.map((row, idx) => {
+                const isExpanded = selectedRow?.master_code === row.master_code;
+                return (
+                  <Fragment key={row.master_code}>
+                    <tr
+                      onClick={() => setSelectedRow(isExpanded ? null : row)}
                       style={{
-                        padding: "8px 12px",
-                        whiteSpace: "nowrap",
-                        maxWidth: col.width,
-                        ...(col.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis" } : {}),
-                        background: "inherit",
-                        ...(col.sticky ? { position: "sticky", left: col.left, zIndex: 1, boxShadow: "1px 0 0 var(--border)" } : {}),
+                        borderBottom: isExpanded ? "none" : "1px solid var(--border)",
+                        background: isExpanded ? "var(--surface-alt)" : idx % 2 === 0 ? "var(--surface)" : "var(--bg)",
+                        cursor: "pointer",
+                        transition: "background .1s",
                       }}
+                      onMouseEnter={e => e.currentTarget.style.background = "var(--surface-alt)"}
+                      onMouseLeave={e => e.currentTarget.style.background = isExpanded ? "var(--surface-alt)" : idx % 2 === 0 ? "var(--surface)" : "var(--bg)"}
                     >
-                      {cellValue(col, row)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+                      {cols.map((col, ci) => (
+                        <td
+                          key={col.key}
+                          style={{
+                            padding: "8px 12px",
+                            whiteSpace: "nowrap",
+                            maxWidth: col.width,
+                            ...(col.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis" } : {}),
+                            background: "inherit",
+                            ...(col.sticky ? { position: "sticky", left: col.left, zIndex: 1, boxShadow: "1px 0 0 var(--border)" } : {}),
+                          }}
+                        >
+                          {ci === 0
+                            ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <span style={{
+                                  fontSize: 8, color: "var(--accent)",
+                                  display: "inline-block", transition: "transform .15s",
+                                  transform: isExpanded ? "rotate(90deg)" : "none",
+                                }}>▶</span>
+                                {cellValue(col, row)}
+                              </span>
+                            : cellValue(col, row)
+                          }
+                        </td>
+                      ))}
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={cols.length} style={{ padding: 0, background: "var(--surface)" }}>
+                          <MasterEventDrawer
+                            masterCode={row.master_code}
+                            currentEventCode={row.current_event_code}
+                            onClose={() => setSelectedRow(null)}
+                            inline
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* Master Event Drawer */}
-      {selectedRow && tab !== "payment-activity" && (
-        <MasterEventDrawer
-          masterCode={selectedRow.master_code}
-          currentEventCode={selectedRow.current_event_code}
-          onClose={() => setSelectedRow(null)}
-        />
-      )}
     </div>
   );
 }

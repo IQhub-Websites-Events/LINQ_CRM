@@ -261,16 +261,27 @@ class EventEditionBookingEngine:
         from book_event.models import BookEvent
 
         mapper: BookingEditionMapper = BookingEditionMapper(windows)
+        # Build a quick lookup: which years have windows?
+        window_years = {w["year"] for w in windows}
         result: Dict[Optional[int], List[int]] = {}
 
         for row in (
             BookEvent.objects
             .filter(event_code__iregex=booking_code_regex(self.event_code))
-            .values("id", "invoice_date", "created_at")
+            .values("id", "invoice_date", "created_at", "event_date")
         ):
-            inv = row["invoice_date"]
-            cr  = row["created_at"].date() if row["created_at"] else None
-            yr  = mapper.year_for(inv, cr)
+            # Primary signal: use the booking's own event_date year if available.
+            # This correctly places a 2024-event booking into the 2024 edition
+            # even if the invoice was dated in 2025.
+            event_yr = row["event_date"].year if row["event_date"] else None
+            if event_yr and event_yr in window_years:
+                yr = event_yr
+            else:
+                # Fallback: assign via invoice_date / created_at window matching
+                inv = row["invoice_date"]
+                cr  = row["created_at"].date() if row["created_at"] else None
+                yr  = mapper.year_for(inv, cr)
+
             result.setdefault(yr, []).append(row["id"])
 
         return result
