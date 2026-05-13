@@ -3,6 +3,7 @@
 backend/credentials/
 backend/CREDENTIALS.md
 CREDENTIALS.md
+*.md
 *.pem
 *.key
 *.p12
@@ -74,6 +75,7 @@ frontend/*.log
 .project
 .classpath
 .settings/
+.claude/
 
 # ── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
