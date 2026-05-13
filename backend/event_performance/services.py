@@ -26,13 +26,13 @@ def _date_range(days_back: int) -> tuple[date, date]:
 
 def bulk_event_metrics(event_codes: list[str]) -> dict:
     """
-    Returns a dict keyed by event_code (= Event.event_code = BookEvent.event_name).
+    Returns a dict keyed by event_code.
 
     All headcount metrics (paid_count, pending_count, timeline counts) are
     delegate-based — each BookDelegate row counts as one person.
     Revenue metrics remain invoice-based (BookEvent) since only invoices carry amounts.
 
-    Join key: BookEvent.event_name = BookDelegate.invoice.event_name = Event.event_code
+    Join key: BookEvent.event_code = BookDelegate.invoice.event_code = Event.event_code
     """
     today     = date.today()
     yesterday = today - timedelta(days=1)
@@ -43,8 +43,8 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
     # ── Query 1: Revenue from invoices ────────────────────────────────────────
     revenue_qs = (
         BookEvent.objects
-        .filter(event_name__in=event_codes)
-        .values("event_name")
+        .filter(event_code__in=event_codes)
+        .values("event_code")
         .annotate(
             total_invoices   = Count("id"),
             total_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),    Value(Decimal("0")), output_field=DecimalField()),
@@ -61,8 +61,8 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
     # Every row = one delegate; payment status comes from the linked invoice.
     delegate_qs = (
         BookDelegate.objects
-        .filter(invoice__event_name__in=event_codes)
-        .values(base_code=F("invoice__event_name"))
+        .filter(invoice__event_code__in=event_codes)
+        .values(base_code=F("invoice__event_code"))
         .annotate(
             total_delegates    = Count("id"),
             paid_count         = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES)),
@@ -71,6 +71,16 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
             cancelled_count    = Count("id", filter=Q(invoice__payment_status__in=CANCELLED_STATUSES)),
             confirmed_delegates= Count("id", filter=Q(attendance="Confirmed")),
             noshow_delegates   = Count("id", filter=Q(attendance="No-show")),
+
+            # Ticket tier breakdown (invoice-level tier, delegate count)
+            vip_count         = Count("id", filter=Q(invoice__ticket_tier="VIP")),
+            speaker_count     = Count("id", filter=Q(invoice__ticket_tier="Speaker")),
+            sponsor_count     = Count("id", filter=Q(invoice__ticket_tier="Sponsor")),
+            complimentary_count = Count("id", filter=Q(invoice__ticket_tier="Complimentary")),
+
+            # Paid-or-free breakdown
+            paid_pof_count    = Count("id", filter=Q(invoice__paid_or_free="Paid")),
+            free_pof_count    = Count("id", filter=Q(invoice__paid_or_free="Free")),
 
             # Payment timeline — delegate counts
             today_paid    = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES, invoice__payment_date=today)),
@@ -82,7 +92,7 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
     )
 
     # ── Index results ─────────────────────────────────────────────────────────
-    revenue_map  = {r["event_name"]: r for r in revenue_qs}
+    revenue_map  = {r["event_code"]: r for r in revenue_qs}
     delegate_map = {r["base_code"]:  r for r in delegate_qs}
 
     result = {}
@@ -99,6 +109,16 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
             "cancelled_count":     d.get("cancelled_count",     0) or 0,
             "confirmed_delegates": d.get("confirmed_delegates", 0) or 0,
             "noshow_delegates":    d.get("noshow_delegates",    0) or 0,
+
+            # Ticket tier breakdown
+            "vip_count":           d.get("vip_count",           0) or 0,
+            "speaker_count":       d.get("speaker_count",       0) or 0,
+            "sponsor_count":       d.get("sponsor_count",       0) or 0,
+            "complimentary_count": d.get("complimentary_count", 0) or 0,
+
+            # Paid-or-free breakdown
+            "paid_pof_count":      d.get("paid_pof_count",      0) or 0,
+            "free_pof_count":      d.get("free_pof_count",      0) or 0,
 
             # Timeline — delegate counts
             "today_paid":          d.get("today_paid",    0) or 0,
@@ -150,7 +170,7 @@ def reps_performance(event_codes: list[str]) -> list[dict]:
     """
     qs = (
         BookEvent.objects
-        .filter(event_name__in=event_codes)   # event_name = Event.event_code
+        .filter(event_code__in=event_codes)
         .values(
             rep_id        = F("sales_executive__id"),
             rep_first     = F("sales_executive__first_name"),

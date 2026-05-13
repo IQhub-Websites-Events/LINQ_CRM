@@ -34,7 +34,8 @@ class BookEventListSerializer(serializers.ModelSerializer):
             "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
             "currency",
             "company_name", "contact_name", "contact_email",
-            "payment_status", "payment_type", "payment_date", "invoice_date",
+            "payment_status", "payment_type", "payment_date", "paid_or_free",
+            "ticket_tier", "invoice_date",
             "sales_executive", "sales_executive_name",
             "team_leader", "team_leader_name",
             "reference", "booking_code", "source", "created_at", "updated_at",
@@ -93,7 +94,8 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "company_address", "company_city", "company_state",
             "company_country", "company_postal_code", "company_website",
             "payment_status", "payment_type", "payment_date", "payment_due_date",
-            "invoice_date", "booking_code", "paid_free",
+            "paid_or_free", "paid_free",
+            "invoice_date", "booking_code",
             "sales_executive", "sales_executive_name",
             "team_leader", "team_leader_name",
             "reference", "parent_code", "notes", "add_ons",
@@ -146,6 +148,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "position", "ticket_package", "sponsorship_level",
             "attendance", "notes", "dietary_requirements",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
         }
 
         with transaction.atomic():
@@ -200,6 +203,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "position", "ticket_package", "sponsorship_level",
             "attendance", "notes", "dietary_requirements",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
         }
 
         with transaction.atomic():
@@ -291,13 +295,13 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
 class PaymentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BookEvent
-        fields = ["payment_status", "payment_type", "payment_date"]
+        fields = ["payment_status", "payment_type", "payment_date", "paid_or_free", "ticket_tier"]
 
     def validate(self, data):
         status = data.get("payment_status", getattr(self.instance, "payment_status", None))
         if status == "Paid":
-            date  = data.get("payment_date",  getattr(self.instance, "payment_date",  None))
-            ptype = data.get("payment_type",  getattr(self.instance, "payment_type",  None))
+            date  = data.get("payment_date", getattr(self.instance, "payment_date", None))
+            ptype = data.get("payment_type", getattr(self.instance, "payment_type", None))
             if not date:
                 raise serializers.ValidationError(
                     {"payment_date": "payment_date is required when status is Paid."}
@@ -306,13 +310,6 @@ class PaymentUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"payment_type": "payment_type is required when status is Paid."}
                 )
-            if ptype not in ("Bank", "Stripe"):
-                raise serializers.ValidationError(
-                    {"payment_type": "payment_type must be Bank or Stripe."}
-                )
-        else:
-            data["payment_date"] = None
-            data["payment_type"] = ""
         return data
 
 
@@ -322,10 +319,12 @@ class DelegatePayloadSerializer(serializers.Serializer):
     FirstName         = serializers.CharField(max_length=150)
     LastName          = serializers.CharField(max_length=150, required=False, default="")
     Email             = serializers.EmailField()
-    PhoneNumber       = serializers.CharField(max_length=50, required=False, default="")
-    Position          = serializers.CharField(max_length=150, required=False, default="")
-    TicketPackage     = serializers.CharField(max_length=100, required=False, default="")
-    SponsorshipLevel  = serializers.CharField(max_length=100, required=False, default="")
+    PhoneNumber       = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    Position          = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    TicketPackage     = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    SponsorshipLevel  = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    TicketTier        = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    PaidOrFree        = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
 
 
 class WebsiteBookingSerializer(serializers.Serializer):
@@ -358,6 +357,10 @@ class WebsiteBookingSerializer(serializers.Serializer):
     CompanyWebAddress   = serializers.CharField(required=False, allow_blank=True, default="")
     # Contact
     AccountsContactEmail = serializers.EmailField(required=False, allow_blank=True, default="")
+    # Invoice-level ticket/payment classification
+    TicketTier = serializers.CharField(max_length=50, required=False, default="")
+    PaidOrFree = serializers.CharField(max_length=20, required=False, default="")
+    PaymentType = serializers.CharField(max_length=30, required=False, default="")
     # Delegates
     Delegates = DelegatePayloadSerializer(many=True, required=False, default=list)
 
@@ -365,13 +368,13 @@ class WebsiteBookingSerializer(serializers.Serializer):
         if not value and value != 0:
             return None
         try:
-            return Decimal(str(value).replace(",", "").strip() or "0")
+            return Decimal(str(value).replace(",", "").replace("%", "").strip() or "0")
         except InvalidOperation:
             raise serializers.ValidationError({name: f"Invalid decimal: {value}"})
 
     def _decimal(self, value, name):
         try:
-            return Decimal(str(value).replace(",", "").strip() or "0")
+            return Decimal(str(value).replace(",", "").replace("%", "").strip() or "0")
         except InvalidOperation:
             raise serializers.ValidationError({name: f"Invalid decimal: {value}"})
 

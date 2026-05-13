@@ -30,6 +30,7 @@ const NAV = [
   },
   {
     section: "Insights",
+    adminOnly: true,
     items: [
       { id: "reports",           label: "Reports",     Icon: ChartIcon   },
       { id: "event-performance", label: "Performance", Icon: CalendarIcon },
@@ -86,16 +87,19 @@ export function Sidebar({ current, onNav, badges = {} }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "4px 0", overflowY: "auto" }}>
-        {NAV.map(({ section, items }) => (
-          <div key={section} style={{ marginBottom: 18 }}>
-            <div style={sectionLabel}>{section}</div>
-            {items.map((item) => (
-              <NavItem key={item.id} item={item} active={current === item.id}
-                badge={item.badgeKey ? badges[item.badgeKey] : null}
-                onClick={() => onNav(item.id)} />
-            ))}
-          </div>
-        ))}
+        {NAV.map(({ section, items, adminOnly }) => {
+          if (adminOnly && !isAdmin) return null;
+          return (
+            <div key={section} style={{ marginBottom: 18 }}>
+              <div style={sectionLabel}>{section}</div>
+              {items.map((item) => (
+                <NavItem key={item.id} item={item} active={current === item.id}
+                  badge={item.badgeKey ? badges[item.badgeKey] : null}
+                  onClick={() => onNav(item.id)} />
+              ))}
+            </div>
+          );
+        })}
 
         {isAdmin && (
           <div style={{ marginBottom: 18 }}>

@@ -14,24 +14,50 @@ export function BookingsCardGrid({ statusFilter = "", onTotalChange }) {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
   const [editInvId, setEditInvId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (p = 1, append = false) => {
+    if (p > 1) setFetchingMore(true);
+    else setLoading(true);
+
     try {
-      const params = { page, page_size: PAGE_SIZE };
+      const params = { page: p, page_size: PAGE_SIZE };
       if (statusFilter) params.payment_status = statusFilter;
       const res = await delegatesApi.list(params);
-      setData(res.results || []);
-      setTotal(res.count || 0);
+      const results = res.results || [];
+      const count = res.count || 0;
+
+      setData(prev => append ? [...prev, ...results] : results);
+      setTotal(count);
+      setHasMore((p * PAGE_SIZE) < count);
     } catch {
       toast.error("Failed to load bookings");
     } finally {
       setLoading(false);
+      setFetchingMore(false);
     }
-  }, [page, statusFilter, toast]);
+  }, [statusFilter, toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    setPage(1);
+    load(1, false);
+  }, [statusFilter, load]);
+
+  const loadMore = useCallback(() => {
+    if (loading || fetchingMore || !hasMore) return;
+    const next = page + 1;
+    setPage(next);
+    load(next, true);
+  }, [page, loading, fetchingMore, hasMore, load]);
+
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      loadMore();
+    }
+  };
   useEffect(() => { onTotalChange?.(total); }, [total, onTotalChange]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -43,9 +69,11 @@ export function BookingsCardGrid({ statusFilter = "", onTotalChange }) {
       ) : data.length === 0 ? (
         <div style={{ textAlign: "center", padding: 48, color: "var(--text-faint)", fontSize: 13 }}>No records match the current filters.</div>
       ) : (
-        <div style={{
-          flex: 1,
-          overflowY: "auto",
+        <div 
+          onScroll={handleScroll}
+          style={{
+            flex: 1,
+            overflowY: "auto",
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
           gap: 14,
@@ -54,21 +82,30 @@ export function BookingsCardGrid({ statusFilter = "", onTotalChange }) {
           {data.map((row) => (
             <BookingCard key={row.id} delegate={row} onEdit={() => setEditInvId(row.book_event_id)} />
           ))}
+          {fetchingMore && (
+            <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 20, color: "var(--accent)", fontSize: 13, fontWeight: 500 }}>
+              Loading more…
+            </div>
+          )}
         </div>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 12, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
-            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
-          </span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <PgBtn disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Prev</PgBtn>
-            <PgBtn disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next →</PgBtn>
-          </div>
-        </div>
-      )}
+      <div style={{ 
+        padding: "10px 0", 
+        borderTop: "1px solid var(--border)", 
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexShrink: 0,
+        marginTop: 12
+      }}>
+        <span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500 }}>
+          Showing {data.length} of {total} bookings
+        </span>
+        {!hasMore && total > 0 && (
+          <span style={{ fontSize: 11, color: "var(--text-faint)" }}>All records loaded</span>
+        )}
+      </div>
 
       <BookingEditModal
         invoiceId={editInvId}

@@ -18,7 +18,7 @@ _PAID = ["Paid"]
 def event_payment_metrics(event_codes: list[str]) -> dict:
     """
     Bulk-calculates per-event payment activity metrics.
-    Returns a dict keyed by event_code (= BookEvent.event_name = Event.event_code).
+    Returns a dict keyed by event_code.
 
     Counts are delegate-based (consistent with bulk_event_metrics in services.py).
     """
@@ -34,10 +34,10 @@ def event_payment_metrics(event_codes: list[str]) -> dict:
     qs = (
         BookDelegate.objects
         .filter(
-            invoice__event_name__in=event_codes,
+            invoice__event_code__in=event_codes,
             invoice__payment_status__in=_PAID,
         )
-        .values(event_name=F("invoice__event_name"))
+        .values(event_code=F("invoice__event_code"))
         .annotate(
             total_paid        = Count("id"),
             paid_7d           = Count("id", filter=Q(invoice__payment_date__gte=d7)),
@@ -55,7 +55,7 @@ def event_payment_metrics(event_codes: list[str]) -> dict:
 
     result: dict[str, dict] = {}
     for r in qs:
-        ec = r["event_name"]
+        ec = r["event_code"]
         raw_last_booking = r["last_booking_date"]
         result[ec] = {
             "total_paid":        r["total_paid"] or 0,
@@ -78,7 +78,7 @@ def event_paid_bookings(event_code: str, days: int | None = None):
     """
     qs = (
         BookEvent.objects
-        .filter(event_name=event_code, payment_status__in=_PAID)
+        .filter(event_code=event_code, payment_status__in=_PAID)
         .select_related("sales_executive")
         .order_by("-payment_date", "-created_at")
     )

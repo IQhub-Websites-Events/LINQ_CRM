@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "google_sync",
     "reports",
     "event_performance",
+    "historical_event_registry",
 ]
 
 MIDDLEWARE = [

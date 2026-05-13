@@ -10,6 +10,8 @@ class BookDelegateInlineSerializer(serializers.ModelSerializer):
     effective_payment_status   = serializers.SerializerMethodField()
     effective_payment_type     = serializers.SerializerMethodField()
     effective_payment_date     = serializers.SerializerMethodField()
+    effective_paid_or_free     = serializers.SerializerMethodField()
+    effective_ticket_tier      = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
@@ -20,7 +22,9 @@ class BookDelegateInlineSerializer(serializers.ModelSerializer):
             "company_display", "attendance", "payment_status",
             "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
+            "effective_paid_or_free", "effective_ticket_tier",
         ]
 
     def get_effective_payment_status(self, obj):
@@ -32,6 +36,12 @@ class BookDelegateInlineSerializer(serializers.ModelSerializer):
     def get_effective_payment_date(self, obj):
         val = obj.delegate_payment_date or obj.invoice.payment_date
         return str(val) if val else None
+
+    def get_effective_paid_or_free(self, obj):
+        return obj.delegate_paid_or_free or obj.invoice.paid_or_free
+
+    def get_effective_ticket_tier(self, obj):
+        return obj.delegate_ticket_tier or obj.invoice.ticket_tier
 
 
 class BookDelegateListSerializer(serializers.ModelSerializer):
@@ -59,10 +69,13 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
     accounts_contact_email = serializers.EmailField(source="invoice.accounts_contact_email", read_only=True)
     sales_executive_name   = serializers.SerializerMethodField()
     team_leader_name       = serializers.SerializerMethodField()
+    paid_or_free           = serializers.CharField(source="invoice.paid_or_free",       read_only=True)
     company_display        = serializers.ReadOnlyField()
     effective_payment_status = serializers.SerializerMethodField()
     effective_payment_type   = serializers.SerializerMethodField()
     effective_payment_date   = serializers.SerializerMethodField()
+    effective_paid_or_free   = serializers.SerializerMethodField()
+    effective_ticket_tier    = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
@@ -75,12 +88,14 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
             "attendance", "payment_status", "payment_date",
             "currency", "discount", "discount_code",
             "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
-            "delegate_count", "ticket_tier",
+            "delegate_count", "ticket_tier", "paid_or_free",
             "sales_executive_name", "team_leader_name",
             "paid_free", "add_ons", "reference",
             "event_name", "accounts_contact_email", "source",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
+            "effective_paid_or_free", "effective_ticket_tier",
             "created_at", "updated_at",
         ]
 
@@ -106,6 +121,12 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
         val = obj.delegate_payment_date or obj.invoice.payment_date
         return str(val) if val else None
 
+    def get_effective_paid_or_free(self, obj):
+        return obj.delegate_paid_or_free or obj.invoice.paid_or_free
+
+    def get_effective_ticket_tier(self, obj):
+        return obj.delegate_ticket_tier or obj.invoice.ticket_tier
+
 
 class BookDelegateDetailSerializer(serializers.ModelSerializer):
     full_name       = serializers.ReadOnlyField()
@@ -115,9 +136,12 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
     company_display = serializers.ReadOnlyField()
     company_detail  = CompanyMiniSerializer(source="company", read_only=True)
     event_name      = serializers.SerializerMethodField()
+    paid_or_free    = serializers.CharField(source="invoice.paid_or_free", read_only=True)
     effective_payment_status = serializers.SerializerMethodField()
     effective_payment_type   = serializers.SerializerMethodField()
     effective_payment_date   = serializers.SerializerMethodField()
+    effective_paid_or_free   = serializers.SerializerMethodField()
+    effective_ticket_tier    = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookDelegate
@@ -127,10 +151,12 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
             "email", "phone_number", "position",
             "ticket_package", "sponsorship_level",
             "company", "company_detail", "company_name_raw", "company_display",
-            "attendance", "payment_status", "payment_date",
+            "attendance", "payment_status", "payment_date", "paid_or_free",
             "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
+            "effective_paid_or_free", "effective_ticket_tier",
             "created_at", "updated_at",
         ]
 
@@ -151,6 +177,12 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
         val = obj.delegate_payment_date or obj.invoice.payment_date
         return str(val) if val else None
 
+    def get_effective_paid_or_free(self, obj):
+        return obj.delegate_paid_or_free or obj.invoice.paid_or_free
+
+    def get_effective_ticket_tier(self, obj):
+        return obj.delegate_ticket_tier or obj.invoice.ticket_tier
+
 
 class BookDelegateWriteSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(write_only=True)
@@ -163,6 +195,7 @@ class BookDelegateWriteSerializer(serializers.ModelSerializer):
             "ticket_package", "sponsorship_level",
             "company", "attendance", "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
+            "delegate_paid_or_free", "delegate_ticket_tier",
         ]
 
     def validate_invoice_number(self, value):

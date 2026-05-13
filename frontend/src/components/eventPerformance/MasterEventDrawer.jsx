@@ -1,0 +1,667 @@
+import { useState, useEffect, useCallback } from "react";
+import { eventPerformanceApi } from "../../api/eventPerformance";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fmtCurrency = (n) =>
+  n == null ? "—" : "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
+
+const fmtDate = (d) => {
+  if (!d) return "—";
+  const dt = new Date(d + "T00:00:00");
+  return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" });
+};
+
+const fmtGrowth = (pct) => {
+  if (pct == null) return "—";
+  const sign = pct >= 0 ? "+" : "";
+  return `${sign}${pct}%`;
+};
+
+// ── Style maps ────────────────────────────────────────────────────────────────
+
+const HEALTH_STYLE = {
+  healthy:  { bg: "var(--success-soft)", color: "var(--success)",   label: "Healthy"  },
+  on_track: { bg: "#dbeafe",            color: "#1d4ed8",           label: "On Track" },
+  warning:  { bg: "var(--warn-soft)",   color: "var(--warn)",       label: "Warning"  },
+  critical: { bg: "var(--danger-soft)", color: "var(--danger)",     label: "Critical" },
+  unknown:  { bg: "var(--surface-alt)", color: "var(--text-faint)", label: "—"        },
+};
+
+const STATUS_STYLE = {
+  Upcoming:  { bg: "#dbeafe",            color: "#1d4ed8"           },
+  Live:      { bg: "var(--success-soft)", color: "var(--success)"   },
+  Completed: { bg: "var(--surface-alt)", color: "var(--text-dim)"   },
+  Draft:     { bg: "var(--surface-alt)", color: "var(--text-faint)" },
+  Cancelled: { bg: "var(--danger-soft)", color: "var(--danger)"     },
+};
+
+const FOLLOW_UP_STATUS_STYLE = {
+  pending:   { bg: "var(--warn-soft)",   color: "var(--warn)"      },
+  called:    { bg: "#dbeafe",            color: "#1d4ed8"           },
+  emailed:   { bg: "#ede9fe",            color: "#6d28d9"           },
+  voicemail: { bg: "var(--surface-alt)", color: "var(--text-dim)"   },
+  converted: { bg: "var(--success-soft)", color: "var(--success)"   },
+  no_answer: { bg: "var(--danger-soft)", color: "var(--danger)"     },
+};
+
+// ── Atoms ─────────────────────────────────────────────────────────────────────
+
+function Badge({ label, style }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center",
+      padding: "2px 7px", borderRadius: 4,
+      fontSize: 10, fontWeight: 600, whiteSpace: "nowrap",
+      background: style?.bg, color: style?.color, ...style,
+    }}>{label}</span>
+  );
+}
+
+function MetricTile({ label, value, color, sub }) {
+  return (
+    <div style={{
+      background: color ? `${color}10` : "var(--surface-alt)",
+      border: `1px solid ${color ? `${color}28` : "var(--border)"}`,
+      borderRadius: 7, padding: "10px 12px",
+    }}>
+      <div style={{ fontSize: 9, color: "var(--text-faint)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: color ?? "var(--text)", fontFamily: "var(--font-mono)", lineHeight: 1.1 }}>
+        {value ?? "—"}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Shared form styles ────────────────────────────────────────────────────────
+
+const inputStyle = {
+  width: "100%", padding: "6px 9px", borderRadius: 6,
+  border: "1px solid var(--border)", background: "var(--surface)",
+  fontSize: 12, color: "var(--text)", fontFamily: "inherit", outline: "none",
+};
+const labelStyle = {
+  display: "block", fontSize: 10, fontWeight: 600, color: "var(--text-faint)",
+  textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4,
+};
+const formCardStyle = {
+  background: "var(--surface-alt)", border: "1px solid var(--border)",
+  borderRadius: 8, padding: "14px", marginBottom: 14,
+};
+const recordCardStyle = {
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderRadius: 8, padding: "12px 14px", marginBottom: 8,
+};
+const addBtnStyle = {
+  fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid var(--border)",
+  background: "var(--surface-alt)", color: "var(--text)", cursor: "pointer", fontWeight: 500,
+};
+const saveBtnStyle = {
+  padding: "6px 14px", borderRadius: 6, border: "none",
+  background: "var(--accent)", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 12,
+};
+const cancelBtnStyle = {
+  padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+  background: "var(--surface-alt)", color: "var(--text-dim)", cursor: "pointer", fontSize: 12,
+};
+const deleteBtnStyle = {
+  background: "none", border: "none", cursor: "pointer",
+  color: "var(--text-faint)", fontSize: 13, padding: "2px 4px", flexShrink: 0,
+};
+
+// ── Current Edition Tab ───────────────────────────────────────────────────────
+
+function CurrentEditionTab({ edition, insights }) {
+  if (!edition) return <div style={{ color: "var(--text-faint)", padding: 24 }}>No current edition data.</div>;
+
+  const paid        = edition.paid_count      ?? 0;
+  const pending     = edition.pending_count   ?? 0;
+  const delegates   = edition.total_delegates ?? 0;
+  const revenue     = edition.total_revenue   ?? 0;
+  const pendValue   = edition.pending_value   ?? 0;
+  const benchmark   = edition.benchmark       ?? 0;
+  const hs          = HEALTH_STYLE[edition.health] ?? HEALTH_STYLE.unknown;
+  const paidPct     = delegates > 0 ? Math.round((paid / delegates) * 100) : 0;
+
+  return (
+    <div style={{ padding: "0 0 24px" }}>
+      {/* Edition info strip */}
+      <div style={{
+        background: "var(--bg)", border: "1px solid var(--border)",
+        borderRadius: 8, padding: "10px 14px", marginBottom: 14,
+        display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center",
+      }}>
+        <div>
+          <div style={{ fontSize: 9, color: "var(--text-faint)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>Code</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 13, color: "var(--accent)", marginTop: 1 }}>{edition.event_code}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, color: "var(--text-faint)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>Edition</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)", marginTop: 1 }}>{edition.year ?? "—"} · {edition.city || "—"}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, color: "var(--text-faint)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.06em" }}>Date</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)", marginTop: 1 }}>{fmtDate(edition.event_date)}</div>
+        </div>
+        <Badge label={edition.status || "—"} style={STATUS_STYLE[edition.status] || {}} />
+        <Badge label={hs.label} style={{ bg: hs.bg, color: hs.color }} />
+      </div>
+
+      {/* Key metrics grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+        <MetricTile label="Paid Delegates"    value={paid}              color="#10b981" sub={`${paidPct}% payment rate`} />
+        <MetricTile label="Pending"           value={pending}           color="#f59e0b" />
+        <MetricTile label="Free"              value={edition.free_count ?? 0} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 14 }}>
+        <MetricTile label="Total Delegates"   value={delegates} />
+        <MetricTile label="Confirmed"         value={edition.confirmed_delegates ?? 0} color="#10b981" />
+        <MetricTile label="Revenue"           value={fmtCurrency(revenue)} />
+      </div>
+
+      {/* Benchmark bar */}
+      {benchmark > 0 && (
+        <div style={{
+          background: "var(--surface-alt)", border: "1px solid var(--border)",
+          borderRadius: 8, padding: "12px 14px", marginBottom: 14,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)" }}>Capacity Benchmark</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: hs.color, fontSize: 14 }}>{benchmark}%</span>
+          </div>
+          <div style={{ background: "var(--border)", borderRadius: 4, height: 6 }}>
+            <div style={{
+              width: `${Math.min(benchmark, 100)}%`, height: "100%", borderRadius: 4,
+              background: hs.color,
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Payment timeline */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          Payment Timeline
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+          {[
+            { label: "Today",  paid: edition.today_paid ?? 0,     rev: edition.today_revenue ?? 0 },
+            { label: "7 Days", paid: edition.d7_paid ?? 0,        rev: edition.d7_revenue ?? 0 },
+            { label: "14 Days",paid: edition.d14_paid ?? 0,       rev: edition.d14_revenue ?? 0 },
+            { label: "21 Days",paid: edition.d21_paid ?? 0,       rev: edition.d21_revenue ?? 0 },
+          ].map(({ label, paid: p, rev }) => (
+            <div key={label} style={{
+              background: p > 0 ? "rgba(16,185,129,0.06)" : "var(--surface-alt)",
+              border: `1px solid ${p > 0 ? "rgba(16,185,129,0.2)" : "var(--border)"}`,
+              borderRadius: 6, padding: "8px 10px",
+            }}>
+              <div style={{ fontSize: 9, color: "var(--text-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 15, color: p > 0 ? "#10b981" : "var(--text-faint)", marginTop: 2 }}>{p}</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>{fmtCurrency(rev)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pending value */}
+      {pendValue > 0 && (
+        <div style={{
+          background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.25)",
+          borderRadius: 7, padding: "10px 14px", marginBottom: 14,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)" }}>Pending Revenue</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "#f59e0b", fontSize: 14 }}>
+            {fmtCurrency(pendValue)}
+          </span>
+        </div>
+      )}
+
+      {/* Performance insights */}
+      {insights?.length > 0 && (
+        <div style={{
+          background: "rgba(99,102,241,0.05)", border: "1px solid rgba(99,102,241,0.2)",
+          borderRadius: 8, padding: "12px 14px",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            Performance Intelligence
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 5 }}>
+            {insights.map((insight, i) => (
+              <li key={i} style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{insight}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── History Tab ───────────────────────────────────────────────────────────────
+
+function HistoryTab({ editions, growthTimeline }) {
+  if (!editions?.length) {
+    return <div style={{ color: "var(--text-faint)", padding: 24, fontSize: 12 }}>No historical editions found.</div>;
+  }
+
+  const maxRevenue = Math.max(...editions.map(e => e.total_revenue ?? 0), 1);
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
+      {/* Growth progression visual */}
+      {growthTimeline?.length > 1 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Revenue Progression
+          </div>
+          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 60 }}>
+            {growthTimeline.map((t, i) => {
+              const pct = maxRevenue > 0 ? Math.max(((t.total_revenue ?? 0) / maxRevenue) * 100, 4) : 4;
+              const isLast = i === growthTimeline.length - 1;
+              return (
+                <div key={t.year ?? i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                  <div style={{ fontSize: 8, color: "var(--text-faint)", fontFamily: "var(--font-mono)" }}>
+                    {fmtCurrency(t.total_revenue)}
+                  </div>
+                  <div style={{
+                    width: "100%", height: `${pct}%`, minHeight: 4, borderRadius: "3px 3px 0 0",
+                    background: isLast ? "var(--accent)" : "var(--border)",
+                    position: "relative",
+                    transition: "height 0.3s",
+                  }} />
+                  <div style={{ fontSize: 9, color: isLast ? "var(--accent)" : "var(--text-faint)", fontWeight: isLast ? 700 : 400 }}>
+                    {t.year}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Editions comparison table */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border)" }}>
+              {["Year", "City", "Status", "Paid", "Pending", "Delegates", "Revenue", "Growth", "Health"].map(h => (
+                <th key={h} style={{
+                  padding: "7px 10px", textAlign: h === "Year" ? "left" : "right",
+                  fontWeight: 600, fontSize: 10, textTransform: "uppercase",
+                  letterSpacing: "0.06em", color: "var(--text-faint)",
+                  whiteSpace: "nowrap",
+                  ...(h === "City" || h === "Status" ? { textAlign: "left" } : {}),
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {editions.map((ed, idx) => {
+              const hs = HEALTH_STYLE[ed.health] ?? HEALTH_STYLE.unknown;
+              const gc = ed.growth_pct == null ? "var(--text-faint)"
+                : ed.growth_pct >= 0 ? "var(--success)" : "var(--danger)";
+              return (
+                <tr
+                  key={ed.event_code ?? idx}
+                  style={{
+                    borderBottom: "1px solid var(--border)",
+                    background: ed.is_current
+                      ? "rgba(99,102,241,0.05)"
+                      : idx % 2 === 0 ? "var(--surface)" : "var(--bg)",
+                  }}
+                >
+                  <td style={{ padding: "8px 10px", fontFamily: "var(--font-mono)", fontWeight: ed.is_current ? 800 : 600, color: ed.is_current ? "var(--accent)" : "var(--text)" }}>
+                    {ed.year ?? "—"}
+                    {ed.is_current && <span style={{ marginLeft: 5, fontSize: 9, background: "var(--accent)", color: "#fff", borderRadius: 3, padding: "1px 4px", fontFamily: "inherit" }}>CURRENT</span>}
+                  </td>
+                  <td style={{ padding: "8px 10px", color: "var(--text-dim)", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ed.city || "—"}</td>
+                  <td style={{ padding: "8px 10px" }}>
+                    <Badge label={ed.status || "—"} style={STATUS_STYLE[ed.status] || {}} />
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#10b981", fontWeight: 600 }}>{ed.paid_count ?? 0}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "#f59e0b" }}>{ed.pending_count ?? 0}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{ed.total_delegates ?? 0}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", fontWeight: 600 }}>{fmtCurrency(ed.total_revenue)}</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: gc, fontWeight: 600 }}>
+                    {fmtGrowth(ed.growth_pct)}
+                  </td>
+                  <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                    <Badge label={hs.label} style={{ bg: hs.bg, color: hs.color }} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Reps Tab ──────────────────────────────────────────────────────────────────
+
+function RepsTab({ reps }) {
+  if (!reps?.length) return <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "20px 0" }}>No rep data available.</div>;
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <thead>
+        <tr>{["Rep", "Paid", "Pending", "Revenue", "Pend £"].map(h => (
+          <th key={h} style={{ textAlign: h === "Rep" ? "left" : "right", padding: "6px 10px", borderBottom: "1px solid var(--border)", color: "var(--text-faint)", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+        ))}</tr>
+      </thead>
+      <tbody>
+        {reps.map((r, i) => (
+          <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+            <td style={{ padding: "8px 10px", fontWeight: 500 }}>{r.rep_name}</td>
+            <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--success)" }}>{r.paid_bookings}</td>
+            <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--warn)" }}>{r.pending_bookings}</td>
+            <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)" }}>{fmtCurrency(r.total_revenue)}</td>
+            <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "var(--font-mono)", color: "var(--warn)" }}>{fmtCurrency(r.pending_value)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ── Main Drawer ───────────────────────────────────────────────────────────────
+
+export function MasterEventDrawer({ masterCode, currentEventCode, onClose }) {
+  const [data,      setData]      = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [tab,       setTab]       = useState("current");
+  const [adding,    setAdding]    = useState(null);
+  const [formData,  setFormData]  = useState({});
+
+  const codeForOps = currentEventCode; // event_code to use for creating ops records
+
+  const load = useCallback(() => {
+    if (!masterCode) return;
+    setLoading(true);
+    eventPerformanceApi.masterHistory(masterCode)
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [masterCode]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const submitFollowUp = async () => {
+    await eventPerformanceApi.followUps.create(codeForOps, formData);
+    setAdding(null); setFormData({}); load();
+  };
+  const submitMailshot = async () => {
+    await eventPerformanceApi.mailshots.create(codeForOps, formData);
+    setAdding(null); setFormData({}); load();
+  };
+  const submitNote = async () => {
+    await eventPerformanceApi.notes.create(codeForOps, { note: formData.note });
+    setAdding(null); setFormData({}); load();
+  };
+  const deleteFollowUp = async (id) => { await eventPerformanceApi.followUps.delete(codeForOps, id); load(); };
+  const deleteMailshot = async (id) => { await eventPerformanceApi.mailshots.delete(codeForOps, id); load(); };
+  const deleteNote     = async (id) => { await eventPerformanceApi.notes.delete(codeForOps, id); load(); };
+
+  const currentEdition = data?.editions?.find(e => e.is_current) ?? data?.editions?.[0];
+  const hs  = HEALTH_STYLE[currentEdition?.health] ?? HEALTH_STYLE.unknown;
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.28)", zIndex: 900 }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: 920,
+        background: "var(--surface)", borderLeft: "1px solid var(--border)",
+        display: "flex", flexDirection: "column", zIndex: 901, overflowY: "auto",
+      }}>
+
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 800,
+                  color: "var(--accent)", background: "rgba(99,102,241,0.1)",
+                  border: "1px solid rgba(99,102,241,0.25)", padding: "3px 9px", borderRadius: 5,
+                }}>{masterCode}</span>
+                {currentEdition && <Badge label={currentEdition.status || "—"} style={STATUS_STYLE[currentEdition.status] || {}} />}
+                {currentEdition && <Badge label={hs.label} style={{ bg: hs.bg, color: hs.color }} />}
+                {data && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: "var(--text-faint)",
+                    background: "var(--surface-alt)", border: "1px solid var(--border)",
+                    borderRadius: 4, padding: "2px 6px",
+                  }}>
+                    {data.total_editions} edition{data.total_editions !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", margin: 0, lineHeight: 1.3 }}>
+                {loading ? "Loading…" : (currentEdition?.event_name || masterCode)}
+              </h2>
+              {currentEdition && (
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
+                  {currentEdition.sub_company} · {currentEdition.city || "—"} · {fmtDate(currentEdition.event_date)}
+                  <span style={{ marginLeft: 8, fontFamily: "var(--font-mono)", color: "var(--accent)", fontWeight: 600 }}>{currentEdition.event_code}</span>
+                </div>
+              )}
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-faint)", fontSize: 20, padding: 4, lineHeight: 1 }}>✕</button>
+          </div>
+
+          {/* Quick metric pills */}
+          {currentEdition && (
+            <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
+              {[
+                { label: "Paid",      value: currentEdition.paid_count      ?? 0 },
+                { label: "Pending",   value: currentEdition.pending_count   ?? 0 },
+                { label: "Delegates", value: currentEdition.total_delegates ?? 0 },
+                { label: "Revenue",   value: fmtCurrency(currentEdition.total_revenue) },
+                { label: "Pend £",    value: fmtCurrency(currentEdition.pending_value) },
+                { label: "Benchmark", value: `${currentEdition.benchmark ?? 0}%` },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--text-faint)", fontWeight: 600 }}>{label}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 2 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Tabs ───────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0, paddingLeft: 24 }}>
+          {[
+            { id: "current",    label: "Current Performance" },
+            { id: "history",    label: "Edition History" },
+            { id: "reps",       label: "Reps" },
+            { id: "follow-ups", label: "Follow-Ups" },
+            { id: "mailshots",  label: "Mailshots" },
+            { id: "notes",      label: "Notes" },
+          ].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => { setTab(id); setAdding(null); }}
+              style={{
+                padding: "10px 14px", border: "none", background: "none",
+                fontSize: 12, fontWeight: tab === id ? 600 : 400,
+                color: tab === id ? "var(--accent)" : "var(--text-faint)",
+                borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent",
+                cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* ── Content ────────────────────────────────────────────────── */}
+        <div style={{ flex: 1, padding: "16px 24px", overflowY: "auto" }}>
+          {loading && <div style={{ color: "var(--text-faint)", padding: "24px 0", textAlign: "center" }}>Loading…</div>}
+
+          {!loading && tab === "current" && (
+            <CurrentEditionTab edition={currentEdition} insights={data?.insights} />
+          )}
+
+          {!loading && tab === "history" && (
+            <HistoryTab editions={data?.editions} growthTimeline={data?.growth_timeline} />
+          )}
+
+          {!loading && tab === "reps" && <RepsTab reps={data?.reps} />}
+
+          {/* Follow-Ups */}
+          {!loading && tab === "follow-ups" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Follow-Up Records</div>
+                <button onClick={() => setAdding(adding === "followup" ? null : "followup")} style={addBtnStyle}>+ Add</button>
+              </div>
+              {adding === "followup" && (
+                <div style={formCardStyle}>
+                  {[["contact_name","Contact Name","text"],["company","Company","text"],["email","Email","email"],["phone","Phone","text"]].map(([k,l,t]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <label style={labelStyle}>{l}</label>
+                      <input type={t} value={formData[k] || ""} onChange={e => setFormData(p => ({...p, [k]: e.target.value}))} style={inputStyle} />
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>Date</label>
+                      <input type="date" value={formData.follow_up_date || ""} onChange={e => setFormData(p => ({...p, follow_up_date: e.target.value}))} style={inputStyle} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>Status</label>
+                      <select value={formData.status || "pending"} onChange={e => setFormData(p => ({...p, status: e.target.value}))} style={inputStyle}>
+                        {["pending","called","emailed","voicemail","converted","no_answer"].map(s => <option key={s} value={s}>{s.replace("_"," ")}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={labelStyle}>Notes</label>
+                    <textarea value={formData.notes || ""} onChange={e => setFormData(p => ({...p, notes: e.target.value}))} rows={2} style={{...inputStyle, resize: "vertical"}} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={submitFollowUp} style={saveBtnStyle}>Save</button>
+                    <button onClick={() => { setAdding(null); setFormData({}); }} style={cancelBtnStyle}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {(!data?.follow_ups?.length && adding !== "followup") && <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "16px 0" }}>No follow-ups recorded.</div>}
+              {data?.follow_ups?.map(fu => (
+                <div key={fu.id} style={recordCardStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{fu.contact_name || "—"} {fu.company && <span style={{ fontWeight: 400, color: "var(--text-dim)", fontSize: 11 }}>· {fu.company}</span>}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{fu.email} {fu.phone && "· " + fu.phone}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Badge label={fu.status} style={FOLLOW_UP_STATUS_STYLE[fu.status] || {}} />
+                      <span style={{ fontSize: 10, color: "var(--text-faint)" }}>{fmtDate(fu.follow_up_date)}</span>
+                      <button onClick={() => deleteFollowUp(fu.id)} style={deleteBtnStyle}>✕</button>
+                    </div>
+                  </div>
+                  {fu.notes && <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 6, lineHeight: 1.5 }}>{fu.notes}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Mailshots */}
+          {!loading && tab === "mailshots" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Mailshot Records</div>
+                <button onClick={() => setAdding(adding === "mailshot" ? null : "mailshot")} style={addBtnStyle}>+ Add</button>
+              </div>
+              {adding === "mailshot" && (
+                <div style={formCardStyle}>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>Type</label>
+                      <select value={formData.mailshot_type || "invite"} onChange={e => setFormData(p => ({...p, mailshot_type: e.target.value}))} style={inputStyle}>
+                        {["invite","reminder","thank_you","follow_up","promotional","other"].map(t => <option key={t} value={t}>{t.replace("_"," ")}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>Date Sent</label>
+                      <input type="date" value={formData.sent_at || ""} onChange={e => setFormData(p => ({...p, sent_at: e.target.value}))} style={inputStyle} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={labelStyle}>Subject</label>
+                    <input type="text" value={formData.subject || ""} onChange={e => setFormData(p => ({...p, subject: e.target.value}))} style={inputStyle} />
+                  </div>
+                  <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                    {[["target_count","Sent"],["opened_count","Opened"],["clicked_count","Clicked"]].map(([k,l]) => (
+                      <div key={k} style={{ flex: 1 }}>
+                        <label style={labelStyle}>{l}</label>
+                        <input type="number" min="0" value={formData[k] || ""} onChange={e => setFormData(p => ({...p, [k]: parseInt(e.target.value) || 0}))} style={inputStyle} />
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={submitMailshot} style={saveBtnStyle}>Save</button>
+                    <button onClick={() => { setAdding(null); setFormData({}); }} style={cancelBtnStyle}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {(!data?.mailshots?.length && adding !== "mailshot") && <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "16px 0" }}>No mailshots recorded.</div>}
+              {data?.mailshots?.map(ms => (
+                <div key={ms.id} style={recordCardStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{ms.subject || ms.mailshot_type.replace("_"," ")}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
+                        Sent: {fmtDate(ms.sent_at)} · <span style={{ color: "var(--text-dim)" }}>{ms.target_count} sent</span> · <span style={{ color: "var(--success)" }}>{ms.opened_count} opened ({ms.open_rate}%)</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <Badge label={ms.mailshot_type.replace("_"," ")} style={{ bg: "var(--surface-alt)", color: "var(--text-dim)" }} />
+                      <button onClick={() => deleteMailshot(ms.id)} style={deleteBtnStyle}>✕</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Notes */}
+          {!loading && tab === "notes" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notes</div>
+                <button onClick={() => setAdding(adding === "note" ? null : "note")} style={addBtnStyle}>+ Add</button>
+              </div>
+              {adding === "note" && (
+                <div style={formCardStyle}>
+                  <textarea
+                    placeholder="Add a note…"
+                    value={formData.note || ""}
+                    onChange={e => setFormData(p => ({...p, note: e.target.value}))}
+                    rows={3}
+                    style={{...inputStyle, resize: "vertical", marginBottom: 10}}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={submitNote} style={saveBtnStyle}>Save</button>
+                    <button onClick={() => { setAdding(null); setFormData({}); }} style={cancelBtnStyle}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {(!data?.notes?.length && adding !== "note") && <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "16px 0" }}>No notes recorded.</div>}
+              {data?.notes?.map(n => (
+                <div key={n.id} style={recordCardStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, fontSize: 13, color: "var(--text)", lineHeight: 1.6 }}>{n.note}</div>
+                    <button onClick={() => deleteNote(n.id)} style={deleteBtnStyle}>✕</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 6 }}>{n.created_by_name} · {new Date(n.created_at).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

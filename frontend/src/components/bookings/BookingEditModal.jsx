@@ -5,6 +5,7 @@ import { Avatar } from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import { SourceBadge } from "../ui/SourceBadge";
 import { fmt } from "../../utils/helpers";
+import { PAYMENT_STATUSES, PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE } from "../../utils/constants";
 
 const BOOKING_CODES = [
   "", "Speaker", "Delegate", "Group Pass", "SPP", "SPP / Group Pass",
@@ -17,16 +18,21 @@ const BOOKING_CODES = [
 ];
 
 const COLS = [
-  { key: "_booking_code",           label: "Booking Code", width: 130, invoiceLevel: true },
-  { key: "_request_date",           label: "Request Date", width: 130, type: "date",   invoiceLevel: true, readOnly: true },
-  { key: "_invoice_date",           label: "Invoice Date", width: 130, type: "date",   invoiceLevel: true },
-  { key: "_full_name",              label: "Name",         width: 160, virtual: "name" },
-  { key: "position",                label: "Job Title",    width: 180 },
-  { key: "_company_name",           label: "Company",      width: 180, invoiceLevel: true },
-  { key: "_accounts_contact_email", label: "Accounts Email", width: 220, invoiceLevel: true },
-  { key: "email",                   label: "Email",        width: 240, type: "email" },
-  { key: "phone_number",            label: "Direct Line",  width: 160, mono: true },
-  { key: "attendance",              label: "Attendance",   width: 80,  type: "checkbox" },
+  { key: "delegate_payment_status",  label: "Pay Status",     width: 140, type: "select", options: ["", ...PAYMENT_STATUSES] },
+  { key: "_booking_code",            label: "Booking Code",   width: 130, invoiceLevel: true },
+  { key: "_request_date",            label: "Request Date",   width: 130, type: "date",   invoiceLevel: true, readOnly: true },
+  { key: "_invoice_date",            label: "Invoice Date",   width: 130, type: "date",   invoiceLevel: true },
+  { key: "delegate_payment_date",    label: "Pay Date",       width: 120, type: "date" },
+  { key: "_full_name",               label: "Name",           width: 160, virtual: "name" },
+  { key: "position",                 label: "Job Title",      width: 180 },
+  { key: "_company_name",            label: "Company",        width: 180, invoiceLevel: true },
+  { key: "email",                    label: "Email",          width: 220, type: "email" },
+  { key: "_accounts_contact_email",  label: "Accounts Email", width: 200, invoiceLevel: true },
+  { key: "phone_number",             label: "Direct Line",    width: 150, mono: true },
+  { key: "delegate_paid_or_free",    label: "Paid/Free",      width: 90,  type: "select", options: ["", ...PAID_OR_FREE] },
+  { key: "delegate_payment_type",    label: "Pay Type",       width: 130, type: "select", options: ["", ...PAYMENT_TYPES] },
+  { key: "delegate_ticket_tier",     label: "Ticket Tier",    width: 120, type: "select", options: ["", ...TICKET_TIERS] },
+  { key: "attendance",               label: "Attendance",     width: 80,  type: "checkbox" },
 ];
 
 const BLANK_DELEGATE = () => ({
@@ -35,6 +41,11 @@ const BLANK_DELEGATE = () => ({
   job_title_legacy: "",
   ticket_package: "", sponsorship_level: "",
   attendance: "Pending", dietary_requirements: "", notes: "",
+  delegate_payment_date: "",
+  delegate_paid_or_free: "",
+  delegate_payment_status: "",
+  delegate_payment_type: "",
+  delegate_ticket_tier: "",
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -69,6 +80,10 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
         source:    inv.source    || "manual",
         form_name: inv.form_name || "",
         form_url:  inv.form_url  || "",
+        payment_date:   inv.payment_date   || null,
+        payment_type:   inv.payment_type   || "",
+        paid_or_free:   inv.paid_or_free   || "",
+        ticket_tier:    inv.ticket_tier    || "",
         notes:     inv.notes     || "",
         delegates: (inv.delegates || []).map(d => ({
           id:                      d.id,
@@ -83,6 +98,11 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
           attendance:              d.attendance              || "Pending",
           dietary_requirements:    d.dietary_requirements    || "",
           notes:                   d.notes                   || "",
+          delegate_payment_date:   d.delegate_payment_date   || "",
+          delegate_paid_or_free:   d.delegate_paid_or_free   || "",
+          delegate_payment_status: d.delegate_payment_status || "",
+          delegate_payment_type:   d.delegate_payment_type   || "",
+          delegate_ticket_tier:    d.delegate_ticket_tier    || "",
         })),
         created_at: inv.created_at,
         updated_at: inv.updated_at,
@@ -147,6 +167,11 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
     accounts_contact_email: form.accounts_contact_email,
     invoice_date:           form.invoice_date,
     booking_code:           form.booking_code,
+    payment_status:         form.payment_status,
+    payment_date:           form.payment_date,
+    payment_type:           form.payment_type,
+    paid_or_free:           form.paid_or_free,
+    ticket_tier:            form.ticket_tier,
   };
 
   return (
@@ -353,9 +378,44 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
           );
         }
         if (c.type === "select") {
+          const isOverrideField = ["delegate_payment_status", "delegate_paid_or_free", "delegate_payment_type", "delegate_ticket_tier"].includes(c.key);
+          if (isOverrideField) {
+            // Map delegate key to invoice key
+            const invMap = {
+              "delegate_payment_status": "payment_status",
+              "delegate_paid_or_free":   "paid_or_free",
+              "delegate_payment_type":   "payment_type",
+              "delegate_ticket_tier":    "ticket_tier"
+            };
+            const invKey = invMap[c.key];
+            const invVal = invoiceCtx[invKey];
+            
+            return (
+              <td key={c.key} style={tdCell}>
+                <CellSelectOverride 
+                  value={delegate[c.key] ?? ""} 
+                  inheritedValue={invVal}
+                  onChange={v => onChange(c.key, v)} 
+                  options={c.options.filter(o => o !== "")} 
+                />
+              </td>
+            );
+          }
+
           return (
             <td key={c.key} style={tdCell}>
               <CellSelect value={delegate[c.key] ?? ""} onChange={v => onChange(c.key, v)} options={c.options} />
+            </td>
+          );
+        }
+        if (c.key === "delegate_payment_date") {
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellDateOverride 
+                value={delegate[c.key] ?? ""} 
+                inheritedValue={invoiceCtx.payment_date} 
+                onChange={v => onChange(c.key, v)} 
+              />
             </td>
           );
         }
@@ -430,6 +490,19 @@ function EventCodePicker({ value, events, onChange, compact }) {
             </span>
             <span style={{ fontSize: 12.5, color: TEXT_DIM, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {selected.name}
+            </span>
+          </>
+        ) : value ? (
+          <>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700,
+              color: "var(--danger)", background: "rgba(255,0,0,.05)",
+              padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0,
+            }}>
+              {value}
+            </span>
+            <span style={{ fontSize: 12.5, color: "var(--danger)", opacity: 0.8 }}>
+              (Event not found)
             </span>
           </>
         ) : (
@@ -539,7 +612,7 @@ function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, c
         fontSize: compact ? 12 : 13,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: readOnly ? "default" : "text",
         transition: "border-color .12s, box-shadow .12s",
         boxSizing: "border-box",
@@ -563,7 +636,7 @@ function FSelect({ value, onChange, options, compact }) {
         borderRadius: 4, background: "#fff", color: TEXT,
         fontSize: compact ? 12 : 13, fontFamily: "var(--font-sans)",
         outline: "none", appearance: "none", cursor: "pointer",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
         backgroundSize: "10px 6px",
@@ -646,7 +719,7 @@ function NameCellInput({ delegate, onChange }) {
         background: f ? "#fff" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
@@ -677,7 +750,7 @@ function CellInput({ value, onChange, type = "text", mono, readOnly, placeholder
         fontSize: 12,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: readOnly ? "default" : "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
@@ -701,10 +774,8 @@ function CellSelect({ value, onChange, options }) {
         background: f ? "#fff" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none", appearance: "none", cursor: "pointer",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
-        backgroundImage: f
-          ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
-          : "none",
+        boxShadow: "none",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
         backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",
@@ -716,7 +787,7 @@ function CellSelect({ value, onChange, options }) {
   );
 }
 
-function CellSelectOverride({ value, onChange, options }) {
+function CellSelectOverride({ value, inheritedValue, onChange, options }) {
   const [f, setF] = useState(false);
   const isEmpty = !value;
   return (
@@ -730,27 +801,24 @@ function CellSelectOverride({ value, onChange, options }) {
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
         background: f ? "#fff" : "transparent",
-        color: isEmpty ? TEXT_FAINT : TEXT,
-        fontStyle: isEmpty ? "italic" : "normal",
+        color: isEmpty ? TEXT_DIM : TEXT,
         fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none", appearance: "none", cursor: "pointer",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
-        backgroundImage: f
-          ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
-          : "none",
+        boxShadow: "none",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
         backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
       }}
     >
-      <option value="">Inherited</option>
+      <option value="">{inheritedValue ? `Inherit: ${inheritedValue}` : "— Select —"}</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
   );
 }
 
-function CellDateOverride({ value, onChange }) {
+function CellDateOverride({ value, inheritedValue, onChange }) {
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState(false);
   const isEmpty = !value;
@@ -761,11 +829,11 @@ function CellDateOverride({ value, onChange }) {
         style={{
           width: "100%", height: 32, padding: "0 6px",
           display: "flex", alignItems: "center",
-          color: TEXT_FAINT, fontSize: 12, fontStyle: "italic",
+          color: TEXT_DIM, fontSize: 12,
           cursor: "text", boxSizing: "border-box",
         }}
       >
-        Inherited
+        {inheritedValue ? `Inherit: ${fmt.date(inheritedValue)}` : "— Select —"}
       </div>
     );
   }
@@ -784,7 +852,7 @@ function CellDateOverride({ value, onChange }) {
         background: f ? "#fff" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",

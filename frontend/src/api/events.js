@@ -22,3 +22,40 @@ export const eventsApi = {
   delete: (id) =>
     client.delete(`/events/${id}/`).then((r) => r.data),
 };
+
+export const historicalEventsApi = {
+  getByEvent: (eventId) =>
+    client
+      .get("/historical-events/", { params: { event_id: eventId } })
+      .then((r) => r.data),
+
+  getByCode: (eventCode) =>
+    client
+      .get("/historical-events/", { params: { event_code: eventCode } })
+      .then((r) => r.data),
+
+  getEditions: (eventId) =>
+    client
+      .get(`/events/${eventId}/historical_editions/`)
+      .then((r) => r.data),
+};
+
+export const editionBookingsApi = {
+  getSummary: (eventId) =>
+    client.get(`/events/${eventId}/edition_bookings/`).then((r) => r.data),
+
+  getForYear: (eventId, year) =>
+    client
+      .get(`/events/${eventId}/edition_bookings/`, { params: { year } })
+      .then((r) => r.data),
+};
+
+export const editionGrowthApi = {
+  // Full YoY growth for one event (with validation)
+  getForEvent: (eventId) =>
+    client.get(`/events/${eventId}/edition_growth/`).then((r) => r.data),
+
+  // YoY growth for all events — used in the Reports Growth table
+  getAll: () =>
+    client.get("/events/all_edition_growth/").then((r) => r.data),
+};

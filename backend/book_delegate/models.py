@@ -51,6 +51,8 @@ class BookDelegate(models.Model):
     delegate_payment_status = models.CharField(max_length=50, blank=True, null=True, default=None)
     delegate_payment_type   = models.CharField(max_length=50, blank=True, null=True, default=None)
     delegate_payment_date   = models.DateField(blank=True, null=True, default=None)
+    delegate_paid_or_free   = models.CharField(max_length=20, blank=True, null=True, default=None)
+    delegate_ticket_tier    = models.CharField(max_length=50, blank=True, null=True, default=None)
     created_at       = models.DateTimeField(default=timezone.now)
     updated_at       = models.DateTimeField(auto_now=True)
 

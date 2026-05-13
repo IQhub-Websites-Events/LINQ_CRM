@@ -8,6 +8,7 @@ import { fmt } from "../../utils/helpers";
 import { BookingEditModal } from "./BookingEditModal";
 import { AddBookingModal } from "./AddBookingModal";
 import { DatePopup } from "./DatePopup";
+import { PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE, PAYMENT_STATUSES } from "../../utils/constants";
 
 const PAGE_SIZE = 50;
 
@@ -17,37 +18,106 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [sortKey, setSortKey] = useState("invoice__invoice_number");
-  const [sortDir, setSortDir] = useState("asc");
-  const [eventFilter, setEvFilter] = useState("");
-  const [search, setSearch] = useState("");
-  const [events, setEvents] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  
+  // Column Filters
+  const [colFilters, setColFilters] = useState({
+    invoice_number: "",
+    event_code: "",
+    booking_code: "",
+    first_name: "",
+    last_name: "",
+    position: "",
+    company_name: "",
+    accounts_contact_email: "",
+    email: "",
+    phone_number: "",
+    payment_status: "",
+    attendance: "",
+    paid_or_free: "",
+    ticket_tier: "",
+    payment_type: "",
+    request_date: "",
+    invoice_date: "",
+    payment_date: "",
+  });
 
+  const [events, setEvents] = useState([]);
   const [editInvId, setEditInvId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [datePopup, setDatePopup] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (p = 1, append = false) => {
+    if (p > 1) setFetchingMore(true);
+    else setLoading(true);
+
     try {
+      const activeFilters = Object.fromEntries(
+        Object.entries(colFilters).filter(([_, v]) => v !== "" && v !== null && v !== undefined)
+      );
+
       const params = {
-        page, page_size: PAGE_SIZE,
+        page: p, page_size: PAGE_SIZE,
         ordering: sortDir === "desc" ? `-${sortKey}` : sortKey,
+        ...activeFilters,
       };
-      if (search) params.search = search;
+      
+      // Map frontend column filter keys to backend filterset keys
       if (statusFilter) params.payment_status = statusFilter;
-      if (eventFilter) params.event_code = eventFilter;
+      if (colFilters.payment_status) params.payment_status = colFilters.payment_status;
+      
+      // Date exact match mapping (date_from = date_to = value)
+      if (colFilters.request_date) {
+        params.request_date_from = colFilters.request_date;
+        params.request_date_to   = colFilters.request_date;
+      }
+      if (colFilters.invoice_date) {
+        params.invoice_date_from = colFilters.invoice_date;
+        params.invoice_date_to   = colFilters.invoice_date;
+      }
+      if (colFilters.payment_date) {
+        params.payment_date_from = colFilters.payment_date;
+        params.payment_date_to   = colFilters.payment_date;
+      }
+      
       const res = await delegatesApi.list(params);
-      setData(res.results || []);
-      setTotal(res.count || 0);
+      const results = res.results || [];
+      const count = res.count || 0;
+
+      setData(prev => append ? [...prev, ...results] : results);
+      setTotal(count);
+      setHasMore((p * PAGE_SIZE) < count);
     } catch {
       toast.error("Failed to load bookings");
     } finally {
       setLoading(false);
+      setFetchingMore(false);
     }
-  }, [page, sortKey, sortDir, search, statusFilter, eventFilter, toast]);
+  }, [sortKey, sortDir, statusFilter, colFilters, toast]);
 
-  useEffect(() => { load(); }, [load]);
+  // Initial load or filter change
+  useEffect(() => {
+    setPage(1);
+    load(1, false);
+  }, [statusFilter, colFilters, sortKey, sortDir, load]);
+
+  const loadMore = useCallback(() => {
+    if (loading || fetchingMore || !hasMore) return;
+    const next = page + 1;
+    setPage(next);
+    load(next, true);
+  }, [page, loading, fetchingMore, hasMore, load]);
+
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // Load more when 100px from bottom
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      loadMore();
+    }
+  };
 
   useEffect(() => { onTotalChange?.(total); }, [total, onTotalChange]);
 
@@ -56,6 +126,11 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
       .then((res) => setEvents(res.results || []))
       .catch(() => {});
   }, []);
+
+  const handleColFilter = (key, val) => {
+    setColFilters(prev => ({ ...prev, [key]: val }));
+    setPage(1);
+  };
 
   const handleCloseEdit = useCallback(() => setEditInvId(null), []);
   const handleSaved = useCallback(() => load(), [load]);
@@ -67,6 +142,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const hasAnyFilter = statusFilter || Object.values(colFilters).some(v => v);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -81,50 +158,19 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         flexShrink: 0,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Search */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 7,
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "0 10px",
-            height: 32,
-          }}>
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round">
-              <circle cx="5" cy="5" r="4"/><path d="M9 9l2 2"/>
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search bookings…"
-              style={{
-                border: "none", outline: "none", fontSize: 12,
-                background: "none", color: "var(--text)",
-                fontFamily: "inherit", width: 200,
-              }}
-            />
-          </div>
+          <span style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: 500 }}>
+            {total.toLocaleString()} Records
+          </span>
 
-          {/* Event filter */}
-          <div style={{ position: "relative" }}>
-            <select
-              value={eventFilter}
-              onChange={(e) => { setEvFilter(e.target.value); setPage(1); }}
-              style={selectStyle}
-            >
-              <option value="">All Events</option>
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.event_code}>{ev.event_code}</option>
-              ))}
-            </select>
-          </div>
-
-          {(search || eventFilter) && (
+          {hasAnyFilter && (
             <button
-              onClick={() => { setSearch(""); setEvFilter(""); setPage(1); }}
-              style={{ fontSize: 11, color: "var(--text-faint)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+              onClick={() => {
+                setColFilters({});
+                setPage(1);
+              }}
+              style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
             >
-              Clear filters ×
+              Reset Column Filters
             </button>
           )}
         </div>
@@ -148,39 +194,197 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         borderRadius: 12,
         overflow: "hidden",
       }}>
-        <div style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}>
+        <div 
+          onScroll={handleScroll}
+          style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}
+        >
           <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <tr style={{ background: "var(--surface-alt)" }}>
                 <Th style={{ width: 32 }}>
                   <input type="checkbox" style={{ accentColor: "var(--accent)" }} />
                 </Th>
-                <SortTh sortKey="payment_status" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 130 }}>Status</SortTh>
-                <SortTh sortKey="invoice__invoice_number" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
-                <Th style={{ minWidth: 80 }}>Event</Th>
+                <SortTh sortKey="_sort_status" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 130 }}>Status</SortTh>
+                <SortTh sortKey="_sort_invoice" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
+                <Th style={{ minWidth: 100 }}>Event</Th>
                 <Th style={{ minWidth: 130 }}>Booking Code</Th>
                 <SortTh sortKey="created_at" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Request Date</SortTh>
-                <SortTh sortKey="invoice__invoice_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Invoice Date</SortTh>
-                <SortTh sortKey="full_name" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 180 }}>Name</SortTh>
+                <SortTh sortKey="_sort_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Invoice Date</SortTh>
+                <SortTh sortKey="_sort_name" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 180 }}>Name</SortTh>
                 <SortTh sortKey="position" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 160 }}>Job Title</SortTh>
                 <Th style={{ minWidth: 180 }}>Company</Th>
                 <Th style={{ minWidth: 200 }}>Accounts Email</Th>
                 <Th style={{ minWidth: 200 }}>Email</Th>
                 <Th style={{ minWidth: 140 }}>Direct Line</Th>
                 <SortTh sortKey="attendance" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 100 }}>Attendance</SortTh>
-                <Th style={{ width: 110 }} />
+                <Th style={{ minWidth: 110 }}>Pay Date</Th>
+                <Th style={{ minWidth: 80  }}>Paid/Free</Th>
+                <Th style={{ minWidth: 110 }}>Ticket Tier</Th>
+                <Th style={{ minWidth: 120 }}>Pay Type</Th>
+              </tr>
+              {/* Filter Row */}
+              <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                <td style={{ width: 32 }}></td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select 
+                    style={colFilterInput} 
+                    value={colFilters.payment_status || ""}
+                    onChange={(e) => handleColFilter("payment_status", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    placeholder="Filter..." 
+                    style={colFilterInput} 
+                    value={colFilters.invoice_number || ""}
+                    onChange={(e) => handleColFilter("invoice_number", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                   <input 
+                    placeholder="Event..." 
+                    style={colFilterInput} 
+                    value={colFilters.event_code || ""}
+                    onChange={(e) => handleColFilter("event_code", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    placeholder="Code..." 
+                    style={colFilterInput} 
+                    value={colFilters.booking_code || ""}
+                    onChange={(e) => handleColFilter("booking_code", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    type="date"
+                    style={colFilterInput} 
+                    value={colFilters.request_date || ""}
+                    onChange={(e) => handleColFilter("request_date", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    type="date"
+                    style={colFilterInput} 
+                    value={colFilters.invoice_date || ""}
+                    onChange={(e) => handleColFilter("invoice_date", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    placeholder="Name..." 
+                    style={colFilterInput} 
+                    value={colFilters.first_name || ""}
+                    onChange={(e) => handleColFilter("first_name", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    placeholder="Title..." 
+                    style={colFilterInput} 
+                    value={colFilters.position || ""}
+                    onChange={(e) => handleColFilter("position", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                   <input 
+                    placeholder="Company..." 
+                    style={colFilterInput} 
+                    value={colFilters.company_name || ""}
+                    onChange={(e) => handleColFilter("company_name", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                   <input 
+                    placeholder="Accounts..." 
+                    style={colFilterInput} 
+                    value={colFilters.accounts_contact_email || ""}
+                    onChange={(e) => handleColFilter("accounts_contact_email", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                   <input 
+                    placeholder="Email..." 
+                    style={colFilterInput} 
+                    value={colFilters.email || ""}
+                    onChange={(e) => handleColFilter("email", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                   <input 
+                    placeholder="Phone..." 
+                    style={colFilterInput} 
+                    value={colFilters.phone_number || ""}
+                    onChange={(e) => handleColFilter("phone_number", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select 
+                    style={colFilterInput} 
+                    value={colFilters.attendance || ""}
+                    onChange={(e) => handleColFilter("attendance", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                    <option value="Pending">Pending</option>
+                  </select>
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <input 
+                    type="date"
+                    style={colFilterInput} 
+                    value={colFilters.payment_date || ""}
+                    onChange={(e) => handleColFilter("payment_date", e.target.value)}
+                  />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select 
+                    style={colFilterInput} 
+                    value={colFilters.paid_or_free || ""}
+                    onChange={(e) => handleColFilter("paid_or_free", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {PAID_OR_FREE.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select 
+                    style={colFilterInput} 
+                    value={colFilters.ticket_tier || ""}
+                    onChange={(e) => handleColFilter("ticket_tier", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {TICKET_TIERS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select 
+                    style={colFilterInput} 
+                    value={colFilters.payment_type || ""}
+                    onChange={(e) => handleColFilter("payment_type", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {PAYMENT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </td>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="15" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="19" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     Loading…
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan="15" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
+                  <td colSpan="19" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-faint)", fontSize: 13 }}>
                     No records match the current filters.
                   </td>
                 </tr>
@@ -193,12 +397,32 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   />
                 ))
               )}
+              {fetchingMore && (
+                <tr>
+                  <td colSpan="19" style={{ textAlign: "center", padding: "20px 0", color: "var(--accent)", fontSize: 13, fontWeight: 500 }}>
+                    Loading more…
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
 
-        <div style={{ borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          <Pager page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPage={setPage} />
+        <div style={{ 
+          padding: "10px 20px", 
+          borderTop: "1px solid var(--border)", 
+          background: "var(--surface-alt)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexShrink: 0 
+        }}>
+          <span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500 }}>
+            Showing {data.length} of {total} bookings
+          </span>
+          {!hasMore && total > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-faint)" }}>All records loaded</span>
+          )}
         </div>
       </div>
 
@@ -325,14 +549,42 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
           : <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No</span>}
       </td>
 
-      <td style={{ ...cell, width: 110 }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          style={viewBtnStyle}
-        >
-          View booking
-        </button>
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+          {delegate.effective_payment_date || "—"}
+        </span>
       </td>
+
+      <td style={cell}>
+        {delegate.effective_paid_or_free ? (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
+            background: delegate.effective_paid_or_free === "Free" ? "#dbeafe" : "#f0fdf4",
+            color:      delegate.effective_paid_or_free === "Free" ? "#1d4ed8" : "#166534",
+          }}>
+            {delegate.effective_paid_or_free}
+          </span>
+        ) : <span style={{ fontSize: 12, color: "var(--text-faint)" }}>—</span>}
+      </td>
+
+      <td style={cell}>
+        {delegate.effective_ticket_tier ? (
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
+            background: delegate.effective_ticket_tier === "VIP" ? "#fdf4ff" : "var(--surface-alt)",
+            color:      delegate.effective_ticket_tier === "VIP" ? "#7e22ce" : "var(--text-dim)",
+          }}>
+            {delegate.effective_ticket_tier}
+          </span>
+        ) : <span style={{ fontSize: 12, color: "var(--text-faint)" }}>—</span>}
+      </td>
+
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+          {delegate.effective_payment_type || "—"}
+        </span>
+      </td>
+
     </tr>
   );
 });
@@ -412,22 +664,18 @@ const viewBtnStyle = {
   whiteSpace: "nowrap",
 };
 
-const selectStyle = {
-  height: 32,
-  padding: "0 28px 0 10px",
-  fontSize: 12,
+const colFilterInput = {
+  width: "100%",
+  height: 26,
+  padding: "0 8px",
+  fontSize: 11,
   border: "1px solid var(--border)",
-  borderRadius: 8,
+  borderRadius: 4,
+  background: "var(--surface-alt)",
   color: "var(--text)",
-  background: "var(--surface)",
   fontFamily: "inherit",
   outline: "none",
-  cursor: "pointer",
-  appearance: "none",
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-  backgroundRepeat: "no-repeat",
-  backgroundPosition: "right 10px center",
-  backgroundSize: "10px 6px",
+  transition: "border-color 0.1s",
 };
 
 const primaryBtnStyle = {

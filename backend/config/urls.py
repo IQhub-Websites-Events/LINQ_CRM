@@ -30,6 +30,7 @@ urlpatterns = [
     path("api/google-sync/",     include("google_sync.urls")),
     path("api/reports/",         include("reports.urls")),
     path("api/event-performance/", include("event_performance.urls")),
+    path("api/historical-events/", include("historical_event_registry.urls")),
     path("api/search/",          GlobalSearchView.as_view(),    name="global-search"),
     path("api/stats/dashboard/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path("api/auth/token/",      CustomAuthToken.as_view(), name="api-token"),

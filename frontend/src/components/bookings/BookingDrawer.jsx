@@ -8,16 +8,18 @@ import { StatusBadge, TierBadge } from "../ui/Badge";
 import { Avatar } from "../ui/Avatar";
 import { Select } from "../ui/Input";
 import { fmt, today } from "../../utils/helpers";
-import { PAYMENT_STATUSES, PAYMENT_TYPES } from "../../utils/constants";
+import { PAYMENT_STATUSES, PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE } from "../../utils/constants";
 
 export function BookingDrawer({ invId, onClose, onSaved }) {
   const toast = useToast();
   const [invoice,  setInvoice]  = useState(null);
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState(false);
-  const [payStatus, setPayStatus] = useState("");
-  const [payDate,   setPayDate]   = useState("");
-  const [payType,   setPayType]   = useState("");
+  const [payStatus,   setPayStatus]   = useState("");
+  const [payDate,     setPayDate]     = useState("");
+  const [payType,     setPayType]     = useState("");
+  const [paidOrFree,  setPaidOrFree]  = useState("");
+  const [ticketTier,  setTicketTier]  = useState("");
 
   useEffect(() => {
     if (!invId) { setInvoice(null); return; }
@@ -27,6 +29,8 @@ export function BookingDrawer({ invId, onClose, onSaved }) {
       setPayStatus(data.payment_status);
       setPayDate(data.payment_date || "");
       setPayType(data.payment_type || "");
+      setPaidOrFree(data.paid_or_free || "");
+      setTicketTier(data.ticket_tier || "");
     }).catch(() => toast.error("Failed to load invoice"))
       .finally(() => setLoading(false));
   }, [invId]);
@@ -42,6 +46,8 @@ export function BookingDrawer({ invId, onClose, onSaved }) {
         payment_status: payStatus,
         payment_date:   payStatus === "Paid" ? (payDate || today()) : payDate || null,
         payment_type:   payType,
+        paid_or_free:   paidOrFree,
+        ticket_tier:    ticketTier,
       });
       await onSaved();
       toast.success(`${invoice.invoice_number} updated`);
@@ -164,7 +170,7 @@ export function BookingDrawer({ invId, onClose, onSaved }) {
                     fontFamily: "inherit", outline: "none" }} />
               </div>
 
-              <div>
+              <div style={{ marginBottom: 10 }}>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#94a3b8",
                   textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Payment type</label>
                 <select value={payType} onChange={(e) => setPayType(e.target.value)}
@@ -175,6 +181,31 @@ export function BookingDrawer({ invId, onClose, onSaved }) {
                   <option value="">— Select —</option>
                   {PAYMENT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 0 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#94a3b8",
+                    textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Paid / Free</label>
+                  <select value={paidOrFree} onChange={(e) => setPaidOrFree(e.target.value)}
+                    style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0",
+                      borderRadius: 7, padding: "7px 10px", fontSize: 13, color: "#1e293b",
+                      fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
+                    <option value="">— Select —</option>
+                    {PAID_OR_FREE.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#94a3b8",
+                    textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Ticket Tier</label>
+                  <select value={ticketTier} onChange={(e) => setTicketTier(e.target.value)}
+                    style={{ width: "100%", background: "#fff", border: "1px solid #e2e8f0",
+                      borderRadius: 7, padding: "7px 10px", fontSize: 13, color: "#1e293b",
+                      fontFamily: "inherit", outline: "none", cursor: "pointer" }}>
+                    <option value="">— Select —</option>
+                    {TICKET_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
               </div>
 
               {invoice.payment_status === "Paid" && (

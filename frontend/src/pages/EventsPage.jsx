@@ -12,6 +12,7 @@ import { useFetch } from "../hooks/useFetch";
 import { useSort } from "../hooks/useSort";
 import { usePagination } from "../hooks/usePagination";
 import { fmt } from "../utils/helpers";
+import { EVENT_STATUSES } from "../utils/constants";
 
 const PAGE_SIZE = 50;
 
@@ -24,7 +25,7 @@ export function EventsPage() {
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
   const [teams, setTeams] = useState([]);
-  const { sort, toggle: sortToggle } = useSort("event_date", "asc");
+  const { sort, toggle: sortToggle } = useSort("event_date", "desc");
   const { page, setPage }        = usePagination();
 
   const { data, loading, refetch } = useFetch(
@@ -105,8 +106,7 @@ export function EventsPage() {
             style={{ background: "#fff", border: "1px solid #e9ebec", borderRadius: 4,
               padding: "8px 30px 8px 12px", fontSize: 13, color: "#495057", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
             <option value="">All Statuses</option>
-            <option value="Live">Live</option>
-            <option value="Completed">Completed</option>
+            {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 

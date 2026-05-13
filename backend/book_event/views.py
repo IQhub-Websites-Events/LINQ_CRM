@@ -100,6 +100,8 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             "payment_status": invoice.payment_status,
             "payment_type":   invoice.payment_type,
             "payment_date":   str(invoice.payment_date) if invoice.payment_date else None,
+            "paid_or_free":   invoice.paid_or_free,
+            "ticket_tier":    invoice.ticket_tier,
         })
 
     @action(detail=False, methods=["get"])
@@ -109,6 +111,41 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         page = self.paginate_queryset(qs)
         ser = BookEventListSerializer(page if page is not None else qs, many=True)
         return self.get_paginated_response(ser.data) if page else Response(ser.data)
+
+    @action(detail=False, methods=["get"])
+    def stats(self, request):
+        """
+        GET /api/invoices/stats/?period=today|month|total
+        Returns volume stats for the specified period.
+        """
+        from django.utils import timezone
+        from django.db.models import Q
+        from book_delegate.models import BookDelegate
+
+        period = request.query_params.get("period", "total")
+        qs = self.get_queryset()
+
+        now = timezone.now()
+        if period == "today":
+            qs = qs.filter(created_at__date=now.date())
+        elif period == "month":
+            qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+
+        del_qs = BookDelegate.objects.filter(invoice__in=qs)
+        
+        stats = del_qs.aggregate(
+            total=Count("id"),
+            paid=Count("id", filter=Q(invoice__payment_status="Paid")),
+            confirmed=Count("id", filter=Q(attendance="Confirmed")),
+            free=Count("id", filter=Q(invoice__paid_or_free="Free")),
+        )
+
+        return Response({
+            "total": stats["total"] or 0,
+            "paid": stats["paid"] or 0,
+            "confirmed": stats["confirmed"] or 0,
+            "free": stats["free"] or 0,
+        })
 
     @action(
         detail=False, methods=["post"], url_path="create_from_website",
@@ -166,6 +203,11 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             incoming_ps = d.get("PaymentStatus", "").strip().lower()
             payment_status = payment_status_map.get(incoming_ps, BookEvent.PaymentStatus.PENDING)
 
+            tier_map     = {v.lower(): v for v in BookEvent.TicketTier.values}
+            pof_map      = {v.lower(): v for v in BookEvent.PaidOrFree.values}
+            ticket_tier  = tier_map.get(d.get("TicketTier", "").strip().lower(), "")
+            paid_or_free = pof_map.get(d.get("PaidOrFree",  "").strip().lower(), "")
+
             with transaction.atomic():
                 invoice = BookEvent.objects.create(
                     invoice_number         = invoice_number,
@@ -182,6 +224,8 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                     add_ons_total_amount   = d.get("AddOnsTotalAmount"),
                     currency               = d.get("Currency", "USD"),
                     payment_status         = payment_status,
+                    ticket_tier            = ticket_tier,
+                    paid_or_free           = paid_or_free,
                     sales_executive        = sales_exec,
                     source                 = BookEvent.Source.WEBSITE,
                     form_name              = d.get("FormName", ""),
@@ -197,18 +241,22 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                     if BookDelegate.objects.filter(invoice=invoice, email=email).exists():
                         skipped += 1
                         continue
+                    d_tier = tier_map.get(dp.get("TicketTier", "").strip().lower(), "") or None
+                    d_pof  = pof_map.get(dp.get("PaidOrFree",  "").strip().lower(), "") or None
                     delegate = BookDelegate.objects.create(
-                        invoice           = invoice,
-                        event_code        = event_code,
-                        company           = company,
-                        company_name_raw  = d.get("DelegateCompanyName", ""),
-                        first_name        = dp["FirstName"].strip(),
-                        last_name         = dp.get("LastName", "").strip(),
-                        email             = email,
-                        phone_number      = dp.get("PhoneNumber", "").strip(),
-                        position          = dp.get("Position", "").strip(),
-                        ticket_package    = dp.get("TicketPackage", "").strip(),
-                        sponsorship_level = dp.get("SponsorshipLevel", "").strip(),
+                        invoice              = invoice,
+                        event_code           = event_code,
+                        company              = company,
+                        company_name_raw     = d.get("DelegateCompanyName", ""),
+                        first_name           = dp["FirstName"].strip(),
+                        last_name            = dp.get("LastName", "").strip(),
+                        email                = email,
+                        phone_number         = dp.get("PhoneNumber", "").strip(),
+                        position             = dp.get("Position", "").strip(),
+                        ticket_package       = dp.get("TicketPackage", "").strip(),
+                        sponsorship_level    = dp.get("SponsorshipLevel", "").strip(),
+                        delegate_ticket_tier = d_tier,
+                        delegate_paid_or_free= d_pof,
                     )
                     created.append(delegate)
                     if i == 0:

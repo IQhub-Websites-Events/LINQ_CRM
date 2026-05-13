@@ -11,9 +11,10 @@
  *   Documentation  — Markdown viewer for the complete reference doc
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { reportsApi, searchApi } from "../api";
+import { reportsApi, searchApi, editionGrowthApi } from "../api";
 import { useToast } from "../contexts/ToastContext";
 import { fmt } from "../utils/helpers";
+import { EventGrowthDrawer } from "../components/events/EventGrowthDrawer";
 
 
 // ─── Status color palettes ────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export function ReportsPage() {
 
   const TABS = [
     ["overview",  "Overview"],
+    ["growth",    "Event Growth"],
     ["registry",  "Sheet Registry"],
     ["data",      "Report Data"],
     ["logs",      "Sync Logs"],
@@ -78,6 +80,7 @@ export function ReportsPage() {
       </div>
 
       {tab === "overview"  && <OverviewTab />}
+      {tab === "growth"    && <EventGrowthTab />}
       {tab === "registry"  && <RegistryTab />}
       {tab === "data"      && <DataTab />}
       {tab === "logs"      && <SyncLogsTab />}
@@ -1084,3 +1087,217 @@ const inputStyle = {
   background: "var(--bg)", color: "var(--text)",
   fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
 };
+
+
+// ─── EVENT GROWTH TAB ─────────────────────────────────────────────────────────
+
+function growthColor(pct) {
+  if (pct == null) return "var(--text-faint)";
+  return pct >= 0 ? "var(--success)" : "var(--danger)";
+}
+
+function GrowthBadge({ pct }) {
+  if (pct == null) return <span style={{ fontSize: 11, color: "var(--text-faint)" }}>—</span>;
+  const col  = growthColor(pct);
+  const sign = pct >= 0 ? "+" : "";
+  return (
+    <span style={{
+      fontSize: 10, fontWeight: 700, color: col,
+      background: pct >= 0 ? "var(--success-soft)" : "var(--danger-soft)",
+      border: `1px solid ${col}30`, borderRadius: 4, padding: "2px 7px",
+      fontFamily: "monospace",
+    }}>
+      {sign}{pct.toFixed(1)}%
+    </span>
+  );
+}
+
+function MiniSalesBar({ editions }) {
+  if (!editions || editions.length === 0) return null;
+  const maxS = Math.max(...editions.map(e => e.total_sales ?? 0), 1);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 28 }}>
+      {[...editions].reverse().map((ed) => {
+        const h = Math.round(((ed.total_sales ?? 0) / maxS) * 100);
+        return (
+          <div
+            key={ed.year}
+            title={`${ed.year}: $${Number(ed.total_sales).toLocaleString()}`}
+            style={{
+              flex: 1, minWidth: 6, height: `${Math.max(h, 4)}%`,
+              background: "var(--accent)", borderRadius: "3px 3px 0 0", opacity: 0.75,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function EventGrowthTab() {
+  const toast = useToast();
+  const [rows,     setRows]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [search,   setSearch]   = useState("");
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    editionGrowthApi.getAll()
+      .then(setRows)
+      .catch(() => toast.error("Failed to load edition growth data"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  const filtered = rows.filter((r) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      r.event_code?.toLowerCase().includes(q) ||
+      r.event_name?.toLowerCase().includes(q) ||
+      r.current_city?.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px 28px" }}>
+
+        {/* Header row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+              Year-on-Year Event Growth
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
+              Booking-based sales growth per event edition · click a row for full detail
+            </div>
+          </div>
+          <input
+            placeholder="Search event…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ ...inputStyle, width: 220 }}
+          />
+        </div>
+
+        {loading ? (
+          <div style={{ color: "var(--text-faint)", fontSize: 13, textAlign: "center", padding: 40 }}>
+            Loading growth data…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ color: "var(--text-faint)", fontSize: 13, textAlign: "center", padding: 40 }}>
+            {search ? "No events match the search." : "No edition growth data found. Run calculate_edition_growth command."}
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  {[
+                    "Event", "City", "Editions", "Total Sales", "Latest Year",
+                    "Latest Sales", "Prev Sales", "Sales Growth",
+                    "Booking Growth", "Delegate Growth", "Trend",
+                  ].map((h) => (
+                    <th key={h} style={{
+                      padding: "8px 10px", textAlign: "left", fontWeight: 700,
+                      fontSize: 10, color: "var(--text-faint)",
+                      textTransform: "uppercase", letterSpacing: "0.05em",
+                      background: "var(--surface)", whiteSpace: "nowrap",
+                    }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row) => {
+                  const latest = row.editions?.[0] ?? {};
+                  return (
+                    <tr
+                      key={row.event_code}
+                      onClick={() => setSelected(row)}
+                      style={{
+                        borderBottom: "1px solid var(--border)",
+                        cursor: "pointer",
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface)"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                    >
+                      {/* Event code + name */}
+                      <td style={{ padding: "10px 10px" }}>
+                        <div style={{ fontWeight: 700, color: "var(--accent)", fontFamily: "monospace", fontSize: 12 }}>
+                          {row.event_code}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 1 }}>
+                          {row.event_name}
+                        </div>
+                      </td>
+                      {/* City */}
+                      <td style={{ padding: "10px 10px", color: "var(--text-dim)", fontSize: 11 }}>
+                        {row.current_city || "—"}
+                      </td>
+                      {/* Editions count */}
+                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, color: "var(--accent)",
+                          background: "rgba(64,81,137,0.08)", borderRadius: 4, padding: "2px 8px",
+                          fontFamily: "monospace",
+                        }}>
+                          {row.total_historical_years}
+                        </span>
+                      </td>
+                      {/* Total sales */}
+                      <td style={{ padding: "10px 10px", fontFamily: "monospace", fontWeight: 700, fontSize: 12, color: "var(--text)" }}>
+                        ${Number(row.total_sales_all_years ?? 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </td>
+                      {/* Latest year */}
+                      <td style={{ padding: "10px 10px", color: "var(--text-dim)", fontFamily: "monospace", fontSize: 11 }}>
+                        {latest.year ?? "—"}
+                      </td>
+                      {/* Latest sales */}
+                      <td style={{ padding: "10px 10px", fontFamily: "monospace", fontSize: 11, color: "var(--text)" }}>
+                        {latest.total_sales != null
+                          ? `$${Number(latest.total_sales).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </td>
+                      {/* Prev sales */}
+                      <td style={{ padding: "10px 10px", fontFamily: "monospace", fontSize: 11, color: "var(--text-dim)" }}>
+                        {latest.previous_year_sales != null
+                          ? `$${Number(latest.previous_year_sales).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                          : "—"}
+                      </td>
+                      {/* Sales growth */}
+                      <td style={{ padding: "10px 10px" }}>
+                        <GrowthBadge pct={row.latest_growth_pct} />
+                      </td>
+                      {/* Booking growth */}
+                      <td style={{ padding: "10px 10px" }}>
+                        <GrowthBadge pct={latest.booking_growth_pct} />
+                      </td>
+                      {/* Delegate growth */}
+                      <td style={{ padding: "10px 10px" }}>
+                        <GrowthBadge pct={latest.delegate_growth_pct} />
+                      </td>
+                      {/* Mini sales trend bar */}
+                      <td style={{ padding: "10px 10px", minWidth: 80 }}>
+                        <MiniSalesBar editions={row.editions} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ marginTop: 10, fontSize: 10, color: "var(--text-faint)" }}>
+          {!loading && `${filtered.length} event${filtered.length !== 1 ? "s" : ""} · growth calculated from live booking data`}
+        </div>
+      </div>
+
+      <EventGrowthDrawer data={selected} onClose={() => setSelected(null)} />
+    </>
+  );
+}

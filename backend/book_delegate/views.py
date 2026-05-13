@@ -10,21 +10,33 @@ from .serializers import (
 from .filters import BookDelegateFilter
 
 
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters
+
 class BookDelegateViewSet(RBACMixin, viewsets.ModelViewSet):
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = BookDelegateFilter
     search_fields   = [
         "first_name", "last_name", "email", "position",
         "invoice__invoice_number", "event_code", "company_name_raw",
     ]
     ordering_fields = [
-        "invoice__invoice_number", "last_name", "first_name", 
-        "email", "event_code", "attendance", "created_at",
-        "invoice__payment_status"
+        "_sort_invoice", "_sort_status", "_sort_date", "_sort_name",
+        "first_name", "last_name", "email", "event_code", "attendance", "created_at",
+        "position", "company_name_raw",
     ]
-    ordering        = ["invoice__invoice_number", "first_name"]
+    ordering        = ["-created_at"]
 
     def get_queryset(self):
+        from django.db.models import F, Value
+        from django.db.models.functions import Concat
         qs = BookDelegate.objects.select_related("invoice__sales_executive", "company")
+        qs = qs.annotate(
+            _sort_invoice=F("invoice__invoice_number"),
+            _sort_status=F("invoice__payment_status"),
+            _sort_date=F("invoice__invoice_date"),
+            _sort_name=Concat(F("first_name"), Value(" "), F("last_name")),
+        )
         return self.rbac_filter_invoice(qs)
 
     def get_serializer_class(self):

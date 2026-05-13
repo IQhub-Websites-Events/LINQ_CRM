@@ -1,12 +1,25 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { BookingsTable } from "../components/bookings/BookingsTable";
 import { BookingsCardGrid } from "../components/bookings/BookingsCardGrid";
+import { FilterSidebar } from "../components/bookings/FilterSidebar";
+import { invoicesApi } from "../api";
+import { useFetch } from "../hooks/useFetch";
 
 const STATUS_TABS = ["All", "Pending", "Paid"];
 
 export function BookingsPage({ navItem }) {
   const [view, setView] = useState("table"); // "table" | "cards"
   const [statusFilter, setStatusFilter] = useState(navItem ? "" : "Pending");
+  const [period, setPeriod] = useState("total");
+
+  const { data: stats, loading: statsLoading } = useFetch(
+    () => invoicesApi.stats(period),
+    [period]
+  );
+
+  const handleClearFilters = useCallback(() => {
+    setStatusFilter("");
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
@@ -20,38 +33,68 @@ export function BookingsPage({ navItem }) {
         gap: 16,
         flexShrink: 0,
       }}>
-        <div>
-          <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 4 }}>CRM › Bookings</div>
-          <h1 style={{
-            margin: 0,
-            fontFamily: "var(--font-serif)",
-            fontWeight: 500,
-            fontSize: 38,
-            lineHeight: 1,
-            letterSpacing: "-0.01em",
-            color: "var(--text)",
-          }}>
-            Bookings.
-          </h1>
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-dim)", maxWidth: 520 }}>
-            Manage invoices, track payment statuses, and view delegate records across all events.
-          </p>
+        <div className="hello" style={{ flex: 1, display: "flex", alignItems: "center", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Filter by
+            </span>
+            <select 
+              value={period} 
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "6px 32px 6px 12px",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "var(--text)",
+                appearance: "none",
+                cursor: "pointer",
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
+                backgroundSize: "10px 6px",
+                outline: "none",
+              }}
+            >
+              <option value="today">Today</option>
+              <option value="month">This Month</option>
+              <option value="total">Total</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flex: 1 }}>
+            <StatCard key="total" label="Total bookings" value={stats?.total} loading={statsLoading} />
+            <StatCard key="paid" label="Paid" value={stats?.paid} loading={statsLoading} />
+            <StatCard key="confirmed" label="Confirmed" value={stats?.confirmed} loading={statsLoading} />
+            <StatCard key="free" label="Free" value={stats?.free} loading={statsLoading} />
+          </div>
         </div>
 
-        {/* Table / Cards toggle */}
-        <ViewToggle view={view} onChange={setView} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+
+          <ViewToggle view={view} onChange={setView} />
+        </div>
       </div>
 
-      {/* Filter strip */}
-      <FilterStrip statusFilter={statusFilter} onStatusChange={(s) => setStatusFilter(s)} />
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <FilterStrip statusFilter={statusFilter} onStatusChange={(s) => setStatusFilter(s)} />
 
-      {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
-        {view === "table" ? (
-          <BookingsTable statusFilter={statusFilter} />
-        ) : (
-          <BookingsCardGrid statusFilter={statusFilter} />
-        )}
+          <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
+            {view === "table" ? (
+              <BookingsTable 
+                statusFilter={statusFilter} 
+              />
+            ) : (
+              <BookingsCardGrid 
+                statusFilter={statusFilter} 
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -163,6 +206,29 @@ function ToggleBtn({ active, onClick, title, children }) {
     >
       {children}
     </button>
+  );
+}
+
+function StatCard({ label, value, loading }) {
+  const displayValue = loading ? "..." : (value ?? 0).toLocaleString();
+  return (
+    <div style={{
+      flex: 1,
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
+      borderRadius: 12,
+      padding: "12px 16px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 4,
+    }}>
+      <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+        {label}
+      </span>
+      <div style={{ fontSize: 24, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-serif)" }}>
+        <span>{displayValue}</span>
+      </div>
+    </div>
   );
 }
 

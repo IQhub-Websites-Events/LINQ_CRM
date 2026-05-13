@@ -67,14 +67,21 @@ class WebhookProcessor:
 
         d              = ser.validated_data
         invoice_number = d["InvoiceNumber"]
-        event_code     = d["Eventcode"]
+        event_code     = self.normalize_event_code(d.get("Eventcode", ""))
+        d["Eventcode"] = event_code  # Save normalized version back to data dict
 
         self._note(f"Payload validated. Invoice={invoice_number}  Event={event_code}")
 
-        # ── 2. Payment status mapping ──────────────────────────────────────────
-        payment_status_map = {v.lower(): v for v in BookEvent.PaymentStatus.values}
-        incoming_ps        = d.get("PaymentStatus", "").strip().lower()
-        payment_status     = payment_status_map.get(incoming_ps, BookEvent.PaymentStatus.PENDING)
+        # ── 2. Field normalization ─────────────────────────────────────────────
+        ps_map   = {v.lower(): v for v in BookEvent.PaymentStatus.values}
+        tier_map = {v.lower(): v for v in BookEvent.TicketTier.values}
+        pof_map  = {v.lower(): v for v in BookEvent.PaidOrFree.values}
+
+        payment_status = ps_map.get(d.get("PaymentStatus", "").strip().lower(), BookEvent.PaymentStatus.PENDING)
+        
+        # Inject normalized values back into validated_data for use in helpers
+        d["TicketTier"] = tier_map.get(d.get("TicketTier", "").strip().lower(), d.get("TicketTier", ""))
+        d["PaidOrFree"] = pof_map.get(d.get("PaidOrFree", "").strip().lower(), d.get("PaidOrFree", ""))
 
         # ── 3. Sales exec assignment ───────────────────────────────────────────
         sales_exec = BookEvent.auto_assign_sales(event_code)
@@ -95,7 +102,7 @@ class WebhookProcessor:
             # ── 5. Delegate processing ─────────────────────────────────────────
             delegates_payload = d.get("Delegates", [])
             inserted_delegates, skipped_delegates, failed_delegates = self._process_delegates(
-                invoice, event_code, d, delegates_payload,
+                invoice, event_code, d, delegates_payload, tier_map, pof_map,
             )
 
             # ── 6. Update contact info ─────────────────────────────────────────
@@ -196,6 +203,34 @@ class WebhookProcessor:
 
     # ── Private helpers ────────────────────────────────────────────────────────
 
+    def normalize_event_code(self, code):
+        """
+        Normalizes event codes to match the designated codes in the system.
+        - Strips year suffixes (e.g., '26', '25')
+        - Maps specific variant codes (e.g., 'ACU' -> 'ACU - RS')
+        """
+        if not code: return ""
+        code = code.strip()
+        
+        # Specific mappings
+        mapping = {
+            "ACU":        "ACU - RS",
+            "ACU - RS26": "ACU - RS",
+            "ACU-RS26":   "ACU - RS",
+            "ACU-RS":     "ACU - RS",
+        }
+        if code in mapping:
+            return mapping[code]
+            
+        # General rule: Strip '26', '25', etc. from the end if it's a suffix
+        # e.g., "MMU/GS - JS26" -> "MMU/GS - JS"
+        for year in ["26", "25", "27"]:
+            if code.endswith(year):
+                # Only strip if it follows a letter or space (avoid stripping from codes where the number is part of the ID)
+                return code[:-len(year)].strip()
+        
+        return code
+
     def _create_booking(self, d, event_code, payment_status, sales_exec):
         invoice = BookEvent.objects.create(
             invoice_number         = d["InvoiceNumber"],
@@ -213,10 +248,10 @@ class WebhookProcessor:
             currency               = d.get("Currency", "USD"),
             payment_status         = payment_status,
             sales_executive        = sales_exec,
-            source                 = BookEvent.Source.WEBSITE,
-            form_name              = d.get("FormName", ""),
-            form_url               = d.get("FormURL", ""),
             packages               = d.get("Packages", []),
+            ticket_tier            = d.get("TicketTier", ""),
+            paid_or_free           = d.get("PaidOrFree", ""),
+            payment_type           = d.get("PaymentType", ""),
         )
         return invoice, WebhookLog.DbInsertStatus.INSERTED, f"Booking CREATED: id={invoice.id}"
 
@@ -224,6 +259,7 @@ class WebhookProcessor:
         """Update non-payment fields on an existing booking."""
         update_fields = []
         field_map = {
+            "event_code":             self.normalize_event_code(d.get("Eventcode", "")),
             "event_name":             d.get("Eventname", ""),
             "event_date":             d.get("Date"),
             "company_name":           d.get("DelegateCompanyName", ""),
@@ -239,21 +275,27 @@ class WebhookProcessor:
             "form_url":               d.get("FormURL", ""),
             "packages":               d.get("Packages", []),
             "payment_status":         payment_status,
+            "ticket_tier":            d.get("TicketTier", ""),
+            "paid_or_free":           d.get("PaidOrFree", ""),
+            "payment_type":           d.get("PaymentType", ""),
         }
         for attr, val in field_map.items():
-            if getattr(invoice, attr) != val:
-                setattr(invoice, attr, val)
-                update_fields.append(attr)
+            # Only update if the incoming value is not empty/None, 
+            # OR if we explicitly want to allow clearing (not for these fields usually)
+            if val or val == 0: 
+                if getattr(invoice, attr) != val:
+                    setattr(invoice, attr, val)
+                    update_fields.append(attr)
 
         if update_fields:
             invoice.save(update_fields=update_fields)
             note = f"Booking UPDATED: id={invoice.id} fields={update_fields}"
         else:
-            note = f"Booking UNCHANGED: id={invoice.id} (no field changes)"
+            note = f"Booking UNCHANGED: id={invoice.id} (no significant field changes)"
 
         return invoice, WebhookLog.DbInsertStatus.UPDATED, note
 
-    def _process_delegates(self, invoice, event_code, d, delegates_payload):
+    def _process_delegates(self, invoice, event_code, d, delegates_payload, tier_map, pof_map):
         inserted = skipped = failed = 0
         company_name = d.get("DelegateCompanyName", "")
 
@@ -276,6 +318,8 @@ class WebhookProcessor:
                         "ticket_package":    dp.get("TicketPackage", "").strip(),
                         "sponsorship_level": dp.get("SponsorshipLevel", "").strip(),
                         "company_name_raw":  company_name,
+                        "delegate_ticket_tier": tier_map.get(dp.get("TicketTier", "").strip().lower(), dp.get("TicketTier", "").strip()),
+                        "delegate_paid_or_free": pof_map.get(dp.get("PaidOrFree", "").strip().lower(), dp.get("PaidOrFree", "").strip()),
                     }
                     for attr, val in upd.items():
                         if getattr(existing, attr, None) != val:
@@ -300,6 +344,8 @@ class WebhookProcessor:
                         position          = dp.get("Position", "").strip(),
                         ticket_package    = dp.get("TicketPackage", "").strip(),
                         sponsorship_level = dp.get("SponsorshipLevel", "").strip(),
+                        delegate_ticket_tier = tier_map.get(dp.get("TicketTier", "").strip().lower(), dp.get("TicketTier", "").strip()),
+                        delegate_paid_or_free = pof_map.get(dp.get("PaidOrFree", "").strip().lower(), dp.get("PaidOrFree", "").strip()),
                     )
                     inserted += 1
                     self._note(f"Delegate #{i+1} inserted: {email}")

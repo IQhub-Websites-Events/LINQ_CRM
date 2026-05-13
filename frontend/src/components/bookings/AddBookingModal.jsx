@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { fmt, today } from "../../utils/helpers";
+import { PAYMENT_STATUSES, PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE } from "../../utils/constants";
 
 const BOOKING_CODES = [
   "", "Speaker", "Delegate", "Group Pass", "SPP", "SPP / Group Pass",
@@ -14,16 +15,21 @@ const BOOKING_CODES = [
 ];
 
 const COLS = [
-  { key: "_booking_code", label: "Booking Code", width: 130, invoiceLevel: true },
-  { key: "_request_date", label: "Request Date", width: 130, type: "date", invoiceLevel: true, readOnly: true },
-  { key: "_invoice_date", label: "Invoice Date", width: 130, type: "date", invoiceLevel: true },
-  { key: "_full_name", label: "Name", width: 160, virtual: "name" },
-  { key: "position", label: "Job Title", width: 180 },
-  { key: "_company_name", label: "Company", width: 180, invoiceLevel: true },
-  { key: "email", label: "Email", width: 240, type: "email" },
-  { key: "_accounts_contact_email", label: "Accounts Email", width: 220, invoiceLevel: true },
-  { key: "phone_number", label: "Direct Line", width: 160, mono: true },
-  { key: "attendance", label: "Attendance", width: 80, type: "checkbox" },
+  { key: "delegate_payment_status",  label: "Pay Status",     width: 140, type: "select", options: ["", ...PAYMENT_STATUSES] },
+  { key: "_booking_code",            label: "Booking Code",   width: 130, invoiceLevel: true },
+  { key: "_request_date",            label: "Request Date",   width: 130, type: "date",   invoiceLevel: true, readOnly: true },
+  { key: "_invoice_date",            label: "Invoice Date",   width: 130, type: "date",   invoiceLevel: true },
+  { key: "delegate_payment_date",    label: "Pay Date",       width: 120, type: "date" },
+  { key: "_full_name",               label: "Name",           width: 160, virtual: "name" },
+  { key: "position",                 label: "Job Title",      width: 180 },
+  { key: "_company_name",            label: "Company",        width: 180, invoiceLevel: true },
+  { key: "email",                    label: "Email",          width: 220, type: "email" },
+  { key: "_accounts_contact_email",  label: "Accounts Email", width: 200, invoiceLevel: true },
+  { key: "phone_number",             label: "Direct Line",    width: 150, mono: true },
+  { key: "delegate_paid_or_free",    label: "Paid/Free",      width: 90,  type: "select", options: ["", ...PAID_OR_FREE] },
+  { key: "delegate_payment_type",    label: "Pay Type",       width: 130, type: "select", options: ["", ...PAYMENT_TYPES] },
+  { key: "delegate_ticket_tier",     label: "Ticket Tier",    width: 120, type: "select", options: ["", ...TICKET_TIERS] },
+  { key: "attendance",               label: "Attendance",     width: 80,  type: "checkbox" },
 ];
 
 const BLANK_DELEGATE = () => ({
@@ -32,6 +38,11 @@ const BLANK_DELEGATE = () => ({
   job_title_legacy: "",
   ticket_package: "", sponsorship_level: "",
   attendance: "Pending", dietary_requirements: "", notes: "",
+  delegate_payment_date: "",
+  delegate_paid_or_free: "",
+  delegate_payment_status: "",
+  delegate_payment_type: "",
+  delegate_ticket_tier: "",
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -45,6 +56,7 @@ export function AddBookingModal({ onClose, onSaved }) {
   const [form, setForm] = useState({
     invoice_number: "", event_code: "", event_name: "", booking_code: "",
     invoice_date: today(), payment_status: "Pending",
+    paid_or_free: "", ticket_tier: "",
     reference: "", add_ons: "",
     company_name: "", accounts_contact_email: "",
     sales_executive: "", team_leader: "",
@@ -421,7 +433,7 @@ function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, c
         fontSize: compact ? 12 : 13,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: readOnly ? "default" : "text",
         transition: "border-color .12s, box-shadow .12s",
         boxSizing: "border-box",
@@ -473,7 +485,7 @@ function CellInput({ value, onChange, type = "text", mono, readOnly, placeholder
         fontSize: 12,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: readOnly ? "default" : "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
@@ -525,7 +537,7 @@ function NameCellInput({ delegate, onChange }) {
         background: f ? "#fff" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
+        boxShadow: "none",
         cursor: "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
@@ -549,10 +561,8 @@ function CellSelect({ value, onChange, options }) {
         background: f ? "#fff" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none", appearance: "none", cursor: "pointer",
-        boxShadow: f ? "0 0 0 2px var(--accent-soft)" : "none",
-        backgroundImage: f
-          ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`
-          : "none",
+        boxShadow: "none",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
         backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",

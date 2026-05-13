@@ -4,6 +4,9 @@ export const invoicesApi = {
   list: (params) =>
     client.get("invoices/", { params }).then((r) => r.data),
 
+  stats: (period) =>
+    client.get("invoices/stats/", { params: { period } }).then((r) => r.data),
+
   get: (id) =>
     client.get(`invoices/${id}/`).then((r) => r.data),
 

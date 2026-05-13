@@ -18,6 +18,8 @@ class BookEvent(models.Model):
     class PaymentStatus(models.TextChoices):
         PENDING              = "Pending",              "Pending"
         PAID                 = "Paid",                 "Paid"
+        UNPAID               = "Unpaid",               "Unpaid"
+        PARTIAL              = "Partial",              "Partial"
         CANCELLED            = "Cancelled",            "Cancelled"
         REFUNDED             = "Refunded",             "Refunded"
         FREE                 = "Free",                 "Free"
@@ -27,8 +29,30 @@ class BookEvent(models.Model):
         PAID_TRANSFERRED     = "Paid (Transferred)",     "Paid (Transferred)"
 
     class PaymentType(models.TextChoices):
-        STRIPE = "Stripe", "Stripe"
-        BANK   = "Bank",   "Bank"
+        STRIPE        = "Stripe",        "Stripe"
+        BANK          = "Bank",          "Bank"
+        BANK_TRANSFER = "Bank Transfer", "Bank Transfer"
+        CREDIT_CARD   = "Credit Card",   "Credit Card"
+        CASH          = "Cash",          "Cash"
+        COMPLIMENTARY = "Complimentary", "Complimentary"
+        MANUAL        = "Manual",        "Manual"
+        INVOICE       = "Invoice",       "Invoice"
+        WIRE_TRANSFER = "Wire Transfer", "Wire Transfer"
+
+    class PaidOrFree(models.TextChoices):
+        PAID = "Paid", "Paid"
+        FREE = "Free", "Free"
+
+    class TicketTier(models.TextChoices):
+        STANDARD      = "Standard",      "Standard"
+        VIP           = "VIP",           "VIP"
+        SPEAKER       = "Speaker",       "Speaker"
+        SPONSOR       = "Sponsor",       "Sponsor"
+        DELEGATE      = "Delegate",      "Delegate"
+        COMPLIMENTARY = "Complimentary", "Complimentary"
+        STUDENT       = "Student",       "Student"
+        MEDIA         = "Media",         "Media"
+        PARTNER       = "Partner",       "Partner"
 
     class Currency(models.TextChoices):
         USD   = "USD",   "USD"
@@ -81,7 +105,7 @@ class BookEvent(models.Model):
     total_amount         = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     add_ons_total_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency             = models.CharField(max_length=10, choices=Currency.choices, default=Currency.USD)
-    ticket_tier          = models.CharField(max_length=20, blank=True, default="")
+    ticket_tier          = models.CharField(max_length=50, choices=TicketTier.choices, blank=True, default="")
     delegate_count       = models.PositiveIntegerField(default=1)
 
     # ── Website intake metadata ────────────────────────────────────────────────
@@ -101,7 +125,10 @@ class BookEvent(models.Model):
         max_length=30, blank=True, default="",
         choices=PaymentType.choices,
     )
-    paid_free = models.CharField(max_length=20, blank=True, default="")
+    paid_or_free = models.CharField(
+        max_length=20, choices=PaidOrFree.choices, blank=True, default="",
+    )
+    paid_free = models.CharField(max_length=20, blank=True, default="")  # legacy
 
     # ── Reference ──────────────────────────────────────────────────────────────
     reference   = models.CharField(max_length=100, blank=True, default="")
@@ -122,6 +149,8 @@ class BookEvent(models.Model):
             models.Index(fields=["company_name"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["updated_at"]),
+            models.Index(fields=["ticket_tier"]),
+            models.Index(fields=["paid_or_free"]),
         ]
 
     def __str__(self):

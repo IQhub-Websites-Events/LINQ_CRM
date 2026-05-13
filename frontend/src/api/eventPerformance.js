@@ -7,6 +7,14 @@ export const eventPerformanceApi = {
   get:     (code)   => client.get(`${BASE}/${code}/`).then(r => r.data),
   summary: ()       => client.get(`${BASE}/summary/`).then(r => r.data),
 
+  // Active-edition view: one row per master event (DDU, WSE, BNZ…)
+  activeEditions: (params) =>
+    client.get(`${BASE}/active-editions/`, { params }).then(r => r.data),
+
+  // Full history + intelligence for a master event
+  masterHistory: (masterCode) =>
+    client.get(`${BASE}/${masterCode}/master-history/`).then(r => r.data),
+
   reps: (code) => client.get(`${BASE}/${code}/reps/`).then(r => r.data),
 
   followUps: {

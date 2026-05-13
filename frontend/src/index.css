@@ -178,10 +178,13 @@ table { font-variant-numeric: tabular-nums; }
   font-size: 13px;
   font-family: var(--font-sans);
   outline: none;
+  background-repeat: no-repeat;
 }
 .form-control:focus, .form-select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  background-color: var(--surface);
+  /* Remove noisy box-shadow that can cause artifacts */
+  box-shadow: none;
 }
 
 /* ─── Teams Management ─── */
