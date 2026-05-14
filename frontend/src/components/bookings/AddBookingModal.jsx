@@ -17,7 +17,7 @@ const BOOKING_CODES = [
 const COLS = [
   { key: "delegate_payment_status",  label: "Pay Status",     width: 140, type: "select", options: ["", ...PAYMENT_STATUSES] },
   { key: "_booking_code",            label: "Booking Code",   width: 130, invoiceLevel: true },
-  { key: "_request_date",            label: "Request Date",   width: 130, type: "date",   invoiceLevel: true, readOnly: true },
+  { key: "_request_date",            label: "Request Date",   width: 130, type: "date",   invoiceLevel: true },
   { key: "_invoice_date",            label: "Invoice Date",   width: 130, type: "date",   invoiceLevel: true },
   { key: "delegate_payment_date",    label: "Pay Date",       width: 120, type: "date" },
   { key: "_full_name",               label: "Name",           width: 160, virtual: "name" },
@@ -55,7 +55,7 @@ export function AddBookingModal({ onClose, onSaved }) {
 
   const [form, setForm] = useState({
     invoice_number: "", event_code: "", event_name: "", booking_code: "",
-    invoice_date: today(), payment_status: "Pending",
+    request_date: today(), invoice_date: today(), payment_status: "Pending",
     paid_or_free: "", ticket_tier: "",
     reference: "", add_ons: "",
     company_name: "", accounts_contact_email: "",
@@ -96,7 +96,7 @@ export function AddBookingModal({ onClose, onSaved }) {
   };
 
   const invoiceCtx = {
-    request_date: today(),
+    request_date: form.request_date,
     company_name: form.company_name,
     accounts_contact_email: form.accounts_contact_email,
     invoice_date: form.invoice_date,
@@ -217,7 +217,7 @@ function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRem
 
 function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemove }) {
   return (
-    <tr style={{ background: idx % 2 === 0 ? "#fff" : BG_ALT }}>
+    <tr style={{ background: idx % 2 === 0 ? "var(--surface)" : BG_ALT }}>
       <td style={{ ...tdCell, textAlign: "center", width: 36, padding: 0 }}>
         {onRemove && (
           <button onClick={onRemove} style={removeDelegateBtn} title="Remove delegate">
@@ -232,7 +232,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         if (c.key === "_request_date") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput type="date" value={fmt.dateInput(invoiceCtx.request_date)} readOnly />
+              <CellInput type="date" value={fmt.dateInput(invoiceCtx.request_date || "")} onChange={v => onSetInvoice("request_date", v)} />
             </td>
           );
         }
@@ -336,7 +336,7 @@ function EventCodePicker({ value, events, onChange, compact }) {
         style={{
           width: "100%", height: compact ? 34 : 38, padding: "0 32px 0 10px",
           border: `1px solid ${open ? "var(--accent)" : BORDER}`,
-          borderRadius: 4, background: "#fff",
+          borderRadius: 4, background: "var(--surface)",
           display: "flex", alignItems: "center", gap: 8,
           cursor: "pointer", textAlign: "left",
           boxShadow: open ? "0 0 0 2px var(--accent-soft)" : "none",
@@ -363,14 +363,14 @@ function EventCodePicker({ value, events, onChange, compact }) {
       </button>
 
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 6, boxShadow: "0 4px 20px rgba(0,0,0,.13)", zIndex: 200, overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: `1px solid ${BORDER}`, borderRadius: 6, boxShadow: "0 4px 20px rgba(0,0,0,.18)", zIndex: 200, overflow: "hidden" }}>
           <div style={{ padding: "8px 10px", borderBottom: `1px solid ${BORDER}` }}>
             <input
               autoFocus
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search code, name or city…"
-              style={{ width: "100%", height: 30, padding: "0 8px", border: `1px solid ${BORDER}`, borderRadius: 4, fontSize: 12, fontFamily: "var(--font-sans)", color: TEXT, outline: "none", boxSizing: "border-box", background: "#fff" }}
+              style={{ width: "100%", height: 30, padding: "0 8px", border: `1px solid ${BORDER}`, borderRadius: 4, fontSize: 12, fontFamily: "var(--font-sans)", color: TEXT, outline: "none", boxSizing: "border-box", background: "var(--surface)" }}
             />
           </div>
           <div style={{ maxHeight: 280, overflowY: "auto" }}>
@@ -382,9 +382,9 @@ function EventCodePicker({ value, events, onChange, compact }) {
                 <div
                   key={ev.event_code}
                   onClick={() => { onChange(ev.event_code, ev); setOpen(false); setSearch(""); }}
-                  style={{ padding: "8px 12px", cursor: "pointer", background: isActive ? "rgba(64,81,137,.07)" : "#fff", borderBottom: `1px solid ${BORDER}` }}
-                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#f8fafc"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(64,81,137,.07)" : "#fff"; }}
+                  style={{ padding: "8px 12px", cursor: "pointer", background: isActive ? "rgba(64,81,137,.07)" : "var(--surface)", borderBottom: `1px solid ${BORDER}` }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--surface-alt)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isActive ? "rgba(64,81,137,.07)" : "var(--surface)"; }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "rgba(64,81,137,.1)", padding: "2px 7px", borderRadius: 4, whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -428,7 +428,7 @@ function FInput({ value, onChange, type = "text", mono, readOnly, placeholder, c
         width: "100%", height: h, padding: "0 10px",
         border: `1px solid ${f ? "var(--accent)" : BORDER}`,
         borderRadius: 4,
-        background: readOnly ? BG_ALT : "#fff",
+        background: readOnly ? BG_ALT : "var(--surface)",
         color: readOnly ? TEXT_DIM : TEXT,
         fontSize: compact ? 12 : 13,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
@@ -480,7 +480,7 @@ function CellInput({ value, onChange, type = "text", mono, readOnly, placeholder
         width: "100%", height: 32, padding: "0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: readOnly ? "transparent" : (f ? "#fff" : "transparent"),
+        background: readOnly ? "transparent" : (f ? "var(--surface)" : "transparent"),
         color: readOnly ? TEXT_DIM : TEXT,
         fontSize: 12,
         fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
@@ -534,7 +534,7 @@ function NameCellInput({ delegate, onChange }) {
         width: "100%", height: 32, padding: "0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "#fff" : "transparent",
+        background: f ? "var(--surface)" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
         boxShadow: "none",
@@ -558,7 +558,7 @@ function CellSelect({ value, onChange, options }) {
         width: "100%", height: 32, padding: "0 18px 0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "#fff" : "transparent",
+        background: f ? "var(--surface)" : "transparent",
         color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none", appearance: "none", cursor: "pointer",
         boxShadow: "none",
@@ -616,7 +616,7 @@ const modalBox = {
   width: "98%",
   maxWidth: 1650,
   maxHeight: "calc(100vh - 64px)",
-  background: "#fff",
+  background: "var(--surface)",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   boxShadow: "0 4px 24px rgba(0,0,0,0.1)",
@@ -628,7 +628,7 @@ const headerWrap = {
   display: "flex", flexDirection: "column",
   padding: "11px 20px 14px",
   borderBottom: `1px solid ${BORDER}`,
-  background: "#fff",
+  background: "var(--surface)",
   position: "sticky", top: 0, zIndex: 20,
 };
 
@@ -660,7 +660,7 @@ const delegateWrap = {
 const footerWrap = {
   display: "flex", alignItems: "center", justifyContent: "space-between",
   padding: "10px 20px",
-  background: "#fff",
+  background: "var(--surface)",
   position: "sticky", bottom: 0, zIndex: 20,
   borderTop: `1px solid ${BORDER}`,
 };
@@ -671,7 +671,7 @@ const footerMeta = {
 
 const btnOutline = {
   height: 36, padding: "0 16px", borderRadius: 5,
-  background: "#fff", border: `1px solid ${BORDER}`,
+  background: "var(--surface)", border: `1px solid ${BORDER}`,
   color: TEXT, fontSize: 12.5, fontWeight: 500,
   cursor: "pointer", fontFamily: "inherit",
 };
@@ -685,7 +685,7 @@ const btnPrimary = {
 
 const addDelegateBtn = {
   height: 30, padding: "0 12px", borderRadius: 4,
-  background: "#fff", border: `1px solid var(--accent)`,
+  background: "var(--surface)", border: `1px solid var(--accent)`,
   color: "var(--accent)", fontSize: 11.5, fontWeight: 500,
   cursor: "pointer", fontFamily: "inherit",
   display: "inline-flex", alignItems: "center",

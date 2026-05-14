@@ -126,28 +126,28 @@ export function EventsPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "20px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
         <div>
-          <h4 style={{ margin: 0, fontSize: 18, color: "#495057", textTransform: "uppercase", fontWeight: 700 }}>Events</h4>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#878a99" }}>Manage and track all company events and their capacities.</p>
+          <h4 style={{ margin: 0, fontSize: 18, color: "var(--text)", textTransform: "uppercase", fontWeight: 700 }}>Events</h4>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-faint)" }}>Manage and track all company events and their capacities.</p>
         </div>
         {isAdmin && <button className="btn btn-primary" onClick={openCreate}>+ New Event</button>}
       </div>
 
 
       <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        <div style={{ padding: "20px", background: "#fff", borderBottom: "1px solid var(--vz-card-border-color)",
+        <div style={{ padding: "20px", background: "var(--surface)", borderBottom: "1px solid var(--border)",
           display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f3f3f9",
-            border: "1px solid #e9ebec", borderRadius: 4, padding: "8px 12px", flex: 1, maxWidth: 300 }}>
-            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface-alt)",
+            border: "1px solid var(--border)", borderRadius: 4, padding: "8px 12px", flex: 1, maxWidth: 300 }}>
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round">
               <circle cx="5" cy="5" r="4"/><path d="M9 9l2.5 2.5"/>
             </svg>
             <input value={search} onChange={(e) => handleSearch(e.target.value)}
               placeholder="Search events..." style={{ background: "none", border: "none", outline: "none",
-                fontSize: 13, color: "#495057", width: "100%", fontFamily: "inherit" }} />
+                fontSize: 13, color: "var(--text)", width: "100%", fontFamily: "inherit" }} />
           </div>
           <select value={status} onChange={(e) => handleStatus(e.target.value)}
-            style={{ background: "#fff", border: "1px solid #e9ebec", borderRadius: 4,
-              padding: "8px 30px 8px 12px", fontSize: 13, color: "#495057", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4,
+              padding: "8px 30px 8px 12px", fontSize: 13, color: "var(--text)", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
             <option value="">All Statuses</option>
             {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -157,7 +157,7 @@ export function EventsPage() {
       <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
           <thead>
-            <tr style={{ background: "#f3f6f9" }}>
+            <tr style={{ background: "var(--surface-alt)" }}>
               <SortableTh sortKey="event_code" sort={sort} onSort={handleSort}>Code</SortableTh>
               <SortableTh sortKey="name"        sort={sort} onSort={handleSort}>Name</SortableTh>
               <SortableTh sortKey="official_name" sort={sort} onSort={handleSort}>Official Name</SortableTh>
@@ -179,7 +179,7 @@ export function EventsPage() {
               <tr key={ev.id}
                 onClick={() => setSelectedEventId(ev.id)}
                 style={{ borderBottom: "1px solid var(--vz-card-border-color)", cursor: "pointer", transition: "background .2s ease" }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f3f3f9"}
+                onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-alt)"}
                 onMouseLeave={(e) => e.currentTarget.style.background = ""}
               >
                 <Td><span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span></Td>
@@ -197,8 +197,8 @@ export function EventsPage() {
                         className="btn-icon" 
                         title="Edit Event"
                         style={{ 
-                          background: "#f0f2f5", border: "none", borderRadius: 6, padding: "6px", 
-                          color: "#405189", cursor: "pointer", display: "flex", alignItems: "center" 
+                          background: "var(--surface-alt)", border: "none", borderRadius: 6, padding: "6px",
+                          color: "#405189", cursor: "pointer", display: "flex", alignItems: "center"
                         }}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -211,8 +211,8 @@ export function EventsPage() {
                           className="btn-icon" 
                           title="Delete Event"
                           style={{ 
-                            background: "#fff5f5", border: "none", borderRadius: 6, padding: "6px", 
-                            color: "#f06548", cursor: "pointer", display: "flex", alignItems: "center" 
+                            background: "rgba(240,101,72,0.1)", border: "none", borderRadius: 6, padding: "6px",
+                          color: "#f06548", cursor: "pointer", display: "flex", alignItems: "center"
                           }}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -232,12 +232,12 @@ export function EventsPage() {
         {/* Infinite scroll sentinel */}
         <div ref={sentinelRef} style={{ height: 1 }} />
         {loadingMore && (
-          <div style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+          <div style={{ padding: "16px", textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
             Loading more…
           </div>
         )}
         {!hasMore && items.length > 0 && (
-          <div style={{ padding: "14px", textAlign: "center", color: "#c0c4cc", fontSize: 12 }}>
+          <div style={{ padding: "14px", textAlign: "center", color: "var(--text-faint)", fontSize: 12 }}>
             All {items.length} events loaded
           </div>
         )}

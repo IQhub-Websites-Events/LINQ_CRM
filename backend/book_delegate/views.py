@@ -21,11 +21,11 @@ class BookDelegateViewSet(RBACMixin, viewsets.ModelViewSet):
         "invoice__invoice_number", "event_code", "company_name_raw",
     ]
     ordering_fields = [
-        "_sort_invoice", "_sort_status", "_sort_date", "_sort_name",
+        "_sort_invoice", "_sort_status", "_sort_date", "_sort_name", "_sort_request_date",
         "first_name", "last_name", "email", "event_code", "attendance", "created_at",
         "position", "company_name_raw",
     ]
-    ordering        = ["-created_at"]
+    ordering        = ["-_sort_request_date"]
 
     def get_queryset(self):
         from django.db.models import F, Value
@@ -35,6 +35,7 @@ class BookDelegateViewSet(RBACMixin, viewsets.ModelViewSet):
             _sort_invoice=F("invoice__invoice_number"),
             _sort_status=F("invoice__payment_status"),
             _sort_date=F("invoice__invoice_date"),
+            _sort_request_date=F("invoice__request_date"),
             _sort_name=Concat(F("first_name"), Value(" "), F("last_name")),
         )
         return self.rbac_filter_invoice(qs)

@@ -131,8 +131,9 @@ class BookEvent(models.Model):
     paid_free = models.CharField(max_length=20, blank=True, default="")  # legacy
 
     # ── Reference ──────────────────────────────────────────────────────────────
-    reference   = models.CharField(max_length=100, blank=True, default="")
-    parent_code = models.CharField(max_length=100, blank=True, default="")
+    reference    = models.CharField(max_length=100, blank=True, default="")
+    parent_code  = models.CharField(max_length=100, blank=True, default="")
+    request_date = models.DateField(null=True, blank=True)
     notes      = models.TextField(blank=True, default="")
     add_ons    = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)

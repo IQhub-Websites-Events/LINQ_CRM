@@ -1,9 +1,9 @@
 import { useState } from "react";
 
 const inputStyle = {
-  width: "100%", backgroundColor: "#fff", border: "1px solid #e2e8f0",
+  width: "100%", backgroundColor: "var(--surface)", border: "1px solid var(--border)",
   borderRadius: 7, padding: "7px 10px", fontSize: 12.5,
-  color: "#1e293b", fontFamily: "inherit", outline: "none",
+  color: "var(--text)", fontFamily: "inherit", outline: "none",
   transition: "border-color .15s",
 };
 
@@ -17,10 +17,10 @@ export function Input({ value, onChange, onKeyDown, placeholder, type = "text",
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
       style={{
         ...inputStyle,
-        borderColor: focused ? "#94a3b8" : "#e2e8f0",
-        boxShadow: focused ? "0 0 0 3px rgba(148,163,184,.12)" : "none",
-        backgroundColor: readOnly ? "#f8fafc" : "#fff",
-        color: readOnly ? "#94a3b8" : "#1e293b",
+        borderColor: focused ? "var(--accent)" : "var(--border)",
+        boxShadow: focused ? "0 0 0 3px var(--accent-soft, rgba(99,102,241,.12))" : "none",
+        backgroundColor: readOnly ? "var(--surface-alt)" : "var(--surface)",
+        color: readOnly ? "var(--text-faint)" : "var(--text)",
         cursor: readOnly ? "not-allowed" : "text",
         ...style,
       }}
@@ -57,8 +57,8 @@ export function Select({ value, onChange, options, placeholder, style = {} }) {
 export function FieldLabel({ children, required }) {
   return (
     <label style={{ display: "block", fontSize: 10, fontWeight: 600,
-      color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>
-      {children}{required && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
+      color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 4 }}>
+      {children}{required && <span style={{ color: "var(--danger)", marginLeft: 2 }}>*</span>}
     </label>
   );
 }

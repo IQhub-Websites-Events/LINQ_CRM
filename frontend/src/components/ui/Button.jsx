@@ -13,11 +13,11 @@ export function Button({ children, onClick, variant = "secondary", size = "md",
     lg: { padding: "8px 16px", fontSize: 13 },
   }[size];
   const variants = {
-    primary:   { background: "#1e293b", color: "#fff" },
-    secondary: { background: "#fff", color: "#475569", border: "1px solid #e2e8f0" },
+    primary:   { background: "var(--accent)", color: "#fff" },
+    secondary: { background: "var(--surface)", color: "var(--text-dim)", border: "1px solid var(--border)" },
     success:   { background: "#166534", color: "#fff" },
     danger:    { background: "#991b1b", color: "#fff" },
-    ghost:     { background: "transparent", color: "#475569" },
+    ghost:     { background: "transparent", color: "var(--text-dim)" },
   }[variant];
 
   return (

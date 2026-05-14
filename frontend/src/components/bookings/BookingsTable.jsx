@@ -20,7 +20,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [fetchingMore, setFetchingMore] = useState(false);
-  const [sortKey, setSortKey] = useState("created_at");
+  const [sortKey, setSortKey] = useState("_sort_request_date");
   const [sortDir, setSortDir] = useState("desc");
   
   // Column Filters
@@ -208,7 +208,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <SortTh sortKey="_sort_invoice" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
                 <Th style={{ minWidth: 100 }}>Event</Th>
                 <Th style={{ minWidth: 130 }}>Booking Code</Th>
-                <SortTh sortKey="created_at" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Request Date</SortTh>
+                <SortTh sortKey="_sort_request_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Request Date</SortTh>
                 <SortTh sortKey="_sort_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Invoice Date</SortTh>
                 <SortTh sortKey="_sort_name" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 180 }}>Name</SortTh>
                 <SortTh sortKey="position" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 160 }}>Job Title</SortTh>
@@ -502,7 +502,7 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
 
       <td style={cell}>
         <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
-          {delegate.created_at ? fmt.dateShort(delegate.created_at.slice(0, 10)) : "—"}
+          {delegate.request_date ? fmt.dateShort(delegate.request_date) : "—"}
         </span>
       </td>
 

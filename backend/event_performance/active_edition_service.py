@@ -13,21 +13,40 @@ from events.models import Event
 
 def normalize_master_code(event_code: str) -> str:
     """
-    Normalizes any event code variant to its canonical master code.
+    Returns the canonical master code: first 3 alphabetic characters (uppercase).
 
-    'DDU - PT'  → 'DDU'
-    'DDU25'     → 'DDU'
-    'DDU'       → 'DDU'
-    'WSE - EU'  → 'WSE'
+    'ACU25'         → 'ACU'
+    'ACU - RS26'    → 'ACU'
+    'MMU/GS - JS26' → 'MMU'
+    'DDU - PT'      → 'DDU'
+    'WSE - EU'      → 'WSE'
+    'DDU'           → 'DDU'
     """
     if not event_code:
         return ""
-    code = event_code.strip().upper()
-    if " - " in code:
-        code = code.split(" - ")[0].strip()
-    code = re.sub(r"\d{2,4}$", "", code).strip()
-    code = re.sub(r"[^A-Z0-9]", "", code)
-    return code
+    alpha = re.sub(r"[^A-Za-z]", "", event_code)
+    mc = alpha[:3].upper()
+    return mc
+
+
+def extract_year_from_code(event_code: str) -> Optional[int]:
+    """
+    Returns the 4-digit year from the trailing 2 digits of an event code.
+
+    'ACU25'         → 2025
+    'ACU - RS26'    → 2026
+    'MMU/GS - JS26' → 2026
+    'DDU'           → None
+    """
+    if not event_code:
+        return None
+    m = re.search(r"(\d{2})\s*$", event_code.strip())
+    return int("20" + m.group(1)) if m else None
+
+
+def event_key(event_code: str) -> tuple:
+    """Returns (master_code, year_or_none) for grouping and matching."""
+    return (normalize_master_code(event_code), extract_year_from_code(event_code))
 
 
 class CurrentActiveEditionResolver:

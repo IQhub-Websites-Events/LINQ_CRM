@@ -38,8 +38,8 @@ class BookDelegateFilter(django_filters.FilterSet):
     )
 
     # Date Ranges
-    request_date_from = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
-    request_date_to   = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    request_date_from = django_filters.DateFilter(field_name="invoice__request_date", lookup_expr="gte")
+    request_date_to   = django_filters.DateFilter(field_name="invoice__request_date", lookup_expr="lte")
     invoice_date_from = django_filters.DateFilter(field_name="invoice__invoice_date", lookup_expr="gte")
     invoice_date_to   = django_filters.DateFilter(field_name="invoice__invoice_date", lookup_expr="lte")
     payment_date_from = django_filters.DateFilter(field_name="invoice__payment_date", lookup_expr="gte")

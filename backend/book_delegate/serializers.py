@@ -50,6 +50,7 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
     payment_date           = serializers.DateField(source="invoice.payment_date",    read_only=True)
     invoice_number         = serializers.CharField(source="invoice.invoice_number",  read_only=True)
     book_event_id          = serializers.IntegerField(source="invoice.id",           read_only=True)
+    request_date           = serializers.DateField(source="invoice.request_date",    read_only=True)
     invoice_date           = serializers.DateField(source="invoice.invoice_date",    read_only=True)
     booking_code           = serializers.CharField(source="invoice.booking_code",    read_only=True)
     currency               = serializers.CharField(source="invoice.currency",        read_only=True)
@@ -81,7 +82,7 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
         model  = BookDelegate
         fields = [
             "id", "book_event_id", "invoice_number", "event_code", "booking_code",
-            "invoice_date", "first_name", "last_name", "full_name",
+            "request_date", "invoice_date", "first_name", "last_name", "full_name",
             "email", "phone_number", "position",
             "ticket_package", "sponsorship_level",
             "delegate_number", "company_display",
