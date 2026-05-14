@@ -14,6 +14,8 @@ class User(AbstractUser):
         MARKET_RESEARCH = "market_research", "Market Research"
         SPEX            = "spex",            "SpEx"
         OPERATIONS      = "operations",      "Operations"
+        SPEAKER_SALES   = "speaker_sales",   "Speaker Sales"
+        TELEMARKETING   = "telemarketing",   "Telemarketing"
 
     class Status(models.TextChoices):
         ACTIVE    = "active",    "Active"
@@ -48,11 +50,68 @@ class User(AbstractUser):
         return f"{self.username} ({self.role})"
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields", None)
+
         # Sync is_active with status
         if self.status == self.Status.ACTIVE:
             self.is_active = True
         else:
             self.is_active = False
+
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if "status" in update_fields:
+                update_fields.add("is_active")
+
+        # Auto-sync role and permissions based on team assignment
+        if self.team:
+            team_name = self.team.name.lower().strip()
+            role_changed = False
+            perms_changed = False
+            
+            if "admin" in team_name:
+                if not self.is_superuser or not self.is_staff:
+                    self.is_superuser = True
+                    self.is_staff = True
+                    perms_changed = True
+                if self.role != self.Role.ADMIN:
+                    self.role = self.Role.ADMIN
+                    role_changed = True
+            else:
+                # Revoke superuser/staff if they are moved out of the Admin team
+                if self.is_superuser or self.is_staff:
+                    self.is_superuser = False
+                    self.is_staff = False
+                    perms_changed = True
+                
+                # Assign role based on keywords in the team name
+                new_role = None
+                if "market research" in team_name:
+                    new_role = self.Role.MARKET_RESEARCH
+                elif "spex" in team_name:
+                    new_role = self.Role.SPEX
+                elif "operation" in team_name or "ops" in team_name:
+                    new_role = self.Role.OPERATIONS
+                elif "speaker sales" in team_name:
+                    new_role = self.Role.SPEAKER_SALES
+                elif "telemarketing" in team_name:
+                    new_role = self.Role.TELEMARKETING
+                elif "sales" in team_name:
+                    new_role = self.Role.SALES
+                
+                if new_role and self.role != new_role:
+                    self.role = new_role
+                    role_changed = True
+                    
+            if update_fields is not None:
+                if perms_changed:
+                    update_fields.update(["is_superuser", "is_staff"])
+                if role_changed:
+                    update_fields.add("role")
+
+        if update_fields is not None:
+            kwargs["update_fields"] = list(update_fields)
+
         super().save(*args, **kwargs)
 
     @property

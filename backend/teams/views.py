@@ -125,8 +125,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         members = list(team.members.all())
         for m in members:
             m.team = dest
-        if members:
-            User.objects.bulk_update(members, ["team"])
+            m.save(update_fields=["team"])
 
         if members and (dest or team):
             TeamActivityLog.objects.create(

@@ -133,6 +133,8 @@ export function UsersPage() {
             <option value="">All Roles</option>
             <option value="admin">Admin</option>
             <option value="sales">Sales</option>
+            <option value="speaker_sales">Speaker Sales</option>
+            <option value="telemarketing">Telemarketing</option>
             <option value="market_research">Market Research</option>
             <option value="spex">SpEx</option>
             <option value="operations">Operations</option>
@@ -280,6 +282,8 @@ function RoleBadge({ role }) {
   const map = {
     admin: { bg: 'var(--danger-soft)', c: 'var(--danger)' },
     sales: { bg: 'var(--accent-soft)', c: 'var(--accent)' },
+    speaker_sales: { bg: 'var(--success-soft)', c: 'var(--success)' },
+    telemarketing: { bg: 'var(--surface-alt)', c: 'var(--text)' },
     market_research: { bg: 'var(--warn-soft)', c: 'var(--warn)' },
     spex: { bg: 'var(--accent-soft)', c: 'var(--accent)' },
     operations: { bg: 'var(--surface-alt)', c: 'var(--text-dim)' },

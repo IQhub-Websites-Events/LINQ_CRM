@@ -159,6 +159,8 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
                 <MSelect value={formData.role} onChange={(v) => set('role', v)} options={[
                   { value: 'admin', label: 'Administrator' },
                   { value: 'sales', label: 'Sales Executive' },
+                  { value: 'speaker_sales', label: 'Speaker Sales' },
+                  { value: 'telemarketing', label: 'Telemarketing' },
                   { value: 'market_research', label: 'Market Research' },
                   { value: 'spex', label: 'SpEx' },
                   { value: 'operations', label: 'Operations' },
