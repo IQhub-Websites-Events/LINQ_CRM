@@ -7,6 +7,7 @@ EventEditionBookingEngine — orchestrates per-edition metrics + booking lists
 EditionBookingValidator   — validates windows, detects orphaned bookings
 """
 import logging
+import re
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -261,30 +262,47 @@ class EventEditionBookingEngine:
         from book_event.models import BookEvent
 
         mapper: BookingEditionMapper = BookingEditionMapper(windows)
-        # Build a quick lookup: which years have windows?
         window_years = {w["year"] for w in windows}
         result: Dict[Optional[int], List[int]] = {}
 
         for row in (
             BookEvent.objects
             .filter(event_code__iregex=booking_code_regex(self.event_code))
-            .values("id", "invoice_date", "created_at", "event_date")
+            .values("id", "invoice_date", "created_at", "event_date", "event_code")
         ):
-            # Primary signal: use the booking's own event_date year if available.
-            # This correctly places a 2024-event booking into the 2024 edition
-            # even if the invoice was dated in 2025.
-            event_yr = row["event_date"].year if row["event_date"] else None
-            if event_yr and event_yr in window_years:
-                yr = event_yr
+            # Priority 1: year encoded in the booking's event_code (e.g. "DDU26" → 2026).
+            # This is the most direct signal — the code itself names the edition.
+            code_yr = self._year_from_booking_code(row.get("event_code") or "")
+            if code_yr and code_yr in window_years:
+                yr = code_yr
             else:
-                # Fallback: assign via invoice_date / created_at window matching
-                inv = row["invoice_date"]
-                cr  = row["created_at"].date() if row["created_at"] else None
-                yr  = mapper.year_for(inv, cr)
+                # Priority 2: booking's own event_date year
+                event_yr = row["event_date"].year if row["event_date"] else None
+                if event_yr and event_yr in window_years:
+                    yr = event_yr
+                else:
+                    # Priority 3: invoice_date / created_at window matching
+                    inv = row["invoice_date"]
+                    cr  = row["created_at"].date() if row["created_at"] else None
+                    yr  = mapper.year_for(inv, cr)
 
             result.setdefault(yr, []).append(row["id"])
 
         return result
+
+    @staticmethod
+    def _year_from_booking_code(code: str) -> Optional[int]:
+        """Extract 2- or 4-digit year suffix from event_code (e.g. 'DDU26' → 2026, 'DDU - RS26' → 2026)."""
+        if not code:
+            return None
+        m = re.search(r"(\d{2,4})$", code.strip())
+        if m:
+            raw = m.group(1)
+            if len(raw) == 2:
+                return 2000 + int(raw)
+            if len(raw) == 4:
+                return int(raw)
+        return None
 
     def _aggregate(self, ids: List[int]) -> Dict[str, Any]:
         from book_event.models import BookEvent

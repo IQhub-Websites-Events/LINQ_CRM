@@ -134,10 +134,11 @@ class BookEvent(models.Model):
     reference    = models.CharField(max_length=100, blank=True, default="")
     parent_code  = models.CharField(max_length=100, blank=True, default="")
     request_date = models.DateField(null=True, blank=True)
-    notes      = models.TextField(blank=True, default="")
-    add_ons    = models.TextField(blank=True, default="")
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
+    notes        = models.TextField(blank=True, default="")
+    add_ons      = models.TextField(blank=True, default="")
+    attendance   = models.CharField(max_length=100, blank=True, default="")
+    created_at   = models.DateTimeField(default=timezone.now)
+    updated_at   = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "book_events"

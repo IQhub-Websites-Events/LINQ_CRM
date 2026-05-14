@@ -36,17 +36,17 @@ function HistoricalRow({ record }) {
       alignItems: "center",
       padding: "7px 10px",
       borderRadius: 6,
-      background: verified ? "rgba(16,185,129,0.04)" : "rgba(148,163,184,0.06)",
-      border: `1px solid ${verified ? "rgba(16,185,129,0.18)" : "#e2e8f0"}`,
+      background: verified ? "rgba(16,185,129,0.06)" : "var(--surface-alt)",
+      border: `1px solid ${verified ? "rgba(16,185,129,0.2)" : "var(--border)"}`,
     }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--vz-primary)", fontFamily: "monospace" }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", fontFamily: "monospace" }}>
         {record.event_year}
       </span>
-      <span style={{ fontSize: 11, color: "#64748b" }}>{record.event_month}</span>
-      <span style={{ fontSize: 11, color: "#1e293b", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{record.event_month}</span>
+      <span style={{ fontSize: 11, color: "var(--text)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {record.event_location || "—"}
       </span>
-      <span style={{ fontSize: 10, color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ fontSize: 10, color: "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {record.source_pdf}
       </span>
       <ConfidenceBadge confidence={record.matched_confidence} />
@@ -69,34 +69,34 @@ function EditionCard({ edition, onClick }) {
       onClick={onClick}
       style={{
         cursor: "pointer",
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 8,
         padding: "12px 14px",
-        transition: "border-color 0.15s, box-shadow 0.15s",
+        transition: "all 0.15s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--vz-primary)";
-        e.currentTarget.style.boxShadow   = "0 2px 8px rgba(64,81,137,0.10)";
+        e.currentTarget.style.borderColor = "var(--accent)";
+        e.currentTarget.style.background = "var(--surface-alt)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "#e2e8f0";
-        e.currentTarget.style.boxShadow   = "none";
+        e.currentTarget.style.borderColor = "var(--border)";
+        e.currentTarget.style.background = "var(--surface)";
       }}
     >
       {/* Year → Location header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <span style={{
-          fontSize: 13, fontWeight: 800, color: "var(--vz-primary)",
+          fontSize: 13, fontWeight: 800, color: "var(--accent)",
           fontFamily: "monospace",
         }}>
           {edition.year}
         </span>
-        <span style={{ fontSize: 12, color: "#94a3b8" }}>→</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", flex: 1 }}>
+        <span style={{ fontSize: 12, color: "var(--text-faint)" }}>→</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", flex: 1 }}>
           {edition.location || "—"}
         </span>
-        <span style={{ fontSize: 10, color: "#94a3b8" }}>›</span>
+        <span style={{ fontSize: 10, color: "var(--text-faint)" }}>›</span>
       </div>
 
       {hasData ? (
@@ -110,16 +110,16 @@ function EditionCard({ edition, onClick }) {
               { label: "Delegates", value: delegates, color: null },
             ].map(({ label, value, color }) => (
               <div key={label} style={{
-                background: color ? `${color}10` : "rgba(100,116,139,0.06)",
-                border: `1px solid ${color ? `${color}28` : "#e2e8f0"}`,
+                background: color ? `${color}12` : "var(--surface-alt)",
+                border: `1px solid ${color ? `${color}28` : "var(--border)"}`,
                 borderRadius: 5,
                 padding: "6px 8px",
                 textAlign: "center",
               }}>
-                <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+                <div style={{ fontSize: 9, color: "var(--text-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
                   {label}
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: color ?? "#1e293b", fontFamily: "monospace" }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: color ?? "var(--text)", fontFamily: "monospace" }}>
                   {value}
                 </div>
               </div>
@@ -129,7 +129,7 @@ function EditionCard({ edition, onClick }) {
           {/* Payment rate bar */}
           {total > 0 && (
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, background: "#e2e8f0", borderRadius: 3, height: 4 }}>
+              <div style={{ flex: 1, background: "var(--border)", borderRadius: 3, height: 4 }}>
                 <div style={{
                   width: `${paidPct}%`,
                   height: "100%",
@@ -137,7 +137,7 @@ function EditionCard({ edition, onClick }) {
                   borderRadius: 3,
                 }} />
               </div>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#64748b", minWidth: 32, textAlign: "right" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", minWidth: 32, textAlign: "right" }}>
                 {paidPct}% paid
               </span>
             </div>
@@ -145,17 +145,82 @@ function EditionCard({ edition, onClick }) {
 
           {/* Revenue */}
           {sales > 0 && (
-            <div style={{ marginTop: 6, fontSize: 10, color: "#64748b", fontWeight: 600, fontFamily: "monospace" }}>
+            <div style={{ marginTop: 6, fontSize: 10, color: "var(--text-dim)", fontWeight: 600, fontFamily: "monospace" }}>
               Revenue: ${Number(sales).toLocaleString("en-US", { maximumFractionDigits: 0 })}
             </div>
           )}
         </>
       ) : (
-        <div style={{ fontSize: 11, color: "#94a3b8", padding: "2px 0" }}>
+        <div style={{ fontSize: 11, color: "var(--text-faint)", padding: "2px 0" }}>
           No booking data linked to this edition.
         </div>
       )}
     </div>
+  );
+}
+
+// ── Current-edition metric tile ───────────────────────────────────────────────
+
+function MetricTile({ label, value, color, sub }) {
+  return (
+    <div style={{
+      background: color ? `${color}12` : "var(--surface-alt)",
+      border: `1px solid ${color ? `${color}28` : "var(--border)"}`,
+      borderRadius: 7, padding: "10px 12px",
+    }}>
+      <div style={{
+        fontSize: 9, color: "var(--text-faint)", fontWeight: 700,
+        textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 18, fontWeight: 800,
+        color: color ?? "var(--text)", fontFamily: "monospace", lineHeight: 1.1,
+      }}>
+        {value ?? "—"}
+      </div>
+      {sub && <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function CurrentEditionMetrics({ edition }) {
+  const total   = edition.total_bookings  ?? 0;
+  const paid    = edition.total_paid      ?? 0;
+  const unpaid  = edition.total_unpaid    ?? 0;
+  const canc    = edition.total_cancelled ?? 0;
+  const pending = edition.total_pending   ?? 0;
+  const dels    = edition.total_delegates ?? 0;
+  const sales   = edition.total_sales     ?? 0;
+  const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+        <MetricTile label="Total"     value={total} />
+        <MetricTile label="Paid"      value={paid}   color="#10b981" sub={`${paidPct}%`} />
+        <MetricTile label="Unpaid"    value={unpaid} color="#f59e0b" />
+        <MetricTile label="Cancelled" value={canc}   color="#ef4444" />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+        <MetricTile label="Pending"   value={pending} color="#6366f1" />
+        <MetricTile label="Delegates" value={dels} />
+        <MetricTile label="Revenue"   value={`$${Number(sales).toLocaleString("en-US", { maximumFractionDigits: 0 })}`} />
+      </div>
+      {total > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+          <div style={{ flex: 1, background: "var(--border)", borderRadius: 3, height: 5 }}>
+            <div style={{
+              width: `${paidPct}%`, height: "100%", borderRadius: 3,
+              background: paidPct >= 80 ? "#10b981" : paidPct >= 50 ? "#f59e0b" : "#ef4444",
+            }} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", minWidth: 44, textAlign: "right" }}>
+            {paidPct}% paid
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -164,13 +229,14 @@ function EditionCard({ edition, onClick }) {
 export function EventDetailDrawer({ eventId, onClose }) {
   const toast = useToast();
 
-  const [event,       setEvent]       = useState(null);
-  const [loading,     setLoading]     = useState(false);
-  const [historical,  setHistorical]  = useState([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [editions,    setEditions]    = useState([]);
-  const [edLoading,   setEdLoading]   = useState(false);
-  const [selectedEd,  setSelectedEd]  = useState(null);
+  const [event,          setEvent]          = useState(null);
+  const [loading,        setLoading]        = useState(false);
+  const [historical,     setHistorical]     = useState([]);
+  const [histLoading,    setHistLoading]    = useState(false);
+  const [currentEdition, setCurrentEdition] = useState(null);
+  const [editions,       setEditions]       = useState([]);
+  const [edLoading,      setEdLoading]      = useState(false);
+  const [selectedEd,     setSelectedEd]     = useState(null);
 
   // Load event details
   useEffect(() => {
@@ -192,17 +258,19 @@ export function EventDetailDrawer({ eventId, onClose }) {
       .finally(() => setHistLoading(false));
   }, [eventId]);
 
-  // Load edition bookings summary (invoice-date based, excludes current year)
+  // Load edition bookings summary (event-code based); split current vs past editions
   useEffect(() => {
-    if (!eventId) { setEditions([]); return; }
+    if (!eventId) { setEditions([]); setCurrentEdition(null); return; }
     setEdLoading(true);
     editionBookingsApi.getSummary(eventId)
       .then((data) => {
         const currentYear = event?.event_date ? new Date(event.event_date).getFullYear() : null;
         const all = data.editions ?? [];
+        const curr = currentYear ? (all.find((e) => e.year === currentYear) ?? null) : null;
+        setCurrentEdition(curr);
         setEditions(currentYear ? all.filter((e) => e.year !== currentYear) : all);
       })
-      .catch(() => setEditions([]))
+      .catch(() => { setEditions([]); setCurrentEdition(null); })
       .finally(() => setEdLoading(false));
   }, [eventId, event?.event_date]);
 
@@ -219,7 +287,7 @@ export function EventDetailDrawer({ eventId, onClose }) {
         subtitle={event ? `${event.name} · ${event.city}` : ""}
       >
         {loading ? (
-          <div style={{ color: "#94a3b8", fontSize: 12, textAlign: "center", padding: "20px" }}>
+          <div style={{ color: "var(--text-faint)", fontSize: 12, textAlign: "center", padding: "20px" }}>
             Loading…
           </div>
         ) : event ? (
@@ -251,35 +319,36 @@ export function EventDetailDrawer({ eventId, onClose }) {
               </InfoGrid>
             </InfoSection>
 
-            <InfoSection title="Bookings">
-              <InfoGrid>
-                <InfoItem label="Total Bookings"   value={String(event.total_bookings ?? "—")} mono />
-                <InfoItem label="Pending Bookings" value={String(event.pending_bookings ?? "—")} mono />
-              </InfoGrid>
+            <InfoSection title="Current Edition">
+              {edLoading ? (
+                <div style={{ color: "var(--text-faint)", fontSize: 11, padding: "6px 0" }}>Loading…</div>
+              ) : currentEdition ? (
+                <CurrentEditionMetrics edition={currentEdition} />
+              ) : (
+                <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "8px 0" }}>
+                  No bookings yet for the current edition.
+                </div>
+              )}
             </InfoSection>
 
-            {/* ── Past Event Editions ─────────────────────────────────── */}
-            <InfoSection title="Past Event Editions">
+            {/* ── Event Editions ──────────────────────────────────────── */}
+            <InfoSection title="Event Editions">
               {edLoading ? (
-                <div style={{ color: "#94a3b8", fontSize: 11, padding: "6px 0" }}>
+                <div style={{ color: "var(--text-faint)", fontSize: 11, padding: "6px 0" }}>
                   Loading editions…
                 </div>
               ) : editions.length === 0 ? (
-                <div style={{ color: "#94a3b8", fontSize: 12, padding: "8px 0" }}>
-                  No historical editions found for this event.
+                <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "8px 0" }}>
+                  No past editions found for this event.
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {editions.map((ed) => (
-                    <EditionCard
-                      key={ed.year}
-                      edition={ed}
-                      onClick={() => setSelectedEd(ed)}
-                    />
+                    <EditionCard key={ed.year} edition={ed} onClick={() => setSelectedEd(ed)} />
                   ))}
-                  <div style={{ marginTop: 4, fontSize: 10, color: "#94a3b8", display: "flex", justifyContent: "space-between" }}>
-                    <span>{editions.length} edition{editions.length !== 1 ? "s" : ""} · click any card for full booking detail</span>
-                    <span>Mapped via invoice date</span>
+                  <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-faint)", display: "flex", justifyContent: "space-between" }}>
+                    <span>{editions.length} past edition{editions.length !== 1 ? "s" : ""} · click any card for full booking detail</span>
+                    <span>Mapped via event code</span>
                   </div>
                 </div>
               )}
@@ -288,11 +357,11 @@ export function EventDetailDrawer({ eventId, onClose }) {
             {/* ── Historical Event Data (raw references) ──────────────── */}
             <InfoSection title="Historical Event Data">
               {histLoading ? (
-                <div style={{ color: "#94a3b8", fontSize: 11, padding: "6px 0" }}>
+                <div style={{ color: "var(--text-faint)", fontSize: 11, padding: "6px 0" }}>
                   Loading historical data…
                 </div>
               ) : historical.length === 0 ? (
-                <div style={{ color: "#94a3b8", fontSize: 12, padding: "8px 0" }}>
+                <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "8px 0" }}>
                   No historical references found for this event.
                 </div>
               ) : (
@@ -302,11 +371,11 @@ export function EventDetailDrawer({ eventId, onClose }) {
                     gridTemplateColumns: "60px 90px 1fr 90px 42px",
                     gap: 8,
                     padding: "0 10px 4px",
-                    borderBottom: "1px solid #e2e8f0",
+                    borderBottom: "1px solid var(--border)",
                     marginBottom: 2,
                   }}>
                     {["Year", "Month", "Location", "Source", "Conf."].map((h) => (
-                      <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <span key={h} style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                         {h}
                       </span>
                     ))}
@@ -315,10 +384,10 @@ export function EventDetailDrawer({ eventId, onClose }) {
                     <HistoricalRow key={rec.id} record={rec} />
                   ))}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, padding: "4px 2px" }}>
-                    <span style={{ fontSize: 10, color: "#94a3b8" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-faint)" }}>
                       {historical.length} record{historical.length !== 1 ? "s" : ""} · {verifiedCount} verified
                     </span>
-                    <span style={{ fontSize: 10, color: "#94a3b8" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-faint)" }}>
                       Source: Event Allocations PDFs (2023–2025)
                     </span>
                   </div>
@@ -332,15 +401,15 @@ export function EventDetailDrawer({ eventId, onClose }) {
                   {event.sales_executive && (
                     <div style={{
                       display: "flex", alignItems: "center", gap: 10,
-                      background: "rgba(64, 81, 137, 0.05)", border: "1px solid var(--vz-primary)",
+                      background: "rgba(64, 81, 137, 0.08)", border: "1px solid var(--accent)",
                       borderRadius: 8, padding: "10px 12px", position: "relative"
                     }}>
                       <Avatar name={event.sales_executive_name} size={30} />
                       <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--vz-primary)" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--accent)" }}>
                           {event.sales_executive_name}
                         </div>
-                        <div style={{ fontSize: 11, color: "#878a99" }}>
+                        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
                           Primary Executive
                         </div>
                       </div>
@@ -352,19 +421,19 @@ export function EventDetailDrawer({ eventId, onClose }) {
                   {event.assigned_sales_users?.filter(u => u.id !== event.sales_executive).map((u) => (
                     <div key={u.id} style={{
                       display: "flex", alignItems: "center", gap: 10,
-                      background: "#f8fafc", border: "1px solid #e2e8f0",
+                      background: "var(--surface-alt)", border: "1px solid var(--border)",
                       borderRadius: 8, padding: "10px 12px",
                     }}>
                       <Avatar name={u.full_name} size={30} />
                       <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 500, color: "#1e293b" }}>{u.full_name}</div>
-                        <div style={{ fontSize: 11, color: "#94a3b8" }}>Assigned Member</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text)" }}>{u.full_name}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Assigned Member</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ color: "#94a3b8", fontSize: 12, padding: "8px 0" }}>
+                <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "8px 0" }}>
                   No sales users assigned to this event.
                 </div>
               )}

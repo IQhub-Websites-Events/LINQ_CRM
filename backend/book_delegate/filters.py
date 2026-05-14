@@ -14,7 +14,7 @@ class BookDelegateFilter(django_filters.FilterSet):
     invoice_number = django_filters.CharFilter(field_name="invoice__invoice_number", lookup_expr="icontains")
     
     # Exact / Multiple
-    event_code     = django_filters.CharFilter(lookup_expr="iexact")
+    event_code     = django_filters.CharFilter(lookup_expr="icontains")
     attendance     = django_filters.ChoiceFilter(choices=BookDelegate.Attendance.choices)
     company        = django_filters.NumberFilter(field_name="company__id")
     company_name   = django_filters.CharFilter(field_name="invoice__company_name", lookup_expr="icontains")

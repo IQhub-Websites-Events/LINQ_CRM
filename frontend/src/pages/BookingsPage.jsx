@@ -2,15 +2,18 @@ import { useState, useCallback } from "react";
 import { BookingsTable } from "../components/bookings/BookingsTable";
 import { BookingsCardGrid } from "../components/bookings/BookingsCardGrid";
 import { FilterSidebar } from "../components/bookings/FilterSidebar";
+import { SmartImportModal } from "../components/bookings/SmartImportModal";
 import { invoicesApi } from "../api";
 import { useFetch } from "../hooks/useFetch";
 
 const STATUS_TABS = ["All", "Pending", "Paid"];
 
 export function BookingsPage({ navItem }) {
-  const [view, setView] = useState("table"); // "table" | "cards"
+  const [view,         setView]         = useState("table"); // "table" | "cards"
   const [statusFilter, setStatusFilter] = useState(navItem ? "" : "Pending");
-  const [period, setPeriod] = useState("total");
+  const [period,       setPeriod]       = useState("total");
+  const [importOpen,   setImportOpen]   = useState(false);
+  const [refreshKey,   setRefreshKey]   = useState(0);
 
   const { data: stats, loading: statsLoading } = useFetch(
     () => invoicesApi.stats(period),
@@ -73,7 +76,25 @@ export function BookingsPage({ navItem }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-
+          <button
+            onClick={() => setImportOpen(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "7px 16px", fontSize: 12, fontWeight: 600,
+              background: "var(--surface)", border: "1px solid var(--border)",
+              borderRadius: 8, cursor: "pointer", color: "var(--text-dim)",
+              fontFamily: "inherit", transition: "all 0.15s", flexShrink: 0,
+              alignSelf: "flex-start", marginTop: 6,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)";  e.currentTarget.style.color = "var(--text-dim)"; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6.5 1v8M3 6l3.5 3.5L10 6" />
+              <path d="M1 11h11" />
+            </svg>
+            Import Data
+          </button>
           <ViewToggle view={view} onChange={setView} />
         </div>
       </div>
@@ -85,17 +106,25 @@ export function BookingsPage({ navItem }) {
 
           <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
             {view === "table" ? (
-              <BookingsTable 
-                statusFilter={statusFilter} 
+              <BookingsTable
+                key={refreshKey}
+                statusFilter={statusFilter}
               />
             ) : (
-              <BookingsCardGrid 
-                statusFilter={statusFilter} 
+              <BookingsCardGrid
+                key={refreshKey}
+                statusFilter={statusFilter}
               />
             )}
           </div>
         </div>
       </div>
+
+      <SmartImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }

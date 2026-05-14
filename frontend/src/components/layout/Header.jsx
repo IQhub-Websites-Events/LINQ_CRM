@@ -8,7 +8,7 @@ export function Header({ onNavigate }) {
   const [results, setResults] = useState(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [syncLabel, setSyncLabel] = useState("Synced just now");
+
   const ref = useRef(null);
 
   // Search debounce
@@ -45,15 +45,7 @@ export function Header({ onNavigate }) {
     return () => document.removeEventListener("keydown", fn);
   }, []);
 
-  // Sync pill — fetch stats once
-  useEffect(() => {
-    searchApi.stats().then((s) => {
-      if (s?.last_sync) {
-        const mins = Math.round((Date.now() - new Date(s.last_sync)) / 60000);
-        setSyncLabel(mins < 1 ? "Synced just now" : `Synced ${mins}m ago`);
-      }
-    }).catch(() => { });
-  }, []);
+
 
   const jump = (screen, id) => { onNavigate(screen, id); setQ(""); setOpen(false); };
 
@@ -132,32 +124,6 @@ export function Header({ onNavigate }) {
 
       {/* Right cluster */}
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-        {/* Sync pill */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: "var(--success-soft)",
-          borderRadius: 999,
-          padding: "4px 10px",
-          fontSize: 11,
-          fontWeight: 500,
-          color: "var(--success)",
-        }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: "var(--success)",
-            boxShadow: "0 0 0 3px var(--success-soft)",
-          }} />
-          {syncLabel}
-        </div>
-
-        {/* Export ghost */}
-        <button style={ghostBtnStyle}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2 9v2h8V9M6 1v7M3.5 4.5L6 7l2.5-2.5" />
-          </svg>
-          Export
-        </button>
-
 
 
         {/* Theme toggle */}
@@ -274,20 +240,6 @@ const SRItem = ({ children, onClick }) => (
   </button>
 );
 
-const ghostBtnStyle = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 5,
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  color: "var(--text)",
-  padding: "6px 11px",
-  borderRadius: 7,
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
 
 const primaryBtnStyle = {
   display: "inline-flex",

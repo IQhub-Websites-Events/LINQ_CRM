@@ -89,8 +89,23 @@ else:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {
+                "timeout": 20,
+            }
         }
     }
+
+# ── SQLite Optimization (WAL Mode) ─────────────────────────────────────────────
+from django.db.backends.signals import connection_created
+from django.dispatch import receiver
+
+@receiver(connection_created)
+def set_sqlite_pragma(sender, connection, **kwargs):
+    if connection.vendor == "sqlite":
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+
 
 # ── Custom Auth ───────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
@@ -154,6 +169,16 @@ LOGGING = {
         "book_event": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+EMAIL_BACKEND   = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST      = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT      = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USE_TLS   = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL  = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+IMPORT_ALERT_EMAIL  = os.environ.get("IMPORT_ALERT_EMAIL", "harrison.peck@iq-hub.com")
 
 # ── Website Integration ───────────────────────────────────────────────────────
 WEBSITE_API_KEY     = os.environ.get("WEBSITE_API_KEY", "")

@@ -34,33 +34,33 @@ const STATUS_COLORS = {
 function MetricTile({ label, value, color, sub }) {
   return (
     <div style={{
-      background: color ? `${color}10` : "#f8fafc",
-      border: `1px solid ${color ? `${color}28` : "#e2e8f0"}`,
+      background: color ? `${color}12` : "var(--surface-alt)",
+      border: `1px solid ${color ? `${color}28` : "var(--border)"}`,
       borderRadius: 7,
       padding: "10px 12px",
     }}>
       <div style={{
-        fontSize: 9, color: "#94a3b8", fontWeight: 700,
+        fontSize: 9, color: "var(--text-faint)", fontWeight: 700,
         textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3,
       }}>
         {label}
       </div>
       <div style={{
         fontSize: 18, fontWeight: 800,
-        color: color ?? "#1e293b",
+        color: color ?? "var(--text)",
         fontFamily: "monospace", lineHeight: 1.1,
       }}>
         {value ?? "—"}
       </div>
       {sub && (
-        <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{sub}</div>
+        <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 2 }}>{sub}</div>
       )}
     </div>
   );
 }
 
 function BookingRow({ b }) {
-  const color = STATUS_COLORS[b.payment_status] ?? "#94a3b8";
+  const color = STATUS_COLORS[b.payment_status] ?? "var(--text-faint)";
   return (
     <div style={{
       display: "grid",
@@ -69,37 +69,37 @@ function BookingRow({ b }) {
       alignItems: "center",
       padding: "7px 8px",
       borderRadius: 5,
-      background: "#f8fafc",
-      border: "1px solid #e2e8f0",
+      background: "var(--surface)",
+      border: "1px solid var(--border)",
     }}>
       <div style={{ minWidth: 0 }}>
         <div style={{
-          fontSize: 11, fontWeight: 600, color: "#1e293b",
+          fontSize: 11, fontWeight: 600, color: "var(--text)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {b.company_name || b.contact_name || "—"}
         </div>
-        <div style={{ fontSize: 10, color: "#94a3b8", fontFamily: "monospace" }}>
+        <div style={{ fontSize: 10, color: "var(--text-faint)", fontFamily: "monospace" }}>
           {b.invoice_number} · {fmtDate(b.invoice_date)}
         </div>
       </div>
       <span style={{
         fontSize: 9, fontWeight: 700, color,
-        background: `${color}14`, border: `1px solid ${color}30`,
+        background: `${color}18`, border: `1px solid ${color}30`,
         borderRadius: 4, padding: "2px 5px", textAlign: "center",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {b.payment_status}
       </span>
       <span style={{
-        fontSize: 11, color: "#64748b",
+        fontSize: 11, color: "var(--text-dim)",
         textAlign: "right", fontFamily: "monospace",
       }}>
         {b.total_amount != null
           ? `${b.currency ?? ""} ${Number(b.total_amount).toLocaleString("en-US", { maximumFractionDigits: 0 })}`
           : "—"}
       </span>
-      <span style={{ fontSize: 10, color: "#94a3b8", textAlign: "right" }}>
+      <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "right" }}>
         {(b.actual_delegates ?? b.delegate_count ?? 0)}d
       </span>
     </div>
@@ -153,11 +153,11 @@ export function EditionBookingDrawer({ eventId, edition, onClose }) {
           <InfoItem label="Window End"   value={fmtDate(edition.window_end)} mono />
           <InfoItem label="Date Source"  value={edition.source ?? "—"} />
         </InfoGrid>
-        <p style={{ margin: "8px 0 0", fontSize: 10, color: "#94a3b8", lineHeight: 1.5 }}>
+        <p style={{ margin: "8px 0 0", fontSize: 10, color: "var(--text-faint)", lineHeight: 1.5 }}>
           Bookings are assigned to this edition when their{" "}
-          <strong style={{ color: "#64748b" }}>invoice date</strong> falls within
+          <strong style={{ color: "var(--text-dim)" }}>invoice date</strong> falls within
           the window above. If no invoice date exists, the{" "}
-          <strong style={{ color: "#64748b" }}>booking created date</strong> is used.
+          <strong style={{ color: "var(--text-dim)" }}>booking created date</strong> is used.
         </p>
       </InfoSection>
 
@@ -177,13 +177,13 @@ export function EditionBookingDrawer({ eventId, edition, onClose }) {
 
         {total > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
-            <div style={{ flex: 1, background: "#e2e8f0", borderRadius: 3, height: 5 }}>
+            <div style={{ flex: 1, background: "var(--border)", borderRadius: 3, height: 5 }}>
               <div style={{
                 width: `${paidPct}%`, height: "100%", borderRadius: 3,
                 background: paidPct >= 80 ? "#10b981" : paidPct >= 50 ? "#f59e0b" : "#ef4444",
               }} />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", minWidth: 44, textAlign: "right" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", minWidth: 44, textAlign: "right" }}>
               {paidPct}% paid
             </span>
           </div>
@@ -193,9 +193,9 @@ export function EditionBookingDrawer({ eventId, edition, onClose }) {
       {/* ── Section 3: Booking List ──────────────────────────────────── */}
       <InfoSection title={`Bookings (${loading ? "…" : bookingCount})`}>
         {loading ? (
-          <div style={{ color: "#94a3b8", fontSize: 11, padding: "6px 0" }}>Loading bookings…</div>
+          <div style={{ color: "var(--text-faint)", fontSize: 11, padding: "6px 0" }}>Loading bookings…</div>
         ) : bookings.length === 0 ? (
-          <div style={{ color: "#94a3b8", fontSize: 12, padding: "8px 0" }}>
+          <div style={{ color: "var(--text-faint)", fontSize: 12, padding: "8px 0" }}>
             No bookings assigned to this edition.
           </div>
         ) : (
@@ -205,12 +205,12 @@ export function EditionBookingDrawer({ eventId, edition, onClose }) {
               gridTemplateColumns: "1fr 100px 76px 38px",
               gap: 6,
               padding: "0 8px 5px",
-              borderBottom: "1px solid #e2e8f0",
+              borderBottom: "1px solid var(--border)",
               marginBottom: 4,
             }}>
               {["Company / Invoice", "Status", "Amount", "Dels"].map((h) => (
                 <span key={h} style={{
-                  fontSize: 9, fontWeight: 700, color: "#94a3b8",
+                  fontSize: 9, fontWeight: 700, color: "var(--text-faint)",
                   textTransform: "uppercase", letterSpacing: "0.05em",
                 }}>
                   {h}
@@ -226,7 +226,7 @@ export function EditionBookingDrawer({ eventId, edition, onClose }) {
               ))}
             </div>
             <div style={{
-              marginTop: 6, fontSize: 10, color: "#94a3b8",
+              marginTop: 6, fontSize: 10, color: "var(--text-faint)",
               display: "flex", justifyContent: "space-between",
             }}>
               <span>

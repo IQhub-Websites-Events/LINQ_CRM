@@ -30,4 +30,7 @@ export const invoicesApi = {
 
   webhookLogs: (params) =>
     client.get("invoices/webhook_logs/", { params }).then((r) => r.data),
+
+  bulkImport: (payload) =>
+    client.post("invoices/bulk_import/", payload).then((r) => r.data),
 };

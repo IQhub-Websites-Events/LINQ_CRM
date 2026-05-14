@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { eventsApi, usersApi, teamsApi } from "../api";
+import { eventsApi, usersApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -23,7 +23,6 @@ export function EventsPage() {
   const [modal,  setModal]      = useState(null);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
-  const [teams, setTeams] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "desc");
 
   // ── Infinite scroll state ────────────────────────────────────────────────
@@ -85,13 +84,9 @@ export function EventsPage() {
   // After create/update/delete — reload from scratch
   const refetch = () => { setPage(1); setItems([]); };
 
-  // Fetch sales users for dropdown
-  useFetch(() => isAdmin ? usersApi.list({ role: "sales", page_size: 200 }) : Promise.resolve(null), [isAdmin], {
+  // Fetch all users for dropdown — sales exec (by ID) and team name fields (by full_name)
+  useFetch(() => usersApi.list({ page_size: 200 }), [], {
     onSuccess: (r) => setSalesUsers(r?.results || []),
-  });
-
-  useFetch(() => teamsApi.list({ page_size: 200 }), [], {
-    onSuccess: (r) => setTeams(r?.results || r || []),
   });
 
   const openCreate = () => setModal({ mode: "create", data: { 
@@ -308,7 +303,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.speaker_sales_team || ""} 
                   onChange={(v) => setField("speaker_sales_team", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -319,7 +314,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.spex_team || ""} 
                   onChange={(v) => setField("spex_team", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -327,7 +322,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.tele_marketing_team || ""} 
                   onChange={(v) => setField("tele_marketing_team", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -338,7 +333,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.market_research_team || ""} 
                   onChange={(v) => setField("market_research_team", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -346,7 +341,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.content_check || ""} 
                   onChange={(v) => setField("content_check", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -357,7 +352,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.marketing_check || ""} 
                   onChange={(v) => setField("marketing_check", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -365,7 +360,7 @@ export function EventsPage() {
                 <Select 
                   value={modal.data.sales_check || ""} 
                   onChange={(v) => setField("sales_check", v)}
-                  options={teams.map(t => ({ label: t.name, value: t.name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
