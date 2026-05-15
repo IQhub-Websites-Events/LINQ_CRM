@@ -86,3 +86,8 @@ frontend/*.log
 Thumbs.db
 ehthumbs.db
 desktop.ini
+
+
+backend/db.sqlite3
+backend/db.sqlite3-shm
+backend/db.sqlite3-wal
