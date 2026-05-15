@@ -144,12 +144,38 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const handleUpdate = async () => {
     setSaving(true);
     try {
-      await invoicesApi.update(form.id, form);
+      // Sanitize payload: convert empty strings to null for date fields
+      const payload = {
+        ...form,
+        request_date: form.request_date || null,
+        invoice_date: form.invoice_date || null,
+        payment_date: form.payment_date || null,
+        delegates: form.delegates.map(d => ({
+          ...d,
+          delegate_payment_date: d.delegate_payment_date || null,
+        })),
+      };
+      await invoicesApi.update(form.id, payload);
       toast.success("Booking updated");
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to update booking");
+      console.error("Update Error:", err.response?.data);
+      const data = err.response?.data;
+      let msg = "Failed to update booking";
+      
+      if (data) {
+        if (typeof data === "string") msg = data;
+        else if (data.detail) msg = data.detail;
+        else if (data.delegates) {
+          msg = Array.isArray(data.delegates) ? data.delegates[0] : (typeof data.delegates === "string" ? data.delegates : "Check delegate data");
+        } else {
+          // Flatten other field errors
+          const firstErr = Object.values(data)[0];
+          msg = Array.isArray(firstErr) ? firstErr[0] : String(firstErr);
+        }
+      }
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -391,8 +417,8 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             <td key={c.key} style={{ ...tdCell, textAlign: "center" }}>
               <input
                 type="checkbox"
-                checked={delegate[c.key] === "Attended"}
-                onChange={e => onChange(c.key, e.target.checked ? "Attended" : "Pending")}
+                checked={delegate[c.key] === "Confirmed"}
+                onChange={e => onChange(c.key, e.target.checked ? "Confirmed" : "Pending")}
                 style={{ width: 14, height: 14, cursor: "pointer", accentColor: "var(--accent)" }}
               />
             </td>

@@ -101,10 +101,12 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
             .distinct()
         )
 
-        # Also include events with bookings from 2+ distinct years
-        multi_year_codes = set()
+        # Also include events with bookings from 2+ distinct years.
+        # Raw booking codes carry a year suffix (e.g. 'SPU - VV26'); strip it
+        # so we group by the canonical base code that matches Event.event_code.
+        from historical_event_registry.utils import normalize_event_code as _norm
         from django.db.models import Count as _Count
-        multi = (
+        multi_raw = (
             BookEvent.objects.exclude(event_date__isnull=True)
             .annotate(yr=ExtractYear("event_date"))
             .values("event_code")
@@ -112,13 +114,13 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
             .filter(year_count__gte=2)
             .values_list("event_code", flat=True)
         )
-        multi_year_codes.update(multi)
+        multi_year_codes = {_norm(c) for c in multi_raw if _norm(c)}
 
         all_codes = hist_codes | multi_year_codes
         if not all_codes:
             return Response([])
 
-        # Build event map: code → Event instance
+        # Build event map: normalized base code → Event instance
         event_map = {e.event_code: e for e in self.get_queryset().filter(event_code__in=all_codes)}
 
         results = []

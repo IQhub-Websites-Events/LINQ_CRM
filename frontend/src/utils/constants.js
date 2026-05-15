@@ -1,8 +1,11 @@
 export const PAYMENT_STATUSES = [
   "Pending",
   "Paid",
+  "Unpaid",
+  "Partial",
   "Cancelled",
   "Refunded",
+  "Free",
   "Credit Pending (Free)",
   "Credit Pending (Paid)",
   "Credit Transferred",
@@ -12,17 +15,37 @@ export const PAYMENT_STATUSES = [
 export const PAYMENT_TYPES = [
   "Stripe",
   "Bank",
+  "Bank Transfer",
+  "Credit Card",
+  "Cash",
+  "Complimentary",
+  "Manual",
+  "Invoice",
+  "Wire Transfer",
 ];
 
 export const TICKET_TIERS = [
-  "SEB",
-  "EB",
-  "Regular",
+  "Standard",
+  "VIP",
+  "Speaker",
+  "Sponsor",
+  "Delegate",
+  "Complimentary",
+  "Student",
+  "Media",
+  "Partner",
+];
+
+export const ATTENDANCE_STATUSES = [
+  "Pending",
+  "Confirmed",
+  "No-show",
+  "Cancelled",
 ];
 
 export const PAID_OR_FREE = ["Paid", "Free"];
 
-export const CURRENCIES = ["USD", "GBP", "EUR", "AED", "SGD", "INR"];
+export const CURRENCIES = ["USD", "GBP", "EUR", "AED", "SGD", "INR", "OTHER"];
 export const USER_ROLES = ["admin", "sales"];
 export const EVENT_STATUSES = ["Draft", "Upcoming", "Live", "Completed", "Cancelled"];
 

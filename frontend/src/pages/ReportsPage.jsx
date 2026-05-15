@@ -95,16 +95,20 @@ export function ReportsPage() {
 // ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
 
 function OverviewTab() {
-  const [sources, setSources] = useState([]);
-  const [loadingSrc, setLSrc] = useState(true);
   const [period, setPeriod] = useState("total");
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
   const { user } = useAuth();
   const toast = useToast();
 
-  const { data: stats, loading: loadingStats } = useFetch(
-    () => invoicesApi.stats(period),
-    [period]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingStats(true);
+    invoicesApi.stats(period)
+      .then((data) => { if (!cancelled) { setStats(data); setLoadingStats(false); } })
+      .catch(() => { if (!cancelled) setLoadingStats(false); });
+    return () => { cancelled = true; };
+  }, [period]);
 
   const { data: dashStats, loading: loadingDash } = useFetch(
     () => searchApi.stats(),

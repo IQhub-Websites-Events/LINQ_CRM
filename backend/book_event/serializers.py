@@ -261,6 +261,10 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
                     "NESTED UPDATE invoice %s: %d created, %d updated, %d removed",
                     instance.invoice_number, created_count, updated_count, len(removed_ids),
                 )
+                
+                # Ensure all delegates (old and new) match the parent invoice's event_code
+                instance.delegates.all().update(event_code=instance.event_code)
+                
                 instance.delegate_count = instance.delegates.count()
                 instance.save(update_fields=["delegate_count"])
 

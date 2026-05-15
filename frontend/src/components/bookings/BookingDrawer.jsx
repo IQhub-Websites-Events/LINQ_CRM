@@ -52,7 +52,18 @@ export function BookingDrawer({ invId, onClose, onSaved }) {
       await onSaved();
       toast.success(`${invoice.invoice_number} updated`);
     } catch (err) {
-      toast.error(err.response?.data?.payment_date?.[0] || "Save failed");
+      console.error("Payment Update Error:", err.response?.data);
+      const data = err.response?.data;
+      let msg = "Save failed";
+      if (data) {
+        if (typeof data === "string") msg = data;
+        else if (data.detail) msg = data.detail;
+        else {
+          const firstErr = Object.values(data)[0];
+          msg = Array.isArray(firstErr) ? firstErr[0] : String(firstErr);
+        }
+      }
+      toast.error(msg);
     } finally { setSaving(false); }
   };
 

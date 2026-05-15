@@ -330,9 +330,10 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     onChange={(e) => handleColFilter("attendance", e.target.value)}
                   >
                     <option value="">All</option>
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
                     <option value="Pending">Pending</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="No-show">No-show</option>
+                    <option value="Cancelled">Cancelled</option>
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
@@ -544,9 +545,9 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
       </td>
 
       <td style={{ ...cell, textAlign: "center" }}>
-        {delegate.attendance === "Attended"
+        {delegate.attendance === "Confirmed"
           ? <span style={{ fontSize: 11, fontWeight: 600, color: "var(--success, #16a34a)" }}>Yes</span>
-          : <span style={{ fontSize: 11, color: "var(--text-faint)" }}>No</span>}
+          : <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{delegate.attendance === "Pending" ? "—" : "No"}</span>}
       </td>
 
       <td style={cell}>

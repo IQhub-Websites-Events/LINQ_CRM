@@ -2,37 +2,37 @@ import re
 
 
 def normalize_event_code(code: str) -> str:
-    """'DDU - PT' → 'DDU'. Used for HistoricalEventReference lookups."""
+    """
+    'SPU - VV26' → 'SPU - VV'. Strips trailing year digits to get the base event code.
+    The last 2 or 4 digits of a booking event_code represent the year;
+    everything before them is the event identifier used on the Event record.
+    """
     if not code:
         return ""
-    code = code.strip()
-    if " - " in code:
-        code = code.split(" - ")[0].strip()
-    code = code.upper()
-    code = re.sub(r"[^A-Z0-9]", "", code)
+    code = code.strip().upper()
+    # Remove any trailing run of digits (the year suffix: e.g. '26', '2026')
+    code = re.sub(r"\d+$", "", code).strip()
     return code
 
 
 def booking_code_regex(base_code: str, year: int = None) -> str:
     """
-    Returns a regex matching all booking event_code variants for a base code.
+    Returns a regex matching all booking event_code variants for a normalized base code.
 
-    Booking codes are stored in several formats:
-      - exact base:        'HDU'
-      - base + year:       'HDU25', 'HDU2025'
-      - base + suffix:     'HDU - VV'
-      - base + suffix+yr:  'HDU - VV26', 'HDU - VV2026'
+    base_code is already year-stripped (e.g. 'SPU - VV', 'HDU').
+    Booking codes are stored as:
+      - exact base:    'SPU - VV'  or  'HDU'
+      - base + year:   'SPU - VV26', 'SPU - VV2026'
 
-    If `year` is provided (e.g. 2025), it strictly limits the suffix to '25' or '2025'.
-    Example: booking_code_regex('HDU', 2025) matches 'HDU25' and 'HDU - VV2025'.
+    If `year` is provided, restricts to that specific year's 2-digit or 4-digit suffix.
+    Example: booking_code_regex('SPU - VV', 2026) matches 'SPU - VV26' and 'SPU - VV2026'.
     """
     escaped = re.escape(base_code.strip().upper())
-    
+
     if year:
-        # Match exactly the 2-digit or 4-digit year representation
         yr2 = str(year)[-2:]
         yr4 = str(year)
-        return rf"^{escaped}(\s*-\s*[A-Za-z/]+\s*)?({yr2}|{yr4})$"
-        
-    # Optional " - LETTERS" suffix followed by optional 2-4 digit year
-    return rf"^{escaped}(\s*-\s*[A-Za-z/]+\s*)?\d{{0,4}}$"
+        return rf"^{escaped}\s*({yr2}|{yr4})$"
+
+    # No year filter — match the exact base or base + any trailing digits
+    return rf"^{escaped}\s*\d{{0,4}}$"

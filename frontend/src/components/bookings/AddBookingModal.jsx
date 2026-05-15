@@ -84,12 +84,33 @@ export function AddBookingModal({ onClose, onSaved }) {
     if (!d0.email.trim()) { toast.error("First delegate email is required"); return; }
     setSaving(true);
     try {
-      await invoicesApi.create(form);
+      // Sanitize payload: convert empty strings to null for date fields
+      const payload = {
+        ...form,
+        request_date: form.request_date || null,
+        invoice_date: form.invoice_date || null,
+        delegates: form.delegates.map(d => ({
+          ...d,
+          delegate_payment_date: d.delegate_payment_date || null,
+        })),
+      };
+      await invoicesApi.create(payload);
       toast.success("Booking created");
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to create booking");
+      console.error("Create Error:", err.response?.data);
+      const data = err.response?.data;
+      let msg = "Failed to create booking";
+      if (data) {
+        if (typeof data === "string") msg = data;
+        else if (data.detail) msg = data.detail;
+        else {
+          const firstErr = Object.values(data)[0];
+          msg = Array.isArray(firstErr) ? firstErr[0] : String(firstErr);
+        }
+      }
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
@@ -276,8 +297,8 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             <td key={c.key} style={{ ...tdCell, textAlign: "center" }}>
               <input
                 type="checkbox"
-                checked={delegate[c.key] === "Attended"}
-                onChange={e => onChange(c.key, e.target.checked ? "Attended" : "Pending")}
+                checked={delegate[c.key] === "Confirmed"}
+                onChange={e => onChange(c.key, e.target.checked ? "Confirmed" : "Pending")}
                 style={{ width: 14, height: 14, cursor: "pointer", accentColor: "var(--accent)" }}
               />
             </td>
