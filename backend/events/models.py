@@ -34,6 +34,7 @@ class Event(models.Model):
     expected_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0.00)
 
     # ── New fields from Events.csv ──────────────────────────────────────────
+    master_code            = models.CharField(max_length=50, blank=True, default="", db_index=True)
     official_name          = models.CharField(max_length=255, blank=True, default="")
     speaker_sales_team     = models.CharField(max_length=255, blank=True, default="")
     spex_team              = models.CharField(max_length=255, blank=True, default="")

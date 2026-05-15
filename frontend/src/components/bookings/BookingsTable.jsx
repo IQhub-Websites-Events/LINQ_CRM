@@ -597,7 +597,7 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.delegate_count ?? 1}</span>
       </td>
       <td style={cell}>
-        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.discount ? fmt.currency(delegate.discount) : "—"}</span>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.discount != null ? `${Math.round(delegate.discount)}%` : "—"}</span>
       </td>
       <td style={cell}>
         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.add_ons || "—"}</span>

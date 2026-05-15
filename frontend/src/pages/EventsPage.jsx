@@ -8,12 +8,20 @@ import { EventStatusBadge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { Input, Select, FormField } from "../components/ui/Input";
-import { useFetch } from "../hooks/useFetch";
 import { useSort } from "../hooks/useSort";
 import { fmt } from "../utils/helpers";
 import { EVENT_STATUSES } from "../utils/constants";
 
 const PAGE_SIZE = 50;
+
+// Resolve a stored field value (may be a user ID or a legacy display name) to an ID string.
+function resolveNameToId(val, users) {
+  if (!val) return "";
+  const asId = parseInt(val);
+  if (!isNaN(asId) && users.some(u => u.id === asId)) return String(asId);
+  const byName = users.find(u => u.full_name === val || u.username === val);
+  return byName ? String(byName.id) : "";
+}
 
 export function EventsPage() {
   const toast = useToast();
@@ -85,9 +93,9 @@ export function EventsPage() {
   const refetch = () => { setPage(1); setItems([]); };
 
   // Fetch all users for dropdown — sales exec (by ID) and team name fields (by full_name)
-  useFetch(() => usersApi.list({ page_size: 500 }), [], {
-    onSuccess: (r) => setAllUsers(r?.results || []),
-  });
+  useEffect(() => {
+    usersApi.list({ page_size: 500 }).then(r => setAllUsers(r?.results || [])).catch(() => {});
+  }, []);
 
   const salesUsers        = allUsers.filter(u => u.role === "sales");
   const speakerSalesUsers = allUsers.filter(u => u.role === "speaker_sales");
@@ -109,13 +117,31 @@ export function EventsPage() {
 
   const openEdit = (ev) => {
     const data = { ...ev };
-    // Convert stored display names back to user IDs so dropdowns pre-select correctly
-    TEAM_FIELDS.forEach(field => {
-      if (data[field]) {
-        const user = allUsers.find(u => u.full_name === data[field]);
-        if (user) data[field] = String(user.id);
-      }
+    const assigned = ev.assigned_sales_users || [];
+
+    // Pre-populate role-specific dropdowns from the M2M assigned_sales_users (most reliable)
+    const roleToField = {
+      speaker_sales:   "speaker_sales_team",
+      spex:            "spex_team",
+      telemarketing:   "tele_marketing_team",
+      market_research: "market_research_team",
+    };
+    Object.values(roleToField).forEach(f => { data[f] = ""; });
+    assigned.forEach(u => {
+      const field = roleToField[u.role];
+      if (field && !data[field]) data[field] = String(u.id);
     });
+
+    // sales_check: a sales-role user who isn't the sales_executive
+    const salesExecId = data.sales_executive ? parseInt(data.sales_executive) : null;
+    const salesCheckUser = assigned.find(u => u.role === "sales" && u.id !== salesExecId);
+    data.sales_check = salesCheckUser ? String(salesCheckUser.id) : resolveNameToId(data.sales_check, allUsers);
+
+    // content_check / marketing_check — no specific role, fall back to stored value
+    ["content_check", "marketing_check"].forEach(field => {
+      data[field] = resolveNameToId(data[field], allUsers);
+    });
+
     setModal({ mode: "edit", data });
   };
 

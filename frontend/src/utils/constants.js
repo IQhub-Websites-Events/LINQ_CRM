@@ -38,6 +38,7 @@ export const ATTENDANCE_STATUSES = [
 ];
 
 export const PAID_OR_FREE = ["Paid", "Free"];
+export const DISCOUNT_OPTIONS = ["0%", "10%", "20%", "25%", "30%", "50%"];
 
 export const CURRENCIES = ["USD", "GBP", "EUR", "AED", "SGD", "INR", "OTHER"];
 export const USER_ROLES = ["admin", "sales"];

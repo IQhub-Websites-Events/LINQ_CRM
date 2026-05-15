@@ -6,7 +6,7 @@ import { Avatar } from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import { SourceBadge } from "../ui/SourceBadge";
 import { fmt } from "../../utils/helpers";
-import { PAYMENT_STATUSES, PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE } from "../../utils/constants";
+import { PAYMENT_STATUSES, PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE, DISCOUNT_OPTIONS } from "../../utils/constants";
 
 const BOOKING_CODES = [
   "", "Speaker", "Delegate", "Group Pass", "SPP", "SPP / Group Pass",
@@ -34,8 +34,8 @@ const COLS = [
   { key: "delegate_payment_type",    label: "Pay Type",       width: 130, type: "select", options: ["", ...PAYMENT_TYPES] },
   { key: "delegate_ticket_tier",     label: "Ticket Tier",    width: 120, type: "select", options: ["", ...TICKET_TIERS] },
   { key: "attendance",               label: "Attendance",     width: 80,  type: "checkbox" },
-  { key: "delegate_count",           label: "Count (0/1)",    width: 80,  type: "number" },
-  { key: "discount",                 label: "Discount",       width: 100, type: "number" },
+  { key: "delegate_count",           label: "Count (0/1)",    width: 80,  type: "select", options: ["0", "1"] },
+  { key: "discount",                 label: "Discount",       width: 100, type: "select", options: DISCOUNT_OPTIONS },
   { key: "add_ons",                  label: "Add-ons",        width: 180 },
   { key: "reference",                label: "Reference",      width: 180 },
 ];
@@ -427,6 +427,33 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             </td>
           );
         }
+        if (c.key === "delegate_count") {
+          const isCancelled = delegate.delegate_payment_status === "Cancelled";
+          const currentVal = isCancelled ? 0 : (delegate[c.key] ?? 1);
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect 
+                value={String(currentVal)} 
+                disabled={isCancelled}
+                onChange={v => onChange(c.key, parseInt(v))} 
+                options={["0", "1"]} 
+              />
+            </td>
+          );
+        }
+        if (c.key === "discount") {
+          const raw = delegate[c.key] != null ? parseFloat(delegate[c.key]) : 0;
+          const val = `${Math.round(raw)}%`;
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect 
+                value={DISCOUNT_OPTIONS.includes(val) ? val : "0%"} 
+                onChange={v => onChange(c.key, parseFloat(v.replace("%", "")))} 
+                options={DISCOUNT_OPTIONS} 
+              />
+            </td>
+          );
+        }
         if (c.type === "checkbox") {
           return (
             <td key={c.key} style={{ ...tdCell, textAlign: "center" }}>
@@ -477,20 +504,6 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
                 value={delegate[c.key] ?? ""} 
                 inheritedValue={invoiceCtx.payment_date} 
                 onChange={v => onChange(c.key, v)} 
-              />
-            </td>
-          );
-        }
-        if (c.key === "delegate_count") {
-          const isCancelled = delegate.delegate_payment_status === "Cancelled";
-          const currentVal = isCancelled ? 0 : (delegate[c.key] ?? 1);
-          return (
-            <td key={c.key} style={tdCell}>
-              <CellSelect 
-                value={String(currentVal)} 
-                disabled={isCancelled}
-                onChange={v => onChange(c.key, parseInt(v))} 
-                options={["0", "1"]} 
               />
             </td>
           );
