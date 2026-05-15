@@ -25,15 +25,9 @@ export const PAYMENT_TYPES = [
 ];
 
 export const TICKET_TIERS = [
-  "Standard",
-  "VIP",
-  "Speaker",
-  "Sponsor",
-  "Delegate",
-  "Complimentary",
-  "Student",
-  "Media",
-  "Partner",
+  "SEB",
+  "EB",
+  "Regular",
 ];
 
 export const ATTENDANCE_STATUSES = [

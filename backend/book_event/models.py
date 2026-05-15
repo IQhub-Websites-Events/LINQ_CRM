@@ -44,15 +44,9 @@ class BookEvent(models.Model):
         FREE = "Free", "Free"
 
     class TicketTier(models.TextChoices):
-        STANDARD      = "Standard",      "Standard"
-        VIP           = "VIP",           "VIP"
-        SPEAKER       = "Speaker",       "Speaker"
-        SPONSOR       = "Sponsor",       "Sponsor"
-        DELEGATE      = "Delegate",      "Delegate"
-        COMPLIMENTARY = "Complimentary", "Complimentary"
-        STUDENT       = "Student",       "Student"
-        MEDIA         = "Media",         "Media"
-        PARTNER       = "Partner",       "Partner"
+        SEB     = "SEB",     "SEB"
+        EB      = "EB",      "EB"
+        REGULAR = "Regular", "Regular"
 
     class Currency(models.TextChoices):
         USD   = "USD",   "USD"
