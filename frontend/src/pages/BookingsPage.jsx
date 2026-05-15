@@ -5,6 +5,8 @@ import { FilterSidebar } from "../components/bookings/FilterSidebar";
 import { SmartImportModal } from "../components/bookings/SmartImportModal";
 import { invoicesApi } from "../api";
 import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../contexts/AuthContext";
+import { useToast } from "../contexts/ToastContext";
 
 const STATUS_TABS = ["All", "Pending", "Paid"];
 
@@ -15,6 +17,9 @@ export function BookingsPage({ navItem }) {
   const [importOpen,   setImportOpen]   = useState(false);
   const [refreshKey,   setRefreshKey]   = useState(0);
 
+  const { user } = useAuth();
+  const toast = useToast();
+
   const { data: stats, loading: statsLoading } = useFetch(
     () => invoicesApi.stats(period),
     [period]
@@ -23,6 +28,18 @@ export function BookingsPage({ navItem }) {
   const handleClearFilters = useCallback(() => {
     setStatusFilter("");
   }, []);
+
+  const handleClearAll = async () => {
+    if (!window.confirm("WARNING: This will delete ALL bookings and related data from the database. This action cannot be undone. Are you sure you want to proceed?")) return;
+    
+    try {
+      await invoicesApi.clearAll();
+      toast.success("Successfully cleared all booking data.");
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to clear booking data.");
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
@@ -76,6 +93,26 @@ export function BookingsPage({ navItem }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {user?.username === 'admin' && (
+            <button
+              onClick={handleClearAll}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 16px", fontSize: 12, fontWeight: 600,
+                background: "var(--danger-soft)", border: "1px solid var(--danger)",
+                borderRadius: 8, cursor: "pointer", color: "var(--danger)",
+                fontFamily: "inherit", transition: "all 0.15s", flexShrink: 0,
+                alignSelf: "flex-start", marginTop: 6,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-soft)";  e.currentTarget.style.color = "var(--danger)"; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+              </svg>
+              Clear All Data
+            </button>
+          )}
           <button
             onClick={() => setImportOpen(true)}
             style={{
@@ -104,15 +141,13 @@ export function BookingsPage({ navItem }) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
           <FilterStrip statusFilter={statusFilter} onStatusChange={(s) => setStatusFilter(s)} />
 
-          <div style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
+          <div key={refreshKey} style={{ flex: 1, minHeight: 0, padding: "0 28px 28px" }}>
             {view === "table" ? (
               <BookingsTable
-                key={refreshKey}
                 statusFilter={statusFilter}
               />
             ) : (
               <BookingsCardGrid
-                key={refreshKey}
                 statusFilter={statusFilter}
               />
             )}

@@ -33,4 +33,7 @@ export const invoicesApi = {
 
   bulkImport: (payload) =>
     client.post("invoices/bulk_import/", payload).then((r) => r.data),
+
+  clearAll: () =>
+    client.delete("invoices/clear_all/").then((r) => r.data),
 };

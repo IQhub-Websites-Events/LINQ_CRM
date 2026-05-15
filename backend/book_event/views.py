@@ -105,6 +105,28 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             "ticket_tier":    invoice.ticket_tier,
         })
 
+    @action(detail=False, methods=["delete"], url_path="clear_all")
+    def clear_all(self, request):
+        """DELETE /api/invoices/clear_all/ — restricted to 'admin' username"""
+        if request.user.username != 'admin':
+            return Response({"detail": "Only the administrator can clear all bookings."}, status=status.HTTP_403_FORBIDDEN)
+            
+        from book_delegate.models import BookDelegate
+        from historical_event_registry.models import HistoricalEventReference, EventEditionMetrics
+        from .models import SyncLog
+        
+        try:
+            with transaction.atomic():
+                BookDelegate.objects.all().delete()
+                BookEvent.objects.all().delete()
+                WebhookLog.objects.all().delete()
+                SyncLog.objects.all().delete()
+                HistoricalEventReference.objects.all().delete()
+                EventEditionMetrics.objects.all().delete()
+            return Response({"detail": "Successfully removed all booking module data."})
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=["get"])
     def pending(self, request):
         """GET /api/invoices/pending/ — shortcut for pending invoices."""
