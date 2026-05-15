@@ -221,6 +221,10 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <Th style={{ minWidth: 80 }}>Paid/Free</Th>
                 <Th style={{ minWidth: 110 }}>Ticket Tier</Th>
                 <Th style={{ minWidth: 120 }}>Pay Type</Th>
+                <Th style={{ minWidth: 80 }}>Count</Th>
+                <Th style={{ minWidth: 100 }}>Discount</Th>
+                <Th style={{ minWidth: 150 }}>Add-ons</Th>
+                <Th style={{ minWidth: 150 }}>Reference</Th>
               </tr>
               {/* Filter Row */}
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
@@ -374,6 +378,10 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     {PAYMENT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </td>
+                <td style={{ padding: "4px 14px" }}></td>
+                <td style={{ padding: "4px 14px" }}></td>
+                <td style={{ padding: "4px 14px" }}></td>
+                <td style={{ padding: "4px 14px" }}></td>
               </tr>
             </thead>
             <tbody>
@@ -585,7 +593,18 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
           {delegate.effective_payment_type || "—"}
         </span>
       </td>
-
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.delegate_count ?? 1}</span>
+      </td>
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.discount ? fmt.currency(delegate.discount) : "—"}</span>
+      </td>
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.add_ons || "—"}</span>
+      </td>
+      <td style={cell}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{delegate.reference || "—"}</span>
+      </td>
     </tr>
   );
 });

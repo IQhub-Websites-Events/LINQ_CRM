@@ -22,7 +22,7 @@ export function EventsPage() {
   const [status, setStatus]     = useState("");
   const [modal,  setModal]      = useState(null);
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [salesUsers, setSalesUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "desc");
 
   // ── Infinite scroll state ────────────────────────────────────────────────
@@ -85,23 +85,61 @@ export function EventsPage() {
   const refetch = () => { setPage(1); setItems([]); };
 
   // Fetch all users for dropdown — sales exec (by ID) and team name fields (by full_name)
-  useFetch(() => usersApi.list({ page_size: 200 }), [], {
-    onSuccess: (r) => setSalesUsers(r?.results || []),
+  useFetch(() => usersApi.list({ page_size: 500 }), [], {
+    onSuccess: (r) => setAllUsers(r?.results || []),
   });
 
-  const openCreate = () => setModal({ mode: "create", data: { 
+  const salesUsers        = allUsers.filter(u => u.role === "sales");
+  const speakerSalesUsers = allUsers.filter(u => u.role === "speaker_sales");
+  const spexUsers         = allUsers.filter(u => u.role === "spex");
+  const telemarketUsers   = allUsers.filter(u => u.role === "telemarketing");
+  const marketResUsers    = allUsers.filter(u => u.role === "market_research");
+
+  const TEAM_FIELDS = [
+    "speaker_sales_team", "spex_team", "tele_marketing_team",
+    "market_research_team", "content_check", "marketing_check", "sales_check",
+  ];
+
+  const openCreate = () => setModal({ mode: "create", data: {
     event_code: "", name: "", official_name: "", city: "", country: "",
     venue: "", event_date: "", end_date: "", sales_executive: null,
     speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
     content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
   } });
-  const openEdit   = (ev) => setModal({ mode: "edit", data: { ...ev } });
+
+  const openEdit = (ev) => {
+    const data = { ...ev };
+    // Convert stored display names back to user IDs so dropdowns pre-select correctly
+    TEAM_FIELDS.forEach(field => {
+      if (data[field]) {
+        const user = allUsers.find(u => u.full_name === data[field]);
+        if (user) data[field] = String(user.id);
+      }
+    });
+    setModal({ mode: "edit", data });
+  };
+
   const closeModal = () => setModal(null);
 
   const save = async () => {
     try {
-      if (modal.mode === "create") await eventsApi.create(modal.data);
-      else await eventsApi.update(modal.data.id, modal.data);
+      const payload = { ...modal.data };
+      // Build assigned_user_ids from all team dropdowns + sales_executive
+      const assignedIds = [];
+      if (payload.sales_executive) assignedIds.push(parseInt(payload.sales_executive));
+      TEAM_FIELDS.forEach(field => {
+        const id = parseInt(payload[field]);
+        if (!isNaN(id)) {
+          assignedIds.push(id);
+          // Replace ID with display name for storage in the text field
+          const user = allUsers.find(u => u.id === id);
+          if (user) payload[field] = user.full_name;
+        }
+      });
+      payload.assigned_user_ids = assignedIds;
+
+      if (modal.mode === "create") await eventsApi.create(payload);
+      else await eventsApi.update(modal.data.id, payload);
       toast.success(modal.mode === "create" ? "Event created" : "Event updated");
       closeModal(); refetch();
     } catch (err) {
@@ -292,18 +330,18 @@ export function EventsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Sales Executive">
-                <Select 
-                  value={modal.data.sales_executive ? String(modal.data.sales_executive) : ""} 
+                <Select
+                  value={modal.data.sales_executive ? String(modal.data.sales_executive) : ""}
                   onChange={(v) => setField("sales_executive", v || null)}
                   options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
               <FormField label="Speaker Sales Team">
-                <Select 
-                  value={modal.data.speaker_sales_team || ""} 
+                <Select
+                  value={modal.data.speaker_sales_team || ""}
                   onChange={(v) => setField("speaker_sales_team", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={speakerSalesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -311,18 +349,18 @@ export function EventsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="SpEx Team">
-                <Select 
-                  value={modal.data.spex_team || ""} 
+                <Select
+                  value={modal.data.spex_team || ""}
                   onChange={(v) => setField("spex_team", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={spexUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
               <FormField label="Tele Marketing Team">
-                <Select 
-                  value={modal.data.tele_marketing_team || ""} 
+                <Select
+                  value={modal.data.tele_marketing_team || ""}
                   onChange={(v) => setField("tele_marketing_team", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={telemarketUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -330,18 +368,18 @@ export function EventsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Market Research Team">
-                <Select 
-                  value={modal.data.market_research_team || ""} 
+                <Select
+                  value={modal.data.market_research_team || ""}
                   onChange={(v) => setField("market_research_team", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={marketResUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
               <FormField label="Content Check">
-                <Select 
-                  value={modal.data.content_check || ""} 
+                <Select
+                  value={modal.data.content_check || ""}
                   onChange={(v) => setField("content_check", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={allUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
@@ -349,18 +387,18 @@ export function EventsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <FormField label="Marketing Check">
-                <Select 
-                  value={modal.data.marketing_check || ""} 
+                <Select
+                  value={modal.data.marketing_check || ""}
                   onChange={(v) => setField("marketing_check", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={allUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>
               <FormField label="Sales Check">
-                <Select 
-                  value={modal.data.sales_check || ""} 
+                <Select
+                  value={modal.data.sales_check || ""}
                   onChange={(v) => setField("sales_check", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: u.full_name }))}
+                  options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
                   placeholder="— Unassigned —"
                 />
               </FormField>

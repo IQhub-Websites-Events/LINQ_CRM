@@ -23,6 +23,7 @@ class BookDelegateInlineSerializer(serializers.ModelSerializer):
             "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
             "delegate_paid_or_free", "delegate_ticket_tier",
+            "delegate_count", "discount", "add_ons", "reference",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
             "effective_paid_or_free", "effective_ticket_tier",
         ]
@@ -54,16 +55,16 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
     invoice_date           = serializers.DateField(source="invoice.invoice_date",    read_only=True)
     booking_code           = serializers.CharField(source="invoice.booking_code",    read_only=True)
     currency               = serializers.CharField(source="invoice.currency",        read_only=True)
-    discount               = serializers.DecimalField(source="invoice.discount", max_digits=10, decimal_places=2, read_only=True)
+    discount               = serializers.DecimalField(max_digits=10, decimal_places=2)
     discount_code          = serializers.CharField(source="invoice.discount_code",   read_only=True)
     pre_tax_amount         = serializers.DecimalField(source="invoice.pre_tax_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
     tax_amount             = serializers.DecimalField(source="invoice.tax_amount",   max_digits=12, decimal_places=2, read_only=True, allow_null=True)
     total_amount           = serializers.DecimalField(source="invoice.total_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
     add_ons_total_amount   = serializers.DecimalField(source="invoice.add_ons_total_amount", max_digits=12, decimal_places=2, read_only=True, allow_null=True)
-    delegate_count         = serializers.IntegerField(source="invoice.delegate_count", read_only=True)
+    delegate_count         = serializers.IntegerField()
     paid_free              = serializers.CharField(source="invoice.paid_free",       read_only=True)
-    add_ons                = serializers.CharField(source="invoice.add_ons",         read_only=True)
-    reference              = serializers.CharField(source="invoice.reference",       read_only=True)
+    add_ons                = serializers.CharField()
+    reference              = serializers.CharField()
     event_name             = serializers.CharField(source="invoice.event_name",      read_only=True)
     ticket_tier            = serializers.CharField(source="invoice.ticket_tier",     read_only=True)
     source                 = serializers.CharField(source="invoice.source",          read_only=True)
@@ -156,6 +157,7 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
             "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
             "delegate_paid_or_free", "delegate_ticket_tier",
+            "delegate_count", "discount", "add_ons", "reference",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
             "effective_paid_or_free", "effective_ticket_tier",
             "created_at", "updated_at",
@@ -197,6 +199,7 @@ class BookDelegateWriteSerializer(serializers.ModelSerializer):
             "company", "attendance", "dietary_requirements", "notes",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
             "delegate_paid_or_free", "delegate_ticket_tier",
+            "delegate_count", "discount", "add_ons", "reference",
         ]
 
     def validate_invoice_number(self, value):

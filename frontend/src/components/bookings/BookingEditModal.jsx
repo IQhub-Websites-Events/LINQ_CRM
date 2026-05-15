@@ -34,6 +34,10 @@ const COLS = [
   { key: "delegate_payment_type",    label: "Pay Type",       width: 130, type: "select", options: ["", ...PAYMENT_TYPES] },
   { key: "delegate_ticket_tier",     label: "Ticket Tier",    width: 120, type: "select", options: ["", ...TICKET_TIERS] },
   { key: "attendance",               label: "Attendance",     width: 80,  type: "checkbox" },
+  { key: "delegate_count",           label: "Count (0/1)",    width: 80,  type: "number" },
+  { key: "discount",                 label: "Discount",       width: 100, type: "number" },
+  { key: "add_ons",                  label: "Add-ons",        width: 180 },
+  { key: "reference",                label: "Reference",      width: 180 },
 ];
 
 const BLANK_DELEGATE = () => ({
@@ -47,6 +51,10 @@ const BLANK_DELEGATE = () => ({
   delegate_payment_status: "",
   delegate_payment_type: "",
   delegate_ticket_tier: "",
+  delegate_count: 1,
+  discount: 0,
+  add_ons: "",
+  reference: "",
 });
 
 /* ═══════════════════════════════════════════════════════════
@@ -108,6 +116,10 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
           delegate_payment_status: d.delegate_payment_status || "",
           delegate_payment_type:   d.delegate_payment_type   || "",
           delegate_ticket_tier:    d.delegate_ticket_tier    || "",
+          delegate_count:          d.delegate_count != null ? d.delegate_count : 1,
+          discount:                d.discount || 0,
+          add_ons:                 d.add_ons  || "",
+          reference:               d.reference || "",
         })),
         created_at: inv.created_at,
         updated_at: inv.updated_at,
@@ -469,6 +481,20 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             </td>
           );
         }
+        if (c.key === "delegate_count") {
+          const isCancelled = delegate.delegate_payment_status === "Cancelled";
+          const currentVal = isCancelled ? 0 : (delegate[c.key] ?? 1);
+          return (
+            <td key={c.key} style={tdCell}>
+              <CellSelect 
+                value={String(currentVal)} 
+                disabled={isCancelled}
+                onChange={v => onChange(c.key, parseInt(v))} 
+                options={["0", "1"]} 
+              />
+            </td>
+          );
+        }
         return (
           <td key={c.key} style={tdCell}>
             <CellInput type={c.type || "text"} mono={c.mono}
@@ -809,11 +835,12 @@ function CellInput({ value, onChange, type = "text", mono, readOnly, placeholder
   );
 }
 
-function CellSelect({ value, onChange, options }) {
+function CellSelect({ value, onChange, options, disabled }) {
   const [f, setF] = useState(false);
   return (
     <select
       value={value ?? ""}
+      disabled={disabled}
       onChange={e => onChange?.(e.target.value)}
       onFocus={() => setF(true)}
       onBlur={() => setF(false)}
@@ -821,11 +848,11 @@ function CellSelect({ value, onChange, options }) {
         width: "100%", height: 32, padding: "0 18px 0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "var(--surface)" : "transparent",
-        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
-        outline: "none", appearance: "none", cursor: "pointer",
+        background: disabled ? "transparent" : (f ? "var(--surface)" : "transparent"),
+        color: disabled ? TEXT_DIM : TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        outline: "none", appearance: "none", cursor: disabled ? "default" : "pointer",
         boxShadow: "none",
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+        backgroundImage: disabled ? "none" : `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
         backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",

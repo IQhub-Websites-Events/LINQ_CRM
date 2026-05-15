@@ -45,8 +45,18 @@ class BookDelegate(models.Model):
         default=Attendance.PENDING, db_index=True,
     )
     delegate_number = models.IntegerField(default=1)
+    delegate_count = models.IntegerField(default=1, choices=[(0, "0"), (1, "1")])  # Strictly 0 or 1
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    add_ons = models.TextField(blank=True, default="")
+    reference = models.CharField(max_length=255, blank=True, default="")
     dietary_requirements = models.CharField(max_length=255, blank=True, default="")
     notes            = models.TextField(blank=True, default="")
+
+    def save(self, *args, **kwargs):
+        # Force delegate_count to 0 if payment status is Cancelled
+        if self.delegate_payment_status == "Cancelled":
+            self.delegate_count = 0
+        super().save(*args, **kwargs)
 
     # Per-delegate payment overrides (null = inherit from invoice)
     delegate_payment_status = models.CharField(max_length=50, blank=True, null=True, default=None)

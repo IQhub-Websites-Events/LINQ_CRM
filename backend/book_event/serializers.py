@@ -158,6 +158,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "attendance", "notes", "dietary_requirements",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
             "delegate_paid_or_free", "delegate_ticket_tier",
+            "delegate_count", "discount", "add_ons", "reference",
         }
 
         with transaction.atomic():
@@ -216,6 +217,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "attendance", "notes", "dietary_requirements",
             "delegate_payment_status", "delegate_payment_type", "delegate_payment_date",
             "delegate_paid_or_free", "delegate_ticket_tier",
+            "delegate_count", "discount", "add_ons", "reference",
         }
 
         with transaction.atomic():
