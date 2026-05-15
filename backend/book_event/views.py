@@ -107,8 +107,8 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["delete"], url_path="clear_all")
     def clear_all(self, request):
-        """DELETE /api/invoices/clear_all/ — restricted to 'admin' username"""
-        if request.user.username != 'admin':
+        """DELETE /api/invoices/clear_all/ — restricted to 'HP' username"""
+        if request.user.username != 'HP':
             return Response({"detail": "Only the administrator can clear all bookings."}, status=status.HTTP_403_FORBIDDEN)
             
         from book_delegate.models import BookDelegate

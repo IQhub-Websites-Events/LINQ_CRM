@@ -93,7 +93,7 @@ export function BookingsPage({ navItem }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {user?.username === 'admin' && (
+          {user?.username === 'HP' && (
             <button
               onClick={handleClearAll}
               style={{

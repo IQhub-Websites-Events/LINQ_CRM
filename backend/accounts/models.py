@@ -64,25 +64,26 @@ class User(AbstractUser):
                 update_fields.add("is_active")
 
         # Auto-sync role and permissions based on team assignment
-        if self.team:
+        # If the user explicitly has the ADMIN role, ensure they have superuser/staff rights
+        # regardless of their team.
+        if self.role == self.Role.ADMIN:
+            if not self.is_superuser or not self.is_staff:
+                self.is_superuser = True
+                self.is_staff = True
+        elif self.team:
             team_name = self.team.name.lower().strip()
-            role_changed = False
-            perms_changed = False
             
             if "admin" in team_name:
                 if not self.is_superuser or not self.is_staff:
                     self.is_superuser = True
                     self.is_staff = True
-                    perms_changed = True
                 if self.role != self.Role.ADMIN:
                     self.role = self.Role.ADMIN
-                    role_changed = True
             else:
-                # Revoke superuser/staff if they are moved out of the Admin team
+                # Revoke superuser/staff if they are moved out of the Admin team and are not explicitly Admin role
                 if self.is_superuser or self.is_staff:
                     self.is_superuser = False
                     self.is_staff = False
-                    perms_changed = True
                 
                 # Assign role based on keywords in the team name
                 new_role = None
@@ -101,13 +102,9 @@ class User(AbstractUser):
                 
                 if new_role and self.role != new_role:
                     self.role = new_role
-                    role_changed = True
                     
             if update_fields is not None:
-                if perms_changed:
-                    update_fields.update(["is_superuser", "is_staff"])
-                if role_changed:
-                    update_fields.add("role")
+                update_fields.update(["is_superuser", "is_staff", "role"])
 
         if update_fields is not None:
             kwargs["update_fields"] = list(update_fields)
