@@ -71,10 +71,9 @@ class HistoricalEditionDataService:
         from book_event.models import BookEvent
         from book_delegate.models import BookDelegate
 
-        code_pattern = booking_code_regex(self.event_code)
+        code_pattern = booking_code_regex(self.event_code, year=year)
         bookings_qs = BookEvent.objects.filter(
             event_code__iregex=code_pattern,
-            event_date__year=year,
         )
 
         total_bookings = bookings_qs.count()
@@ -83,7 +82,6 @@ class HistoricalEditionDataService:
 
         delegates_qs = BookDelegate.objects.filter(
             event_code__iregex=code_pattern,
-            invoice__event_date__year=year,
         )
         total_delegates = delegates_qs.count()
 
@@ -241,10 +239,10 @@ class HistoricalMetricsAggregator:
                     f"{ref_count} historical reference(s) found for {year} "
                     f"but 0 BookEvent records match event_code+year."
                 ),
-                "aggregation_source": "BookEvent.event_code + BookEvent.event_date__year",
+                "aggregation_source": "BookEvent.event_code (year suffix)",
                 "suggested_fix": (
-                    f"Verify BookEvent records have event_code='{self.event_code}' "
-                    f"and event_date set to a date in {year}."
+                    f"Verify BookEvent records exist with event_code matching '{self.event_code}' "
+                    f"and ending in '{str(year)[-2:]}' or '{year}' (e.g., '{self.event_code}{str(year)[-2:]}')."
                 ),
             })
 
@@ -260,10 +258,10 @@ class HistoricalMetricsAggregator:
                     f"total_delegates({delegates}) < total_bookings({tb}). "
                     f"Each booking should have at least 1 delegate."
                 ),
-                "aggregation_source": "BookDelegate.event_code + invoice__event_date__year",
+                "aggregation_source": "BookDelegate.event_code (year suffix)",
                 "suggested_fix": (
                     "Check that BookDelegate records are linked to BookEvent invoices "
-                    f"with event_date in {year}."
+                    f"with the correct event_code suffix for {year}."
                 ),
             })
 

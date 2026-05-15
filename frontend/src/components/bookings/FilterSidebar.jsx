@@ -25,7 +25,7 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
         justifyContent: "space-between",
       }}>
         <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Advanced Filters</span>
-        <button 
+        <button
           onClick={onClear}
           style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}
         >
@@ -35,11 +35,11 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          
+
           {/* Status Selection (Multi-select simulation) */}
           <FilterSection label="Payment Status">
-            <select 
-              value={filters.payment_status || ""} 
+            <select
+              value={filters.payment_status || ""}
               onChange={(e) => handleChange("payment_status", e.target.value)}
               style={selectStyle}
             >
@@ -51,16 +51,16 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
           {/* Date Ranges */}
           <FilterSection label="Request Date">
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input 
-                type="date" 
-                value={filters.request_date_from || ""} 
+              <input
+                type="date"
+                value={filters.request_date_from || ""}
                 onChange={(e) => handleChange("request_date_from", e.target.value)}
                 style={inputStyle}
               />
               <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "center" }}>to</span>
-              <input 
-                type="date" 
-                value={filters.request_date_to || ""} 
+              <input
+                type="date"
+                value={filters.request_date_to || ""}
                 onChange={(e) => handleChange("request_date_to", e.target.value)}
                 style={inputStyle}
               />
@@ -69,16 +69,16 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
 
           <FilterSection label="Invoice Date">
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input 
-                type="date" 
-                value={filters.invoice_date_from || ""} 
+              <input
+                type="date"
+                value={filters.invoice_date_from || ""}
                 onChange={(e) => handleChange("invoice_date_from", e.target.value)}
                 style={inputStyle}
               />
               <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "center" }}>to</span>
-              <input 
-                type="date" 
-                value={filters.invoice_date_to || ""} 
+              <input
+                type="date"
+                value={filters.invoice_date_to || ""}
                 onChange={(e) => handleChange("invoice_date_to", e.target.value)}
                 style={inputStyle}
               />
@@ -87,16 +87,16 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
 
           <FilterSection label="Payment Date">
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <input 
-                type="date" 
-                value={filters.payment_date_from || ""} 
+              <input
+                type="date"
+                value={filters.payment_date_from || ""}
                 onChange={(e) => handleChange("payment_date_from", e.target.value)}
                 style={inputStyle}
               />
               <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "center" }}>to</span>
-              <input 
-                type="date" 
-                value={filters.payment_date_to || ""} 
+              <input
+                type="date"
+                value={filters.payment_date_to || ""}
                 onChange={(e) => handleChange("payment_date_to", e.target.value)}
                 style={inputStyle}
               />
@@ -105,8 +105,8 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
 
           {/* Other Dropdowns */}
           <FilterSection label="Paid / Free">
-            <select 
-              value={filters.paid_or_free || ""} 
+            <select
+              value={filters.paid_or_free || ""}
               onChange={(e) => handleChange("paid_or_free", e.target.value)}
               style={selectStyle}
             >
@@ -116,8 +116,8 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
           </FilterSection>
 
           <FilterSection label="Ticket Tier">
-            <select 
-              value={filters.ticket_tier || ""} 
+            <select
+              value={filters.ticket_tier || ""}
               onChange={(e) => handleChange("ticket_tier", e.target.value)}
               style={selectStyle}
             >
@@ -127,8 +127,8 @@ export function FilterSidebar({ filters, onFilterChange, onClear, onClose }) {
           </FilterSection>
 
           <FilterSection label="Payment Type">
-            <select 
-              value={filters.payment_type || ""} 
+            <select
+              value={filters.payment_type || ""}
               onChange={(e) => handleChange("payment_type", e.target.value)}
               style={selectStyle}
             >

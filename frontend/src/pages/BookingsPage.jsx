@@ -11,11 +11,11 @@ import { useToast } from "../contexts/ToastContext";
 const STATUS_TABS = ["All", "Pending", "Paid"];
 
 export function BookingsPage({ navItem }) {
-  const [view,         setView]         = useState("table"); // "table" | "cards"
+  const [view, setView] = useState("table"); // "table" | "cards"
   const [statusFilter, setStatusFilter] = useState(navItem ? "" : "Pending");
-  const [period,       setPeriod]       = useState("total");
-  const [importOpen,   setImportOpen]   = useState(false);
-  const [refreshKey,   setRefreshKey]   = useState(0);
+  const [period, setPeriod] = useState("total");
+  const [importOpen, setImportOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const { user } = useAuth();
   const toast = useToast();
@@ -31,7 +31,7 @@ export function BookingsPage({ navItem }) {
 
   const handleClearAll = async () => {
     if (!window.confirm("WARNING: This will delete ALL bookings and related data from the database. This action cannot be undone. Are you sure you want to proceed?")) return;
-    
+
     try {
       await invoicesApi.clearAll();
       toast.success("Successfully cleared all booking data.");
@@ -54,42 +54,7 @@ export function BookingsPage({ navItem }) {
         flexShrink: 0,
       }}>
         <div className="hello" style={{ flex: 1, display: "flex", alignItems: "center", gap: 24 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Filter by
-            </span>
-            <select 
-              value={period} 
-              onChange={(e) => setPeriod(e.target.value)}
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                padding: "6px 32px 6px 12px",
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--text)",
-                appearance: "none",
-                cursor: "pointer",
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 10px center",
-                backgroundSize: "10px 6px",
-                outline: "none",
-              }}
-            >
-              <option value="today">Today</option>
-              <option value="month">This Month</option>
-              <option value="total">Total</option>
-            </select>
-          </div>
-
-          <div style={{ display: "flex", gap: 16, flex: 1 }}>
-            <StatCard key="total" label="Total bookings" value={stats?.total} loading={statsLoading} />
-            <StatCard key="paid" label="Paid" value={stats?.paid} loading={statsLoading} />
-            <StatCard key="confirmed" label="Confirmed" value={stats?.confirmed} loading={statsLoading} />
-            <StatCard key="free" label="Free" value={stats?.free} loading={statsLoading} />
-          </div>
+          {/* Header title or empty spacer */}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -105,7 +70,7 @@ export function BookingsPage({ navItem }) {
                 alignSelf: "flex-start", marginTop: 6,
               }}
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-soft)";  e.currentTarget.style.color = "var(--danger)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-soft)"; e.currentTarget.style.color = "var(--danger)"; }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
@@ -124,7 +89,7 @@ export function BookingsPage({ navItem }) {
               alignSelf: "flex-start", marginTop: 6,
             }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)";  e.currentTarget.style.color = "var(--text-dim)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-dim)"; }}
           >
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M6.5 1v8M3 6l3.5 3.5L10 6" />

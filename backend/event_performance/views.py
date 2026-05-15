@@ -11,6 +11,7 @@ from .serializers import (
     MailshotSerializer, EventPerformanceNoteSerializer,
 )
 from .services import bulk_event_metrics, compute_health, reps_performance
+from accounts.permissions import IsAdminRole
 
 
 def _build_event_row(event: Event, metrics: dict) -> dict:
@@ -32,7 +33,7 @@ def _build_event_row(event: Event, metrics: dict) -> dict:
 
 
 class EventPerformanceViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminRole]
 
     def list(self, request):
         """

@@ -1,14 +1,14 @@
 const STATUS_MAP = {
-  paid:                    { c: "var(--success)", bg: "var(--success-soft)", l: "Paid" },
-  pending:                 { c: "var(--warn)",    bg: "var(--warn-soft)",    l: "Pending" },
-  overdue:                 { c: "var(--danger)",  bg: "var(--danger-soft)",  l: "Overdue" },
-  cancelled:               { c: "var(--danger)",  bg: "var(--danger-soft)",  l: "Cancelled" },
-  refunded:                { c: "var(--text-faint)", bg: "var(--surface-alt)", l: "Refunded" },
-  free:                    { c: "#3b82f6",         bg: "rgba(59, 130, 246, 0.12)", l: "Free" },
-  "credit pending (free)": { c: "#a855f7",         bg: "rgba(168, 85, 247, 0.12)", l: "Credit Pending (Free)" },
-  "credit pending (paid)": { c: "#a855f7",         bg: "rgba(168, 85, 247, 0.12)", l: "Credit Pending (Paid)" },
-  "credit transferred":    { c: "#06b6d4",         bg: "rgba(6, 182, 212, 0.12)",  l: "Credit Transferred" },
-  "paid (transferred)":    { c: "var(--success)", bg: "var(--success-soft)", l: "Paid (Transferred)" },
+  paid: { c: "var(--success)", bg: "var(--success-soft)", l: "Paid" },
+  pending: { c: "var(--warn)", bg: "var(--warn-soft)", l: "Pending" },
+  overdue: { c: "var(--danger)", bg: "var(--danger-soft)", l: "Overdue" },
+  cancelled: { c: "var(--danger)", bg: "var(--danger-soft)", l: "Cancelled" },
+  refunded: { c: "var(--text-faint)", bg: "var(--surface-alt)", l: "Refunded" },
+  free: { c: "#3b82f6", bg: "rgba(59, 130, 246, 0.12)", l: "Free" },
+  "credit pending (free)": { c: "#a855f7", bg: "rgba(168, 85, 247, 0.12)", l: "Credit Pending (Free)" },
+  "credit pending (paid)": { c: "#a855f7", bg: "rgba(168, 85, 247, 0.12)", l: "Credit Pending (Paid)" },
+  "credit transferred": { c: "#06b6d4", bg: "rgba(6, 182, 212, 0.12)", l: "Credit Transferred" },
+  "paid (transferred)": { c: "var(--success)", bg: "var(--success-soft)", l: "Paid (Transferred)" },
 };
 
 export function StatusBadge({ status }) {
@@ -48,9 +48,9 @@ export function TierBadge({ tier }) {
 
 export function EventStatusBadge({ status }) {
   const className = {
-    Live:      "badge-soft-success",
-    Upcoming:  "badge-soft-info",
-    Draft:     "badge-soft-secondary",
+    Live: "badge-soft-success",
+    Upcoming: "badge-soft-info",
+    Draft: "badge-soft-secondary",
     Completed: "badge-soft-success",
     Cancelled: "badge-soft-danger",
   }[status] || "badge-soft-secondary";

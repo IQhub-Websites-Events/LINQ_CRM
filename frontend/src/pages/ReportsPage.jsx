@@ -11,7 +11,9 @@
  *   Documentation  — Markdown viewer for the complete reference doc
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { reportsApi, searchApi, editionGrowthApi } from "../api";
+import { invoicesApi, reportsApi, searchApi } from "../api";
+import { useFetch } from "../hooks/useFetch";
+import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { fmt } from "../utils/helpers";
 import { EventGrowthDrawer } from "../components/events/EventGrowthDrawer";
@@ -19,51 +21,49 @@ import { EventGrowthDrawer } from "../components/events/EventGrowthDrawer";
 
 // ─── Status color palettes ────────────────────────────────────────────────────
 const SYNC_COLORS = {
-  never:   { bg: "#f1f5f9", c: "#94a3b8" },
-  idle:    { bg: "#f1f5f9", c: "#64748b" },
+  never: { bg: "#f1f5f9", c: "#94a3b8" },
+  idle: { bg: "#f1f5f9", c: "#64748b" },
   syncing: { bg: "#fef3c7", c: "#d97706", pulse: true },
   success: { bg: "var(--success-soft)", c: "var(--success)" },
   partial: { bg: "#fff7ed", c: "#ea580c" },
-  failed:  { bg: "var(--danger-soft)",  c: "var(--danger)"  },
+  failed: { bg: "var(--danger-soft)", c: "var(--danger)" },
 };
 
 const LOG_COLORS = {
   running: { bg: "#fef3c7", c: "#d97706" },
   success: { bg: "var(--success-soft)", c: "var(--success)" },
   partial: { bg: "#fff7ed", c: "#ea580c" },
-  failed:  { bg: "var(--danger-soft)",  c: "var(--danger)"  },
+  failed: { bg: "var(--danger-soft)", c: "var(--danger)" },
 };
 
 
 // ─── Page shell ───────────────────────────────────────────────────────────────
 
 export function ReportsPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState("overview");
 
   const TABS = [
-    ["overview",  "Overview"],
-    ["growth",    "Event Growth"],
-    ["registry",  "Sheet Registry"],
-    ["data",      "Report Data"],
-    ["logs",      "Sync Logs"],
-    ["docs",      "Documentation"],
+    ["overview", "Overview"],
+    ...(user?.role === "admin" ? [
+      ["growth", "Event Growth"],
+      ["registry", "Sheet Registry"],
+      ["data", "Report Data"],
+      ["logs", "Sync Logs"],
+      ["docs", "Documentation"],
+    ] : []),
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
       <div style={{ padding: "24px 28px 0", flexShrink: 0 }}>
-        <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 4 }}>CRM › Insights</div>
         <h1 style={{
           margin: 0, fontFamily: "var(--font-serif)",
           fontWeight: 500, fontSize: 38, lineHeight: 1,
           letterSpacing: "-0.01em", color: "var(--text)",
         }}>
-          Reports.
+          <span>Dashboard.</span>
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--text-dim)" }}>
-          Centralised reporting platform — 40–50 Google Sheets, live data, real-time sync.
-        </p>
-
         <div style={{ display: "flex", marginTop: 20, borderBottom: "1px solid var(--border)" }}>
           {TABS.map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -73,18 +73,20 @@ export function ReportsPage() {
               color: tab === id ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer", marginBottom: -1,
             }}>
-              {label}
+              <span>{label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {tab === "overview"  && <OverviewTab />}
-      {tab === "growth"    && <EventGrowthTab />}
-      {tab === "registry"  && <RegistryTab />}
-      {tab === "data"      && <DataTab />}
-      {tab === "logs"      && <SyncLogsTab />}
-      {tab === "docs"      && <DocsTab />}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {tab === "overview" ? <OverviewTab key="overview-tab" /> :
+          tab === "growth" ? <EventGrowthTab key="growth-tab" /> :
+            tab === "registry" ? <RegistryTab key="registry-tab" /> :
+              tab === "data" ? <DataTab key="data-tab" /> :
+                tab === "logs" ? <SyncLogsTab key="logs-tab" /> :
+                  tab === "docs" ? <DocsTab key="docs-tab" /> : null}
+      </div>
     </div>
   );
 }
@@ -93,111 +95,130 @@ export function ReportsPage() {
 // ─── OVERVIEW TAB ─────────────────────────────────────────────────────────────
 
 function OverviewTab() {
-  const [stats, setStats]         = useState(null);
-  const [sources, setSources]     = useState([]);
-  const [loadingStats, setLS]     = useState(true);
-  const [loadingSrc, setLSrc]     = useState(true);
+  const [sources, setSources] = useState([]);
+  const [loadingSrc, setLSrc] = useState(true);
+  const [period, setPeriod] = useState("total");
+  const { user } = useAuth();
   const toast = useToast();
 
-  useEffect(() => {
-    searchApi.stats().then(setStats).catch(() => {}).finally(() => setLS(false));
-    reportsApi.sources.list({ page_size: 50 })
-      .then(r => setSources(r.results || r))
-      .catch(() => toast.error("Failed to load sheet sources"))
-      .finally(() => setLSrc(false));
-  }, [toast]);
+  const { data: stats, loading: loadingStats } = useFetch(
+    () => invoicesApi.stats(period),
+    [period]
+  );
 
-  const totalSources  = sources.length;
-  const activeSources = sources.filter(s => s.is_active).length;
-  const syncedToday   = sources.filter(s => {
-    if (!s.last_synced_at) return false;
-    return new Date(s.last_synced_at).toDateString() === new Date().toDateString();
-  }).length;
-  const failedSources = sources.filter(s => s.sync_status === "failed").length;
+  const { data: dashStats, loading: loadingDash } = useFetch(
+    () => searchApi.stats(),
+    []
+  );
 
-  const inv = stats?.invoices || {};
-  const ev  = stats?.events   || {};
-  const topEv = stats?.top_events_by_revenue || [];
-  const maxRev = topEv[0]?.revenue || 1;
+  const inv = dashStats?.invoices || {};
+  const ev = dashStats?.events || {};
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px 28px" }}>
-      {/* Sheet source KPIs */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
-          Google Sheets Platform
+
+      {/* Role-Specific Dashboard KPIs */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)" }}>
+            <span>Your Performance</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <span>Filter by</span>
+            </span>
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "4px 28px 4px 10px",
+                fontSize: 12,
+                fontWeight: 500,
+                color: "var(--text)",
+                appearance: "none",
+                cursor: "pointer",
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239a978f' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
+                backgroundSize: "10px 6px",
+                outline: "none",
+              }}
+            >
+              <option value="today">Today</option>
+              <option value="month">This Month</option>
+              <option value="total">Total</option>
+            </select>
+          </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-          <StatCard label="Total Sources" value={loadingSrc ? "…" : totalSources} color="var(--accent)" />
-          <StatCard label="Active Sources" value={loadingSrc ? "…" : activeSources} color="var(--success)" />
-          <StatCard label="Synced Today" value={loadingSrc ? "…" : syncedToday} color="#2563eb" />
-          <StatCard label="Failed Sources" value={loadingSrc ? "…" : failedSources} color={failedSources > 0 ? "var(--danger)" : "var(--text-faint)"} />
+
+        <div key="role-specific-rows" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {(user?.role === "admin" || user?.role === "sales" || user?.role === "telemarketing" || !["spex", "speaker_sales"].includes(user?.role)) ? (
+            <div key="sales-kpis-block" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {user?.role === "admin" && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase" }}>Sales</span>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                <StatCard key="s1" label="Total bookings" value={stats?.sales?.total} loading={loadingStats} color="var(--accent)" />
+                <StatCard key="s2" label="Paid" value={stats?.sales?.paid} loading={loadingStats} color="var(--success)" />
+                <StatCard key="s3" label="Pending" value={stats?.sales?.pending} loading={loadingStats} color="var(--danger)" />
+                <StatCard key="s4" label="Free" value={stats?.sales?.free} loading={loadingStats} color="var(--text-faint)" />
+              </div>
+            </div>
+          ) : null}
+
+          {(user?.role === "admin" || user?.role === "spex") ? (
+            <div key="spex-kpis-block" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {user?.role === "admin" && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase" }}>SpEx</span>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                <StatCard key="x1" label="Sponsors Booked" value={stats?.spex?.booked} loading={loadingStats} color="var(--accent)" />
+                <StatCard key="x2" label="Sponsors Paid" value={stats?.spex?.paid} loading={loadingStats} color="var(--success)" />
+                <StatCard key="x3" label="Pending" value={stats?.spex?.pending} loading={loadingStats} color="var(--danger)" />
+              </div>
+            </div>
+          ) : null}
+
+          {(user?.role === "admin" || user?.role === "speaker_sales") ? (
+            <div key="speaker-kpis-block" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {user?.role === "admin" && <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-faint)", textTransform: "uppercase" }}>Speaker Sales</span>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                <StatCard key="k1" label="Total Speakers" value={stats?.speaker?.total} loading={loadingStats} color="var(--accent)" />
+                <StatCard key="k2" label="Paid" value={stats?.speaker?.paid} loading={loadingStats} color="var(--success)" />
+                <StatCard key="k3" label="Pending" value={stats?.speaker?.pending} loading={loadingStats} color="var(--danger)" />
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {/* CRM KPIs */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
-          CRM Summary
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-          <StatCard label="Total Revenue" value={loadingStats ? "…" : fmt.currency(inv.revenue_paid)} sub="Paid bookings" color="var(--success)" />
-          <StatCard label="Pending Revenue" value={loadingStats ? "…" : fmt.currency(inv.revenue_pending)} sub="Awaiting payment" color="#d97706" />
-          <StatCard label="Total Bookings" value={loadingStats ? "…" : (inv.total || 0)} sub={`${inv.paid || 0} paid`} color="var(--accent)" />
-          <StatCard label="Active Events" value={loadingStats ? "…" : ((ev.live || 0) + (ev.upcoming || 0))} sub={`${ev.total || 0} total`} color="#7c3aed" />
-        </div>
-      </div>
-
-      {/* Bottom grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Revenue by event */}
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Top Events by Revenue</div>
-          {topEv.length === 0
-            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No paid revenue yet</div>
-            : topEv.slice(0, 6).map((e) => (
-              <div key={e.event_code} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{e.event_code}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>{fmt.currency(e.revenue)}</span>
-                </div>
-                <div style={{ height: 5, background: "var(--surface-alt)", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 3, background: "var(--accent)", width: `${Math.round(e.revenue / maxRev * 100)}%`, transition: "width .4s" }} />
-                </div>
-              </div>
-            ))
-          }
-        </div>
-
-        {/* Sheet source status */}
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 16 }}>Sheet Source Status</div>
-          {loadingSrc
-            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>Loading…</div>
-            : sources.length === 0
-            ? <div style={{ fontSize: 12, color: "var(--text-faint)" }}>No sheet sources configured yet. Add one in Sheet Registry.</div>
-            : sources.slice(0, 8).map(s => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)" }}>{s.name}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-faint)" }}>{s.worksheet_name} · {s.records_count} rows</div>
-                </div>
-                <StatusChip status={s.sync_status} colors={SYNC_COLORS} />
-              </div>
-            ))
-          }
-        </div>
+      {/* CRM Summary (Global) */}
+      <div key="global-summary-block">
+        {user?.role === "admin" ? (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
+              <span>CRM Summary (Global)</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+              <StatCard key="g1" label="Global Revenue" value={loadingDash ? "…" : fmt.currency(inv.revenue_paid)} sub="Total paid" color="var(--success)" />
+              <StatCard key="g2" label="Awaiting Payment" value={loadingDash ? "…" : fmt.currency(inv.revenue_pending)} sub="Pending revenue" color="#d97706" />
+              <StatCard key="g3" label="Total Invoices" value={loadingDash ? "…" : (inv.total || 0)} sub={`${inv.paid || 0} paid`} color="var(--accent)" />
+              <StatCard key="g4" label="Live Events" value={loadingDash ? "…" : (ev.live || 0)} sub={`${ev.upcoming || 0} historical`} color="#6366f1" />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, sub, color }) {
+function StatCard({ label, value, sub, color, loading }) {
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: color || "var(--text)", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>{sub}</div>}
+      <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 8 }}><span>{label}</span></div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || "var(--text)", lineHeight: 1 }}>
+        <span>{loading ? "…" : (value ?? 0)}</span>
+      </div>
+      {sub ? <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}><span>{sub}</span></div> : null}
     </div>
   );
 }
@@ -207,21 +228,21 @@ function StatCard({ label, value, sub, color }) {
 
 function RegistryTab() {
   const toast = useToast();
-  const [sources, setSources]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [syncing, setSyncing]     = useState(null);
+  const [syncing, setSyncing] = useState(null);
   const [syncingAll, setSyncingAll] = useState(false);
-  const [creating, setCreating]   = useState(false);
-  const [editing, setEditing]     = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
-      if (search)     params.search     = search;
+      if (search) params.search = search;
       if (typeFilter) params.sheet_type = typeFilter;
       const res = await reportsApi.sources.list(params);
       setSources(res.results || res);
@@ -276,14 +297,14 @@ function RegistryTab() {
   const SHEET_TYPES = ["", "bookings", "events", "delegates", "revenue", "pipeline", "custom"];
 
   const COLS = [
-    { label: "Name",      w: 180 },
-    { label: "Tab",       w: 130 },
-    { label: "Type",      w: 100 },
-    { label: "Status",    w: 110 },
-    { label: "Records",   w: 80  },
-    { label: "Freq",      w: 80  },
+    { label: "Name", w: 180 },
+    { label: "Tab", w: 130 },
+    { label: "Type", w: 100 },
+    { label: "Status", w: 110 },
+    { label: "Records", w: 80 },
+    { label: "Freq", w: 80 },
     { label: "Last Sync", w: 160 },
-    { label: "",          w: 200 },
+    { label: "", w: 200 },
   ];
 
   return (
@@ -303,7 +324,7 @@ function RegistryTab() {
         ))}
 
         <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", height: 30, marginLeft: "auto" }}>
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4"/><path d="M9 9l2 2"/></svg>
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4" /><path d="M9 9l2 2" /></svg>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sources…" style={{ border: "none", outline: "none", fontSize: 12, background: "none", color: "var(--text)", fontFamily: "inherit", width: 160 }} />
         </div>
 
@@ -337,17 +358,17 @@ function RegistryTab() {
                 {loading
                   ? <tr><td colSpan={COLS.length} style={emptyCell}>Loading…</td></tr>
                   : sources.length === 0
-                  ? <tr><td colSpan={COLS.length} style={emptyCell}>No sheet sources yet. Click "+ Add Sheet" to connect a Google Sheet.</td></tr>
-                  : sources.map(src => (
-                    <SourceRow
-                      key={src.id}
-                      source={src}
-                      syncing={syncing === src.id}
-                      onSync={() => handleSync(src)}
-                      onEdit={() => setEditing(src)}
-                      onDelete={() => setConfirmDelete(src)}
-                    />
-                  ))
+                    ? <tr><td colSpan={COLS.length} style={emptyCell}>No sheet sources yet. Click "+ Add Sheet" to connect a Google Sheet.</td></tr>
+                    : sources.map(src => (
+                      <SourceRow
+                        key={src.id}
+                        source={src}
+                        syncing={syncing === src.id}
+                        onSync={() => handleSync(src)}
+                        onEdit={() => setEditing(src)}
+                        onDelete={() => setConfirmDelete(src)}
+                      />
+                    ))
                 }
               </tbody>
             </table>
@@ -356,7 +377,7 @@ function RegistryTab() {
       </div>
 
       {creating && <SourceModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); load(); }} />}
-      {editing  && <SourceModal source={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {editing && <SourceModal source={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {confirmDelete && (
         <ConfirmModal
           title="Delete Sheet Source"
@@ -402,7 +423,7 @@ function SourceRow({ source: s, syncing, onSync, onEdit, onDelete }) {
           <button onClick={onSync} disabled={syncing} style={{ ...actionBtn, borderColor: syncing ? "var(--border)" : "var(--accent)", color: syncing ? "var(--text-faint)" : "var(--accent)" }}>
             {syncing ? "Syncing…" : "Sync"}
           </button>
-          <button onClick={onEdit}   style={actionBtn}>Edit</button>
+          <button onClick={onEdit} style={actionBtn}>Edit</button>
           <button onClick={onDelete} style={{ ...actionBtn, borderColor: "var(--danger)", color: "var(--danger)" }}>Delete</button>
         </div>
       </td>
@@ -415,14 +436,14 @@ function SourceRow({ source: s, syncing, onSync, onEdit, onDelete }) {
 
 function DataTab() {
   const toast = useToast();
-  const [sources, setSources]     = useState([]);
+  const [sources, setSources] = useState([]);
   const [selectedSrc, setSelectedSrc] = useState(null);
-  const [rows, setRows]           = useState([]);
-  const [columns, setColumns]     = useState([]);
-  const [loading, setLoading]     = useState(false);
-  const [total, setTotal]         = useState(0);
-  const [page, setPage]           = useState(1);
-  const [search, setSearch]       = useState("");
+  const [rows, setRows] = useState([]);
+  const [columns, setColumns] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     reportsApi.sources.list({ page_size: 100 })
@@ -480,7 +501,7 @@ function DataTab() {
         {selectedSrc && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 7, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 10px", height: 32 }}>
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4"/><path d="M9 9l2 2"/></svg>
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="4" /><path d="M9 9l2 2" /></svg>
               <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Search rows…" style={{ border: "none", outline: "none", fontSize: 12, background: "none", color: "var(--text)", fontFamily: "inherit", width: 180 }} />
             </div>
             <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{total.toLocaleString()} rows</span>
@@ -544,18 +565,18 @@ function DataTab() {
 
 function SyncLogsTab() {
   const toast = useToast();
-  const [logs, setLogs]           = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [sources, setSources]     = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sources, setSources] = useState([]);
   const [srcFilter, setSrcFilter] = useState("");
-  const [stFilter, setStFilter]   = useState("");
-  const [total, setTotal]         = useState(0);
-  const [page, setPage]           = useState(1);
+  const [stFilter, setStFilter] = useState("");
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     reportsApi.sources.list({ page_size: 100 })
       .then(r => setSources(r.results || r))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const load = useCallback(async () => {
@@ -563,7 +584,7 @@ function SyncLogsTab() {
     try {
       const params = { page, page_size: 50 };
       if (srcFilter) params.source = srcFilter;
-      if (stFilter)  params.status = stFilter;
+      if (stFilter) params.status = stFilter;
       const res = await reportsApi.syncLogs.list(params);
       setLogs(res.results || []);
       setTotal(res.count || 0);
@@ -610,14 +631,14 @@ function SyncLogsTab() {
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr style={{ background: "var(--surface-alt)" }}>
                   {[
-                    { label: "Status",    w: 100 },
-                    { label: "Source",    w: 180 },
-                    { label: "Started",   w: 160 },
-                    { label: "Duration",  w: 90  },
-                    { label: "Processed", w: 90  },
-                    { label: "Created",   w: 80  },
-                    { label: "Updated",   w: 80  },
-                    { label: "Failed",    w: 70  },
+                    { label: "Status", w: 100 },
+                    { label: "Source", w: 180 },
+                    { label: "Started", w: 160 },
+                    { label: "Duration", w: 90 },
+                    { label: "Processed", w: 90 },
+                    { label: "Created", w: 80 },
+                    { label: "Updated", w: 80 },
+                    { label: "Failed", w: 70 },
                     { label: "Triggered", w: 120 },
                   ].map(({ label, w }) => (
                     <th key={label} style={{ padding: "10px 14px", fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-dim)", textAlign: "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", minWidth: w }}>
@@ -630,24 +651,24 @@ function SyncLogsTab() {
                 {loading
                   ? <tr><td colSpan={9} style={emptyCell}>Loading…</td></tr>
                   : logs.length === 0
-                  ? <tr><td colSpan={9} style={emptyCell}>No sync logs yet.</td></tr>
-                  : logs.map(log => (
-                    <tr key={log.id} style={{ borderTop: "1px solid var(--border)", fontSize: 13 }}>
-                      <td style={cell}><StatusChip status={log.status} colors={LOG_COLORS} /></td>
-                      <td style={cell}><span style={{ fontSize: 12, color: "var(--text)" }}>{log.source_name || "—"}</span></td>
-                      <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{new Date(log.started_at).toLocaleString()}</td>
-                      <td style={{ ...cell, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
-                        {log.duration_seconds != null ? `${log.duration_seconds}s` : "—"}
-                      </td>
-                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12 }}>{log.records_processed}</td>
-                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>+{log.records_created}</td>
-                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "#2563eb" }}>↑{log.records_updated}</td>
-                      <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: log.records_failed > 0 ? "var(--danger)" : "var(--text-faint)" }}>
-                        {log.records_failed > 0 ? `✕${log.records_failed}` : "—"}
-                      </td>
-                      <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{log.triggered_by || "—"}</td>
-                    </tr>
-                  ))
+                    ? <tr><td colSpan={9} style={emptyCell}>No sync logs yet.</td></tr>
+                    : logs.map(log => (
+                      <tr key={log.id} style={{ borderTop: "1px solid var(--border)", fontSize: 13 }}>
+                        <td style={cell}><StatusChip status={log.status} colors={LOG_COLORS} /></td>
+                        <td style={cell}><span style={{ fontSize: 12, color: "var(--text)" }}>{log.source_name || "—"}</span></td>
+                        <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{new Date(log.started_at).toLocaleString()}</td>
+                        <td style={{ ...cell, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+                          {log.duration_seconds != null ? `${log.duration_seconds}s` : "—"}
+                        </td>
+                        <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12 }}>{log.records_processed}</td>
+                        <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--success)" }}>+{log.records_created}</td>
+                        <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: "#2563eb" }}>↑{log.records_updated}</td>
+                        <td style={{ ...cell, textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12, color: log.records_failed > 0 ? "var(--danger)" : "var(--text-faint)" }}>
+                          {log.records_failed > 0 ? `✕${log.records_failed}` : "—"}
+                        </td>
+                        <td style={{ ...cell, fontSize: 11, color: "var(--text-dim)" }}>{log.triggered_by || "—"}</td>
+                      </tr>
+                    ))
                 }
               </tbody>
             </table>
@@ -669,10 +690,10 @@ function SyncLogsTab() {
 
 function DocsTab() {
   const toast = useToast();
-  const [files, setFiles]       = useState([]);
+  const [files, setFiles] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [content, setContent]   = useState("");
-  const [loading, setLoading]   = useState(false);
+  const [content, setContent] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     reportsApi.docs.list()
@@ -755,7 +776,7 @@ function MarkdownRenderer({ content }) {
   const flushTable = () => {
     if (tableRows.length < 2) { tableRows = []; inTable = false; return; }
     const header = tableRows[0].split("|").map(c => c.trim()).filter(Boolean);
-    const body   = tableRows.slice(2); // skip separator row
+    const body = tableRows.slice(2); // skip separator row
     elements.push(
       <div key={`tbl-${i}`} style={{ overflowX: "auto", marginBottom: 16 }}>
         <table style={{ borderCollapse: "collapse", fontSize: 12, width: "100%" }}>
@@ -814,9 +835,9 @@ function MarkdownRenderer({ content }) {
 
     // Headings
     if (line.startsWith("#### ")) { elements.push(<h4 key={i} style={{ margin: "20px 0 8px", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{line.slice(5)}</h4>); i++; continue; }
-    if (line.startsWith("### "))  { elements.push(<h3 key={i} style={{ margin: "24px 0 10px", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{line.slice(4)}</h3>); i++; continue; }
-    if (line.startsWith("## "))   { elements.push(<h2 key={i} style={{ margin: "28px 0 12px", fontSize: 18, fontWeight: 700, color: "var(--text)", borderBottom: "1px solid var(--border)", paddingBottom: 6 }}>{line.slice(3)}</h2>); i++; continue; }
-    if (line.startsWith("# "))    { elements.push(<h1 key={i} style={{ margin: "0 0 16px", fontSize: 22, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-serif)" }}>{line.slice(2)}</h1>); i++; continue; }
+    if (line.startsWith("### ")) { elements.push(<h3 key={i} style={{ margin: "24px 0 10px", fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{line.slice(4)}</h3>); i++; continue; }
+    if (line.startsWith("## ")) { elements.push(<h2 key={i} style={{ margin: "28px 0 12px", fontSize: 18, fontWeight: 700, color: "var(--text)", borderBottom: "1px solid var(--border)", paddingBottom: 6 }}>{line.slice(3)}</h2>); i++; continue; }
+    if (line.startsWith("# ")) { elements.push(<h1 key={i} style={{ margin: "0 0 16px", fontSize: 22, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-serif)" }}>{line.slice(2)}</h1>); i++; continue; }
 
     // HR
     if (line.match(/^---+$/)) { elements.push(<hr key={i} style={{ border: "none", borderTop: "1px solid var(--border)", margin: "20px 0" }} />); i++; continue; }
@@ -837,7 +858,7 @@ function MarkdownRenderer({ content }) {
     }
     if (line.match(/^\d+\. /)) {
       const text = line.replace(/^\d+\. /, "");
-      const num  = line.match(/^(\d+)\./)?.[1] || "•";
+      const num = line.match(/^(\d+)\./)?.[1] || "•";
       elements.push(<div key={i} style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 4, paddingLeft: 16, display: "flex", gap: 8 }}><span style={{ flexShrink: 0, minWidth: 16, color: "var(--accent)", fontWeight: 600 }}>{num}.</span>{text}</div>);
       i++; continue;
     }
@@ -872,7 +893,7 @@ function SourceModal({ source, onClose, onSaved }) {
     sync_frequency: source?.sync_frequency || "manual",
     notes: source?.notes || "",
   });
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [worksheets, setWorksheets] = useState([]);
 
@@ -931,7 +952,7 @@ function SourceModal({ source, onClose, onSaved }) {
             </Field>
             <Field label="Type">
               <select value={form.sheet_type} onChange={e => set("sheet_type", e.target.value)} style={{ ...inputStyle, height: 34 }}>
-                {["bookings","events","delegates","revenue","pipeline","attendance","custom"].map(t => (
+                {["bookings", "events", "delegates", "revenue", "pipeline", "attendance", "custom"].map(t => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
               </select>
@@ -960,7 +981,7 @@ function SourceModal({ source, onClose, onSaved }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <Field label="Sync Frequency">
               <select value={form.sync_frequency} onChange={e => set("sync_frequency", e.target.value)} style={{ ...inputStyle, height: 34 }}>
-                {[["manual","Manual Only"],["hourly","Every Hour"],["daily","Daily"],["weekly","Weekly"]].map(([v, l]) => (
+                {[["manual", "Manual Only"], ["hourly", "Every Hour"], ["daily", "Daily"], ["weekly", "Weekly"]].map(([v, l]) => (
                   <option key={v} value={v}>{l}</option>
                 ))}
               </select>
@@ -1098,7 +1119,7 @@ function growthColor(pct) {
 
 function GrowthBadge({ pct }) {
   if (pct == null) return <span style={{ fontSize: 11, color: "var(--text-faint)" }}>—</span>;
-  const col  = growthColor(pct);
+  const col = growthColor(pct);
   const sign = pct >= 0 ? "+" : "";
   return (
     <span style={{
@@ -1136,9 +1157,9 @@ function MiniSalesBar({ editions }) {
 
 function EventGrowthTab() {
   const toast = useToast();
-  const [rows,     setRows]     = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {

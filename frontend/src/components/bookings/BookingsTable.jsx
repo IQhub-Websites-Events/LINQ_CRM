@@ -22,7 +22,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const [fetchingMore, setFetchingMore] = useState(false);
   const [sortKey, setSortKey] = useState("_sort_request_date");
   const [sortDir, setSortDir] = useState("desc");
-  
+
   // Column Filters
   const [colFilters, setColFilters] = useState({
     invoice_number: "",
@@ -64,25 +64,25 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         ordering: sortDir === "desc" ? `-${sortKey}` : sortKey,
         ...activeFilters,
       };
-      
+
       // Map frontend column filter keys to backend filterset keys
       if (statusFilter) params.payment_status = statusFilter;
       if (colFilters.payment_status) params.payment_status = colFilters.payment_status;
-      
+
       // Date exact match mapping (date_from = date_to = value)
       if (colFilters.request_date) {
         params.request_date_from = colFilters.request_date;
-        params.request_date_to   = colFilters.request_date;
+        params.request_date_to = colFilters.request_date;
       }
       if (colFilters.invoice_date) {
         params.invoice_date_from = colFilters.invoice_date;
-        params.invoice_date_to   = colFilters.invoice_date;
+        params.invoice_date_to = colFilters.invoice_date;
       }
       if (colFilters.payment_date) {
         params.payment_date_from = colFilters.payment_date;
-        params.payment_date_to   = colFilters.payment_date;
+        params.payment_date_to = colFilters.payment_date;
       }
-      
+
       const res = await delegatesApi.list(params);
       const results = res.results || [];
       const count = res.count || 0;
@@ -124,7 +124,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   useEffect(() => {
     eventsApi.list({ page_size: 100 })
       .then((res) => setEvents(res.results || []))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleColFilter = (key, val) => {
@@ -194,7 +194,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         borderRadius: 12,
         overflow: "hidden",
       }}>
-        <div 
+        <div
           onScroll={handleScroll}
           style={{ flex: 1, overflowX: "auto", overflowY: "auto" }}
         >
@@ -218,7 +218,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <Th style={{ minWidth: 140 }}>Direct Line</Th>
                 <SortTh sortKey="attendance" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 100 }}>Attendance</SortTh>
                 <Th style={{ minWidth: 110 }}>Pay Date</Th>
-                <Th style={{ minWidth: 80  }}>Paid/Free</Th>
+                <Th style={{ minWidth: 80 }}>Paid/Free</Th>
                 <Th style={{ minWidth: 110 }}>Ticket Tier</Th>
                 <Th style={{ minWidth: 120 }}>Pay Type</Th>
               </tr>
@@ -226,8 +226,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
                 <td style={{ width: 32 }}></td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select 
-                    style={colFilterInput} 
+                  <select
+                    style={colFilterInput}
                     value={colFilters.payment_status || ""}
                     onChange={(e) => handleColFilter("payment_status", e.target.value)}
                   >
@@ -236,96 +236,96 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
-                    placeholder="Filter..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Filter..."
+                    style={colFilterInput}
                     value={colFilters.invoice_number || ""}
                     onChange={(e) => handleColFilter("invoice_number", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                   <input 
-                    placeholder="Event..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Event..."
+                    style={colFilterInput}
                     value={colFilters.event_code || ""}
                     onChange={(e) => handleColFilter("event_code", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
-                    placeholder="Code..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Code..."
+                    style={colFilterInput}
                     value={colFilters.booking_code || ""}
                     onChange={(e) => handleColFilter("booking_code", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
+                  <input
                     type="date"
-                    style={colFilterInput} 
+                    style={colFilterInput}
                     value={colFilters.request_date || ""}
                     onChange={(e) => handleColFilter("request_date", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
+                  <input
                     type="date"
-                    style={colFilterInput} 
+                    style={colFilterInput}
                     value={colFilters.invoice_date || ""}
                     onChange={(e) => handleColFilter("invoice_date", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
-                    placeholder="Name..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Name..."
+                    style={colFilterInput}
                     value={colFilters.first_name || ""}
                     onChange={(e) => handleColFilter("first_name", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
-                    placeholder="Title..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Title..."
+                    style={colFilterInput}
                     value={colFilters.position || ""}
                     onChange={(e) => handleColFilter("position", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                   <input 
-                    placeholder="Company..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Company..."
+                    style={colFilterInput}
                     value={colFilters.company_name || ""}
                     onChange={(e) => handleColFilter("company_name", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                   <input 
-                    placeholder="Accounts..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Accounts..."
+                    style={colFilterInput}
                     value={colFilters.accounts_contact_email || ""}
                     onChange={(e) => handleColFilter("accounts_contact_email", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                   <input 
-                    placeholder="Email..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Email..."
+                    style={colFilterInput}
                     value={colFilters.email || ""}
                     onChange={(e) => handleColFilter("email", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                   <input 
-                    placeholder="Phone..." 
-                    style={colFilterInput} 
+                  <input
+                    placeholder="Phone..."
+                    style={colFilterInput}
                     value={colFilters.phone_number || ""}
                     onChange={(e) => handleColFilter("phone_number", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select 
-                    style={colFilterInput} 
+                  <select
+                    style={colFilterInput}
                     value={colFilters.attendance || ""}
                     onChange={(e) => handleColFilter("attendance", e.target.value)}
                   >
@@ -336,16 +336,16 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <input 
+                  <input
                     type="date"
-                    style={colFilterInput} 
+                    style={colFilterInput}
                     value={colFilters.payment_date || ""}
                     onChange={(e) => handleColFilter("payment_date", e.target.value)}
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select 
-                    style={colFilterInput} 
+                  <select
+                    style={colFilterInput}
                     value={colFilters.paid_or_free || ""}
                     onChange={(e) => handleColFilter("paid_or_free", e.target.value)}
                   >
@@ -354,8 +354,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select 
-                    style={colFilterInput} 
+                  <select
+                    style={colFilterInput}
                     value={colFilters.ticket_tier || ""}
                     onChange={(e) => handleColFilter("ticket_tier", e.target.value)}
                   >
@@ -364,8 +364,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select 
-                    style={colFilterInput} 
+                  <select
+                    style={colFilterInput}
                     value={colFilters.payment_type || ""}
                     onChange={(e) => handleColFilter("payment_type", e.target.value)}
                   >
@@ -408,14 +408,14 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           </table>
         </div>
 
-        <div style={{ 
-          padding: "10px 20px", 
-          borderTop: "1px solid var(--border)", 
+        <div style={{
+          padding: "10px 20px",
+          borderTop: "1px solid var(--border)",
           background: "var(--surface-alt)",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          flexShrink: 0 
+          flexShrink: 0
         }}>
           <span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500 }}>
             Showing {data.length} of {total} bookings
@@ -560,7 +560,7 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
           <span style={{
             fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
             background: delegate.effective_paid_or_free === "Free" ? "#dbeafe" : "#f0fdf4",
-            color:      delegate.effective_paid_or_free === "Free" ? "#1d4ed8" : "#166534",
+            color: delegate.effective_paid_or_free === "Free" ? "#1d4ed8" : "#166534",
           }}>
             {delegate.effective_paid_or_free}
           </span>
@@ -572,7 +572,7 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
           <span style={{
             fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 4,
             background: delegate.effective_ticket_tier === "VIP" ? "#fdf4ff" : "var(--surface-alt)",
-            color:      delegate.effective_ticket_tier === "VIP" ? "#7e22ce" : "var(--text-dim)",
+            color: delegate.effective_ticket_tier === "VIP" ? "#7e22ce" : "var(--text-dim)",
           }}>
             {delegate.effective_ticket_tier}
           </span>

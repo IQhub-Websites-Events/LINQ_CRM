@@ -30,19 +30,18 @@ const NAV = [
   },
   {
     section: "Insights",
-    adminOnly: true,
     items: [
-      { id: "reports",           label: "Reports",     Icon: ChartIcon   },
-      { id: "event-performance", label: "Performance", Icon: CalendarIcon },
+      { id: "reports", label: "Dashboard", Icon: ChartIcon },
     ],
   },
 ];
 
 const ADMIN_NAV = [
-  { id: "users",            label: "Users",        Icon: UsersIcon   },
-  { id: "teams-management", label: "Teams",        Icon: UsersIcon   },
-  { id: "webhook-logs",     label: "Webhooks",     Icon: WebhookIcon },
-  { id: "google-sync",      label: "Sync Ops",     Icon: SyncIcon    },
+  { id: "event-performance", label: "Performance", Icon: CalendarIcon },
+  { id: "users", label: "Users", Icon: UsersIcon },
+  { id: "teams-management", label: "Teams", Icon: UsersIcon },
+  { id: "webhook-logs", label: "Webhooks", Icon: WebhookIcon },
+  { id: "google-sync", label: "Sync Ops", Icon: SyncIcon },
 ];
 
 const sectionLabel = {

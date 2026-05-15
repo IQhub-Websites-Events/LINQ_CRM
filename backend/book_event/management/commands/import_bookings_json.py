@@ -71,6 +71,7 @@ class Command(BaseCommand):
                 "PaymentType": item.get("Payment_Type") or item.get("PaymentType", ""),
                 "PaidOrFree": item.get("Booking_code_type") or item.get("PaidOrFree", ""),
                 "TicketTier": item.get("Ticket_Tier") or item.get("TicketTier", ""),
+                "booking_code": item.get("Packages") or item.get("Booking_code") or item.get("Ticket_Tier") or "",
                 "Discount": item.get("Discount") or "0",
                 "Delegates": [
                     {

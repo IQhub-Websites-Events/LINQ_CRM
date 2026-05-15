@@ -135,18 +135,18 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         ser = BookEventListSerializer(page if page is not None else qs, many=True)
         return self.get_paginated_response(ser.data) if page else Response(ser.data)
 
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], permission_classes=[IsSalesOrAdmin])
     def stats(self, request):
         """
         GET /api/invoices/stats/?period=today|month|total
-        Returns volume stats for the specified period.
+        Returns volume stats for Sales, SpEx, and Speaker Sales.
         """
         from django.utils import timezone
-        from django.db.models import Q
+        from django.db.models import Q, Count
         from book_delegate.models import BookDelegate
 
         period = request.query_params.get("period", "total")
-        qs = self.get_queryset()
+        qs = self.filter_queryset(self.get_queryset())
 
         now = timezone.now()
         if period == "today":
@@ -155,19 +155,57 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
 
         del_qs = BookDelegate.objects.filter(invoice__in=qs)
-        
-        stats = del_qs.aggregate(
+
+        # Identification Lists
+        SPEX_LIST = [
+            "PLT SpEx", "GLD SpEx", "SLV SpEx", "Speaker / PLT SpEx", 
+            "Speaker / GLD SpEx", "Speaker / SLV SpEx", "Speaker / PTN SpEx", 
+            "PTN SpEx", "Add-Ons", "Upgraded to PLT SpEx", 
+            "Upgraded to GLD SpEx", "Upgraded to SLV SpEx"
+        ]
+        SPEAKER_LIST = [
+            "Speaker", "SPP", "SPP / Group Pass", "Speaker / PLT SpEx", 
+            "Speaker / GLD SpEx", "Speaker / SLV SpEx", "Speaker / PTN SpEx", 
+            "Speaker / Group Pass"
+        ]
+
+        # 1. Sales / Telemarketing Stats (Standard Delegate Counts)
+        sales = del_qs.aggregate(
             total=Count("id"),
             paid=Count("id", filter=Q(invoice__payment_status="Paid")),
-            confirmed=Count("id", filter=Q(attendance="Confirmed")),
             free=Count("id", filter=Q(invoice__paid_or_free="Free")),
         )
 
+        # 2. SpEx Stats (Unique Company Counts based on invoice.booking_code)
+        spex_qs = qs.filter(booking_code__in=SPEX_LIST)
+        spex_booked = spex_qs.values("company_name").distinct().count()
+        spex_paid = spex_qs.filter(payment_status="Paid").values("company_name").distinct().count()
+
+        # 3. Speaker Sales Stats (Delegate Counts based on invoice.booking_code)
+        speaker = del_qs.aggregate(
+            total=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST)),
+            confirmed=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST, attendance="Confirmed")),
+            paid=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST, invoice__payment_status="Paid")),
+        )
+
         return Response({
-            "total": stats["total"] or 0,
-            "paid": stats["paid"] or 0,
-            "confirmed": stats["confirmed"] or 0,
-            "free": stats["free"] or 0,
+            "sales": {
+                "total": sales["total"] or 0,
+                "paid": sales["paid"] or 0,
+                "pending": max(0, (sales["total"] or 0) - (sales["paid"] or 0)),
+                "free": sales["free"] or 0,
+            },
+            "spex": {
+                "booked": spex_booked,
+                "paid": spex_paid,
+                "pending": max(0, spex_booked - spex_paid),
+            },
+            "speaker": {
+                "total": speaker["total"] or 0,
+                "confirmed": speaker["confirmed"] or 0,
+                "paid": speaker["paid"] or 0,
+                "pending": max(0, (speaker["total"] or 0) - (speaker["paid"] or 0)),
+            }
         })
 
     @action(

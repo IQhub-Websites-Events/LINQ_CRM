@@ -287,10 +287,9 @@ class YearOnYearGrowthCalculator:
         from book_event.models import BookEvent
         from book_delegate.models import BookDelegate
 
-        code_pattern = booking_code_regex(self.event_code)
+        code_pattern = booking_code_regex(self.event_code, year=year)
         bookings_qs = BookEvent.objects.filter(
             event_code__iregex=code_pattern,
-            event_date__year=year,
         )
         total_bookings = bookings_qs.count()
         total_paid     = bookings_qs.filter(payment_status__in=PAID_STATUSES).count()
@@ -300,7 +299,6 @@ class YearOnYearGrowthCalculator:
 
         total_delegates = BookDelegate.objects.filter(
             event_code__iregex=code_pattern,
-            invoice__event_date__year=year,
         ).count()
 
         return {
