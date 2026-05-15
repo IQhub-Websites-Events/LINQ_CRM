@@ -25,6 +25,7 @@ class BookDelegate(models.Model):
         related_name="delegates",
         to_field="invoice_number",
         db_column="invoice_number",
+        db_constraint=False,
     )
     event_code       = models.CharField(max_length=50, db_index=True)
     company          = models.ForeignKey(

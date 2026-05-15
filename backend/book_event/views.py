@@ -149,10 +149,27 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         qs = self.filter_queryset(self.get_queryset())
 
         now = timezone.now()
+        today = now.date()
+        
         if period == "today":
-            qs = qs.filter(created_at__date=now.date())
+            qs = qs.filter(invoice_date=today)
+        elif period == "yesterday":
+            from datetime import timedelta
+            qs = qs.filter(invoice_date=today - timedelta(days=1))
+        elif period == "last_7_days":
+            from datetime import timedelta
+            qs = qs.filter(invoice_date__gte=today - timedelta(days=7))
+        elif period == "last_30_days":
+            from datetime import timedelta
+            qs = qs.filter(invoice_date__gte=today - timedelta(days=30))
         elif period == "month":
-            qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+            qs = qs.filter(invoice_date__year=now.year, invoice_date__month=now.month)
+        elif period == "quarter":
+            # Optional: handle quarter
+            q = (now.month - 1) // 3 + 1
+            qs = qs.filter(invoice_date__year=now.year, invoice_date__month__gte=(q-1)*3+1, invoice_date__month__lte=q*3)
+        elif period == "year":
+            qs = qs.filter(invoice_date__year=now.year)
 
         del_qs = BookDelegate.objects.filter(invoice__in=qs)
 

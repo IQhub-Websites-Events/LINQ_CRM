@@ -130,6 +130,8 @@ class DashboardStatsView(APIView):
             paid=Count("id", filter=Q(payment_status="Paid")),
             pending=Count("id", filter=Q(payment_status="Pending")),
             cancelled=Count("id", filter=Q(payment_status="Cancelled")),
+            revenue_paid=Coalesce(Sum("total_amount", filter=Q(payment_status="Paid")), Decimal("0")),
+            revenue_pending=Coalesce(Sum("total_amount", filter=Q(payment_status="Pending")), Decimal("0")),
         )
 
         from django.utils import timezone

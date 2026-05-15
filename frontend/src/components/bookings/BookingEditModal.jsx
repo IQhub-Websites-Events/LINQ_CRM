@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { Avatar } from "../ui/Avatar";
 import { StatusBadge } from "../ui/Badge";
 import { SourceBadge } from "../ui/SourceBadge";
@@ -53,6 +54,8 @@ const BLANK_DELEGATE = () => ({
 ═══════════════════════════════════════════════════════════ */
 export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const canEditInvoiceNumber = user?.role === "admin" || user?.role === "sales";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
@@ -262,7 +265,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
               <FInput value={form.event_name} readOnly compact />
             </FGroup>
             <FGroup label="Invoice Number" compact>
-              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} compact />
+              <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} readOnly={!canEditInvoiceNumber} compact />
             </FGroup>
           </div>
         </div>

@@ -103,7 +103,16 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "source", "form_name", "form_url", "packages",
             "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "invoice_number", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        can_edit = user and (getattr(user, "is_admin", False) or getattr(user, "role", "") == "sales")
+        if not can_edit:
+            fields["invoice_number"].read_only = True
+        return fields
 
     def to_representation(self, instance):
         from book_delegate.serializers import BookDelegateInlineSerializer
@@ -198,6 +207,9 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
         delegates_data = validated_data.pop("delegates", None)
         self._upsert_company(validated_data)
 
+        old_invoice_number = instance.invoice_number
+        new_invoice_number = validated_data.get("invoice_number", old_invoice_number)
+
         _ALLOWED_DELEGATE = {
             "first_name", "last_name", "email", "phone_number",
             "position", "ticket_package", "sponsorship_level",
@@ -207,6 +219,14 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
         }
 
         with transaction.atomic():
+            # Cascade invoice_number to delegates BEFORE updating BookEvent so that
+            # instance.delegates.all() still resolves correctly after the rename.
+            # db_constraint=False on the FK means no DB constraint blocks this.
+            if new_invoice_number != old_invoice_number:
+                BookDelegate.objects.filter(invoice_id=old_invoice_number).update(
+                    invoice_id=new_invoice_number
+                )
+
             instance = super().update(instance, validated_data)
 
             if delegates_data is not None:

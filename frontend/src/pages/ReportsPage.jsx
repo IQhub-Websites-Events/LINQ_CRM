@@ -152,7 +152,11 @@ function OverviewTab() {
               }}
             >
               <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last_7_days">Last 7 Days</option>
+              <option value="last_30_days">Last 30 Days</option>
               <option value="month">This Month</option>
+              <option value="year">This Year</option>
               <option value="total">Total</option>
             </select>
           </div>
