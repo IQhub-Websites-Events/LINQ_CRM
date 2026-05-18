@@ -25,16 +25,11 @@ export function LoginPage() {
       <div style={{ width: "100%", maxWidth: 360 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{
-            width: 44, height: 44, background: "#0f172a", borderRadius: 12,
-            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px"
-          }}>
-            <svg width="20" height="20" viewBox="0 0 14 14" fill="none">
-              <path d="M1 7h12M7 1l6 6-6 6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          <div>
+            <img src="logo-dark.png" alt="Logo" width={130} height={40} />
           </div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: "#1e293b", letterSpacing: "-.4px" }}>
-            Linq CRM
+            IQ-HUB CRM
           </h1>
         </div>
 
@@ -78,10 +73,6 @@ export function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p style={{ textAlign: "center", marginTop: 16, fontSize: 11.5, color: "#94a3b8" }}>
-          Data auto-synced from event website · Sales team access only
-        </p>
       </div>
     </div>
   );

@@ -11,15 +11,24 @@ class EventFilter(django_filters.FilterSet):
     city            = django_filters.CharFilter(lookup_expr="icontains")
     event_code      = django_filters.CharFilter(lookup_expr="icontains")
     year            = django_filters.NumberFilter(field_name="event_date", lookup_expr="year")
+    name            = django_filters.CharFilter(lookup_expr="icontains")
+    official_name   = django_filters.CharFilter(lookup_expr="icontains")
+    accepting_web_bookings = django_filters.BooleanFilter()
+    sales_executive = django_filters.NumberFilter(field_name="sales_executive__id")
 
     class Meta:
         model  = Event
-        fields = ["status", "sub_company", "event_date_from", "event_date_to", "city", "event_code", "year"]
+        fields = ["status", "sub_company", "event_date_from", "event_date_to", "city", "event_code", "year", "name", "official_name", "accepting_web_bookings", "sales_executive"]
 
     def filter_status(self, queryset, name, value):
         today = timezone.now().date()
-        if value.lower() == "completed":
+        val_lower = value.lower()
+        if val_lower == "completed":
             return queryset.filter(event_date__lt=today)
-        elif value.lower() == "live":
+        elif val_lower == "live":
             return queryset.filter(Q(event_date__gte=today) | Q(event_date__isnull=True))
+        
+        valid_statuses = [c[0].lower() for c in Event.Status.choices]
+        if val_lower in valid_statuses:
+            return queryset.filter(status__iexact=value)
         return queryset

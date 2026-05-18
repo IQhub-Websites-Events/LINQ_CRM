@@ -45,8 +45,23 @@ const BLANK_DELEGATE = () => ({
   delegate_ticket_tier: "",
 });
 
+const getEditionFromCode = (code, eventDate) => {
+  if (!code) return "";
+  const match = code.match(/(\d{2,4})$/);
+  if (match) {
+    const numStr = match[1];
+    return numStr.length === 2 ? `20${numStr}` : numStr;
+  }
+  if (eventDate) {
+    const year = new Date(eventDate).getFullYear();
+    if (!isNaN(year)) return String(year);
+  }
+  return "";
+};
+
 /* ═══════════════════════════════════════════════════════════
    AddBookingModal
+   React Component for creating a new booking.
 ═══════════════════════════════════════════════════════════ */
 export function AddBookingModal({ onClose, onSaved }) {
   const toast = useToast();
@@ -54,7 +69,7 @@ export function AddBookingModal({ onClose, onSaved }) {
   const [events, setEvents] = useState([]);
 
   const [form, setForm] = useState({
-    invoice_number: "", event_code: "", event_name: "", booking_code: "",
+    invoice_number: "", event_code: "", event_name: "", edition: "", booking_code: "",
     request_date: today(), invoice_date: today(), payment_status: "Pending",
     paid_or_free: "", ticket_tier: "",
     reference: "", add_ons: "",
@@ -64,7 +79,7 @@ export function AddBookingModal({ onClose, onSaved }) {
   });
 
   useEffect(() => {
-    eventsApi.list({ page_size: 100 }).then(r => setEvents(r.results || [])).catch(() => { });
+    eventsApi.list({ page_size: 5000 }).then(r => setEvents(r.results || [])).catch(() => { });
   }, []);
 
   const set = (f, v) => setForm(p => ({ ...p, [f]: v }));
@@ -134,7 +149,7 @@ export function AddBookingModal({ onClose, onSaved }) {
             <span style={headerTitle}>Add Booking</span>
             <button onClick={onClose} style={closeBtn}>✕</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.55fr", gap: "0 12px", marginTop: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.4fr 0.6fr", gap: "0 12px", marginTop: 12 }}>
             <FGroup label="Event Code" req compact>
               <EventCodePicker
                 value={form.event_code}
@@ -143,11 +158,24 @@ export function AddBookingModal({ onClose, onSaved }) {
                 onChange={(code, ev) => {
                   set("event_code", code);
                   set("event_name", ev?.name || "");
+                  if (ev?.event_date) {
+                    const year = new Date(ev.event_date).getFullYear();
+                    if (!isNaN(year)) {
+                      set("edition", year);
+                    }
+                  }
                 }}
               />
             </FGroup>
             <FGroup label="Event Name" compact>
               <FInput value={form.event_name} readOnly compact />
+            </FGroup>
+            <FGroup label="Edition" compact>
+              <FInput
+                value={form.edition || ""}
+                readOnly
+                compact
+              />
             </FGroup>
             <FGroup label="Invoice Number" req compact>
               <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} placeholder="INV-XXXX" compact />
@@ -342,7 +370,7 @@ function EventCodePicker({ value, events, onChange, compact }) {
   const q = search.toLowerCase();
   const filtered = q
     ? events.filter(e =>
-        e.event_code.toLowerCase().includes(q) ||
+        (e.event_code || "").toLowerCase().includes(q) ||
         (e.name || "").toLowerCase().includes(q) ||
         (e.city || "").toLowerCase().includes(q))
     : events;

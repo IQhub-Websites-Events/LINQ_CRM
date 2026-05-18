@@ -23,13 +23,17 @@ const APP_FIELDS = [
   { key: "payment_date",           label: "Date Paid",        required: false },
   { key: "payment_type",           label: "Payment Type",     required: false },
   { key: "ticket_tier",            label: "Ticket Tier",      required: false },
-  { key: "discount_code",          label: "Discount",         required: false },
+  { key: "discount_code",          label: "Discount Code / Coupon", required: false },
+  { key: "discount",               label: "Discount Value",   required: false },
   { key: "add_ons",                label: "Add-Ons",          required: false },
   { key: "reference",              label: "Ref",              required: false },
   { key: "sales_executive",        label: "Sales Executive",  required: false },
   { key: "attendance",             label: "Attendance",       required: false },
   { key: "created_at",             label: "Added Time",       required: false },
   { key: "delegate_count",         label: "Delegate Count",   required: false },
+  { key: "edition",                label: "Edition Year",     required: false },
+  { key: "position",               label: "Job Title",        required: false },
+  { key: "notes",                  label: "Notes",            required: false },
 ];
 
 const ALIAS_MAP = {
@@ -49,13 +53,17 @@ const ALIAS_MAP = {
   payment_date:           ["date paid", "payment date", "paymentdate", "pay date", "paid date"],
   payment_type:           ["payment type", "paymenttype", "pay type", "payment method"],
   ticket_tier:            ["ticket tier", "tickettier", "tier", "ticket type"],
-  discount_code:          ["discount", "discount code", "promo code", "coupon"],
+  discount_code:          ["discount code", "coupon", "promo code", "discountcoupon"],
+  discount:               ["discount", "discount value", "discount amount", "price reduction"],
   add_ons:                ["add-ons", "addons", "extras", "additional"],
   reference:              ["ref", "reference", "ref no", "reference number"],
   sales_executive:        ["sales executive", "salesexecutive", "sales rep", "account manager"],
   attendance:             ["attendance", "attendance in", "attended", "checked in", "present"],
   created_at:             ["added time", "created at", "createdat", "date added", "timestamp"],
   delegate_count:         ["count of rows", "delegate count", "row count", "total delegates"],
+  edition:                ["edition", "edition year", "year of event", "event year"],
+  position:               ["job title", "position", "role", "designation", "title"],
+  notes:                  ["notes", "remarks", "comment", "comments"],
 };
 
 const ACCEPT_EXTS = [".xlsx", ".xls", ".csv", ".json"];

@@ -15,9 +15,12 @@ class BookDelegateFilter(django_filters.FilterSet):
     
     # Exact / Multiple
     event_code     = django_filters.CharFilter(lookup_expr="icontains")
-    attendance     = django_filters.ChoiceFilter(choices=BookDelegate.Attendance.choices)
+    edition        = django_filters.CharFilter(method="filter_edition")
+    attendance     = django_filters.CharFilter(method="filter_attendance")
     company        = django_filters.NumberFilter(field_name="company__id")
     company_name   = django_filters.CharFilter(field_name="invoice__company_name", lookup_expr="icontains")
+    delegate_count = django_filters.NumberFilter()
+    discount       = django_filters.NumberFilter()
     
     # Overrides (Effective values)
     payment_status = django_filters.MultipleChoiceFilter(
@@ -80,13 +83,38 @@ class BookDelegateFilter(django_filters.FilterSet):
             queryset, "delegate_ticket_tier", "invoice__ticket_tier", value
         )
 
+    def filter_attendance(self, queryset, name, value):
+        if not value:
+            return queryset
+        val_lower = value.lower()
+        if val_lower == "yes":
+            return queryset.filter(attendance="Confirmed")
+        elif val_lower == "no":
+            return queryset.exclude(attendance="Confirmed")
+        return queryset
+
+    def filter_edition(self, queryset, name, value):
+        if not value:
+            return queryset
+        val_str = str(value).strip()
+        if not val_str:
+            return queryset
+        try:
+            year = int(val_str)
+            if year < 100:
+                year += 2000
+            return queryset.filter(edition=year)
+        except ValueError:
+            return queryset
+
     class Meta:
         model  = BookDelegate
         fields = [
             "first_name", "last_name", "email", "position", "booking_code",
-            "invoice_number", "event_code", "payment_status", "payment_type",
+            "invoice_number", "event_code", "edition", "payment_status", "payment_type",
             "paid_or_free", "ticket_tier", "attendance", "company", "company_name",
             "request_date_from", "request_date_to",
             "invoice_date_from", "invoice_date_to",
             "payment_date_from", "payment_date_to",
+            "delegate_count", "discount",
         ]

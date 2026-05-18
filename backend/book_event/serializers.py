@@ -24,11 +24,12 @@ class BookEventListSerializer(serializers.ModelSerializer):
     sales_executive_name  = serializers.SerializerMethodField()
     team_leader_name      = serializers.SerializerMethodField()
     delegate_count_actual = serializers.SerializerMethodField()
+    updated_by_name       = serializers.SerializerMethodField()
 
     class Meta:
         model  = BookEvent
         fields = [
-            "id", "invoice_number", "event_code", "event_name", "event_date",
+            "id", "invoice_number", "event_code", "edition", "event_name", "event_date",
             "ticket_tier", "delegate_count", "delegate_count_actual",
             "discount", "discount_code",
             "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
@@ -39,6 +40,7 @@ class BookEventListSerializer(serializers.ModelSerializer):
             "sales_executive", "sales_executive_name",
             "team_leader", "team_leader_name",
             "reference", "booking_code", "source", "created_at", "updated_at",
+            "updated_by", "updated_by_name",
         ]
         read_only_fields = ["id", "invoice_number", "created_at", "updated_at"]
 
@@ -65,12 +67,19 @@ class BookEventListSerializer(serializers.ModelSerializer):
     def get_delegate_count_actual(self, obj):
         return getattr(obj, "_delegate_count_actual", None)
 
+    def get_updated_by_name(self, obj):
+        if obj.updated_by_id:
+            u = obj.updated_by
+            return u.get_full_name() or u.username
+        return None
+
 
 class BookEventDetailSerializer(serializers.ModelSerializer):
     delegates            = serializers.JSONField(required=False)
     sales_executive_name = serializers.SerializerMethodField()
     team_leader_name     = serializers.SerializerMethodField()
     event_detail         = serializers.SerializerMethodField()
+    updated_by_name      = serializers.SerializerMethodField()
 
     # Write-only company address fields — stripped before DB save, used for Company upsert
     company_address    = serializers.CharField(write_only=True, required=False, default="", allow_blank=True)
@@ -83,7 +92,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BookEvent
         fields = [
-            "id", "invoice_number", "event_code", "event_name", "event_date",
+            "id", "invoice_number", "event_code", "edition", "event_name", "event_date",
             "ticket_tier", "delegate_count",
             "discount", "discount_code",
             "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
@@ -101,7 +110,7 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
             "reference", "parent_code", "notes", "add_ons",
             "delegates", "event_detail",
             "source", "form_name", "form_url", "packages",
-            "created_at", "updated_at",
+            "created_at", "updated_at", "updated_by", "updated_by_name",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
@@ -301,6 +310,12 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
     def get_team_leader_name(self, obj):
         if obj.team_leader_id:
             u = obj.team_leader
+            return u.get_full_name() or u.username
+        return None
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by_id:
+            u = obj.updated_by
             return u.get_full_name() or u.username
         return None
 

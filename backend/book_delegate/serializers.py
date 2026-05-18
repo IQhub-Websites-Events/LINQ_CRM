@@ -25,7 +25,7 @@ class BookDelegateInlineSerializer(serializers.ModelSerializer):
             "delegate_paid_or_free", "delegate_ticket_tier",
             "delegate_count", "discount", "add_ons", "reference",
             "effective_payment_status", "effective_payment_type", "effective_payment_date",
-            "effective_paid_or_free", "effective_ticket_tier",
+            "effective_paid_or_free", "effective_ticket_tier", "edition",
         ]
 
     def get_effective_payment_status(self, obj):
@@ -82,7 +82,7 @@ class BookDelegateListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BookDelegate
         fields = [
-            "id", "book_event_id", "invoice_number", "event_code", "booking_code",
+            "id", "book_event_id", "invoice_number", "event_code", "edition", "booking_code",
             "request_date", "invoice_date", "first_name", "last_name", "full_name",
             "email", "phone_number", "position",
             "ticket_package", "sponsorship_level",
@@ -148,7 +148,7 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = BookDelegate
         fields = [
-            "id", "invoice_number", "event_code", "event_name",
+            "id", "invoice_number", "event_code", "edition", "event_name",
             "first_name", "last_name", "full_name",
             "email", "phone_number", "position",
             "ticket_package", "sponsorship_level",
@@ -164,9 +164,16 @@ class BookDelegateDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_event_name(self, obj):
+        if obj.invoice and obj.invoice.event_name:
+            return obj.invoice.event_name
         from events.models import Event
         try:
-            return Event.objects.get(event_code=obj.event_code).name
+            import re
+            master_event = Event.objects.get(event_code=obj.event_code)
+            clean_name = re.sub(r'\s*\d{4}$', '', master_event.name).strip()
+            if obj.edition:
+                return f"{clean_name} {obj.edition}"
+            return clean_name
         except Event.DoesNotExist:
             return ""
 

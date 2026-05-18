@@ -27,26 +27,6 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
         qs = Event.objects.select_related("sales_executive").prefetch_related("assigned_users")
         if not user.is_admin:
             qs = qs.filter(Q(assigned_users=user) | Q(sales_executive=user)).distinct()
-
-        # For the list action only: the suffixed format (e.g. "AFS - JS") is canonical.
-        # When both "AFS" and "AFS - JS" exist, hide the plain "AFS" entry so
-        # each event concept appears exactly once.
-        if getattr(self, "action", None) == "list":
-            suffixed_base_codes = set(
-                code.split(" - ")[0].strip()
-                for code in Event.objects.filter(event_code__contains=" - ")
-                .values_list("event_code", flat=True)
-            )
-            if suffixed_base_codes:
-                legacy_plain_codes = [
-                    code for code in
-                    Event.objects.exclude(event_code__contains=" - ")
-                    .values_list("event_code", flat=True)
-                    if code in suffixed_base_codes
-                ]
-                if legacy_plain_codes:
-                    qs = qs.exclude(event_code__in=legacy_plain_codes)
-
         return qs
 
     def get_serializer_class(self):

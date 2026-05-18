@@ -23,7 +23,7 @@ class EventListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Event
         fields = [
-            "id", "event_code", "name", "official_name", "sub_company", "city", "country",
+            "id", "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
             "event_date", "end_date", "event_status",
             "sales_executive", "sales_executive_name",
             "assigned_sales_users",
@@ -50,7 +50,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Event
         fields = [
-            "id", "event_code", "name", "official_name", "sub_company", "city", "country",
+            "id", "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
             "venue", "event_date", "end_date", "event_status",
             "sales_executive", "sales_executive_name",
             "assigned_sales_users",
@@ -85,7 +85,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Event
         fields = [
-            "event_code", "name", "official_name", "sub_company", "city", "country",
+            "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
             "venue", "event_date", "end_date",
             "sales_executive",
             "speaker_sales_team", "spex_team", "tele_marketing_team",

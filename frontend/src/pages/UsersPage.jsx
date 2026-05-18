@@ -176,7 +176,6 @@ export function UsersPage() {
                 <Th>Team</Th>
                 <Th>Events</Th>
                 <Th>Status</Th>
-                <Th>Last Login</Th>
                 <Th style={{ width: 110 }} />
               </tr>
             </thead>
@@ -219,11 +218,6 @@ export function UsersPage() {
                       </span>
                     </td>
                     <td style={cell}><UserStatusBadge status={user.status || 'active'} /></td>
-                    <td style={cell}>
-                      <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>
-                        {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
-                      </span>
-                    </td>
                     <td style={{ ...cell, width: 110 }} onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                         <ActionBtn onClick={() => { setSelectedUser(user); setIsModalOpen(true); }} title="Edit">

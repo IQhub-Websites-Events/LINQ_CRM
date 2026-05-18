@@ -57,6 +57,20 @@ const BLANK_DELEGATE = () => ({
   reference: "",
 });
 
+const getEditionFromCode = (code, eventDate) => {
+  if (!code) return "";
+  const match = code.match(/(\d{2,4})$/);
+  if (match) {
+    const numStr = match[1];
+    return numStr.length === 2 ? `20${numStr}` : numStr;
+  }
+  if (eventDate) {
+    const year = new Date(eventDate).getFullYear();
+    if (!isNaN(year)) return String(year);
+  }
+  return "";
+};
+
 /* ═══════════════════════════════════════════════════════════
    BookingEditModal
 ═══════════════════════════════════════════════════════════ */
@@ -79,6 +93,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
         id:             inv.id,
         invoice_number: inv.invoice_number || "",
         event_code:     inv.event_code     || "",
+        edition:        inv.edition        || "",
         event_name:     inv.event_name     || "",
         booking_code:   inv.booking_code   || "",
         request_date:   inv.request_date   || null,
@@ -135,7 +150,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    eventsApi.list({ page_size: 500 }).then(r => setEvents(r.results || [])).catch(() => {});
+    eventsApi.list({ page_size: 5000 }).then(r => setEvents(r.results || [])).catch(() => {});
   }, []);
 
   // Fetch assigned persons from the Events module whenever event_code is known
@@ -261,7 +276,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
             <button onClick={onClose} style={closeBtn}>✕</button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 0.55fr", gap: "0 12px", marginTop: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 0.4fr 0.6fr", gap: "0 12px", marginTop: 12 }}>
             <FGroup label="Event Code" req compact>
               <EventCodePicker
                 value={form.event_code}
@@ -270,11 +285,24 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
                 onChange={(code, ev) => {
                   set("event_code", code);
                   set("event_name", ev?.name || "");
+                  if (ev?.event_date) {
+                    const year = new Date(ev.event_date).getFullYear();
+                    if (!isNaN(year)) {
+                      set("edition", year);
+                    }
+                  }
                 }}
               />
             </FGroup>
             <FGroup label="Event Name" compact>
               <FInput value={form.event_name} readOnly compact />
+            </FGroup>
+            <FGroup label="Edition" compact>
+              <FInput
+                value={form.edition || ""}
+                readOnly
+                compact
+              />
             </FGroup>
             <FGroup label="Invoice Number" compact>
               <FInput mono value={form.invoice_number} onChange={v => set("invoice_number", v)} readOnly={!canEditInvoiceNumber} compact />
@@ -304,7 +332,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
               {form.delegates.length} delegate{form.delegates.length !== 1 ? "s" : ""}
               {form.updated_at && (
                 <span style={{ marginLeft: 8, opacity: 0.7 }}>
-                  · Modified {new Date(form.updated_at).toLocaleDateString("en-GB")}
+                  · Modified {form.updated_by_name ? `by ${form.updated_by_name} ` : ""}on {new Date(form.updated_at).toLocaleDateString("en-GB")} at {new Date(form.updated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
             </span>
@@ -540,7 +568,7 @@ function EventCodePicker({ value, events, onChange, compact }) {
   const q = search.toLowerCase();
   const filtered = q
     ? events.filter(e =>
-        e.event_code.toLowerCase().includes(q) ||
+        (e.event_code || "").toLowerCase().includes(q) ||
         (e.name  || "").toLowerCase().includes(q) ||
         (e.city  || "").toLowerCase().includes(q))
     : events;

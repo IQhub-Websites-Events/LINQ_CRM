@@ -24,77 +24,35 @@ def _date_range(days_back: int) -> tuple[date, date]:
     return today - timedelta(days=days_back), today
 
 
-def _build_code_cross_ref(event_codes: list[str]) -> tuple[dict, dict, list]:
-    """
-    Builds a mapping between canonical Event event_codes and all BookEvent
-    event_codes that refer to the same edition by (master_code, year) pair.
-
-    Returns:
-        canonical_to_booking  — {event_code: [booking_code, ...]}
-        reverse_map           — {booking_code: canonical_event_code}
-        all_booking_codes     — flat de-duped list for DB queries
-    """
-    from event_performance.active_edition_service import normalize_master_code, extract_year_from_code
-
-    # Index every distinct BookEvent code by (master, year)
-    bk_by_key: dict = {}
-    for bc in BookEvent.objects.values_list("event_code", flat=True).distinct():
-        mc = normalize_master_code(bc)
-        yr = extract_year_from_code(bc)
-        if mc:
-            bk_by_key.setdefault((mc, yr), []).append(bc)
-
-    canonical_to_booking: dict[str, list[str]] = {}
-    reverse_map: dict[str, str] = {}
-
-    for ec in event_codes:
-        mc = normalize_master_code(ec)
-        yr = extract_year_from_code(ec)
-        # Collect all booking codes for this (master, year) pair + the canonical code itself
-        matches = list(set(bk_by_key.get((mc, yr), []) + [ec]))
-        canonical_to_booking[ec] = matches
-        for bc in matches:
-            if bc not in reverse_map:           # first canonical wins if ambiguous
-                reverse_map[bc] = ec
-
-    all_booking_codes = list(reverse_map.keys())
-    return canonical_to_booking, reverse_map, all_booking_codes
-
-
-def _merge_rows(rows, code_field: str, reverse_map: dict) -> dict:
-    """
-    Collapses annotated queryset rows (keyed by booking code) into
-    canonical-code buckets by summing all numeric/Decimal fields.
-    """
-    merged: dict[str, dict] = {}
-    for row in rows:
-        bc = row[code_field]
-        cc = reverse_map.get(bc, bc)
-        if cc not in merged:
-            merged[cc] = {k: v for k, v in row.items() if k != code_field}
-        else:
-            for k, v in row.items():
-                if k == code_field:
-                    continue
-                existing = merged[cc].get(k, 0) or 0
-                merged[cc][k] = existing + (v or 0)
-    return merged
-
-
 def bulk_event_metrics(event_codes: list[str]) -> dict:
     """
     Returns a dict keyed by event_code.
-
-    BookEvent records whose event_code variant normalises to the same
-    (master_code, year) as a canonical Event event_code are automatically
-    included — handles formats like 'ACU - RS26', 'ACU25', 'MMU/GS - JS26'.
-
-    Headcount metrics are delegate-based; revenue metrics are invoice-based.
+    Each event code's metrics are calculated from BookEvent / BookDelegate records
+    where event_code matches exactly and edition matches the Event's edition year.
     """
     if not event_codes:
         return {}
 
-    _, reverse_map, all_booking_codes = _build_code_cross_ref(event_codes)
+    from events.models import Event
+    from django.db.models import Q
+    from decimal import Decimal
+
+    events_list = Event.objects.filter(event_code__in=event_codes)
+    event_year_map = {}
+    for e in events_list:
+        if e.event_date:
+            event_year_map[e.event_code] = e.event_date.year
+
+    booking_filter = Q()
+    delegate_filter = Q()
+    for ec in event_codes:
+        yr = event_year_map.get(ec)
+        if yr is not None:
+            booking_filter |= Q(event_code=ec, edition=yr)
+            delegate_filter |= Q(invoice__event_code=ec, invoice__edition=yr)
+        else:
+            booking_filter |= Q(event_code=ec)
+            delegate_filter |= Q(invoice__event_code=ec)
 
     today     = date.today()
     yesterday = today - timedelta(days=1)
@@ -102,11 +60,11 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
     d14_start = today - timedelta(days=14)
     d21_start = today - timedelta(days=21)
 
-    # ── Query 1: Revenue from invoices ────────────────────────────────────────
+    # Query 1: Revenue from invoices
     revenue_qs = (
         BookEvent.objects
-        .filter(event_code__in=all_booking_codes)
-        .values("event_code")
+        .filter(booking_filter)
+        .values("event_code", "edition")
         .annotate(
             total_invoices   = Count("id"),
             total_revenue    = Coalesce(Sum("total_amount", filter=Q(payment_status__in=PAID_STATUSES)),    Value(Decimal("0")), output_field=DecimalField()),
@@ -119,11 +77,11 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
         )
     )
 
-    # ── Query 2: All headcounts from delegates ────────────────────────────────
+    # Query 2: All headcounts from delegates
     delegate_qs = (
         BookDelegate.objects
-        .filter(invoice__event_code__in=all_booking_codes)
-        .values(base_code=F("invoice__event_code"))
+        .filter(delegate_filter)
+        .values(base_code=F("invoice__event_code"), base_edition=F("invoice__edition"))
         .annotate(
             total_delegates     = Count("id"),
             paid_count          = Count("id", filter=Q(invoice__payment_status__in=PAID_STATUSES)),
@@ -146,14 +104,20 @@ def bulk_event_metrics(event_codes: list[str]) -> dict:
         )
     )
 
-    # ── Merge results back to canonical codes ─────────────────────────────────
-    revenue_map  = _merge_rows(revenue_qs,  "event_code", reverse_map)
-    delegate_map = _merge_rows(delegate_qs, "base_code",  reverse_map)
+    revenue_map = {
+        (row["event_code"], row["edition"]): row
+        for row in revenue_qs
+    }
+    delegate_map = {
+        (row["base_code"], row["base_edition"]): row
+        for row in delegate_qs
+    }
 
     result = {}
     for ec in event_codes:
-        r = revenue_map.get(ec, {})
-        d = delegate_map.get(ec, {})
+        yr = event_year_map.get(ec)
+        r = revenue_map.get((ec, yr), {})
+        d = delegate_map.get((ec, yr), {})
 
         result[ec] = {
             "total_delegates":     d.get("total_delegates",     0) or 0,
@@ -212,9 +176,30 @@ def reps_performance(event_codes: list[str]) -> list[dict]:
     """
     Per-rep breakdown: paid bookings + revenue + pending for a set of events.
     """
+    if not event_codes:
+        return []
+
+    from events.models import Event
+    from django.db.models import Q
+    from decimal import Decimal
+
+    events_list = Event.objects.filter(event_code__in=event_codes)
+    event_year_map = {}
+    for e in events_list:
+        if e.event_date:
+            event_year_map[e.event_code] = e.event_date.year
+
+    booking_filter = Q()
+    for ec in event_codes:
+        yr = event_year_map.get(ec)
+        if yr is not None:
+            booking_filter |= Q(event_code=ec, edition=yr)
+        else:
+            booking_filter |= Q(event_code=ec)
+
     qs = (
         BookEvent.objects
-        .filter(event_code__in=event_codes)
+        .filter(booking_filter)
         .values(
             rep_id        = F("sales_executive__id"),
             rep_first     = F("sales_executive__first_name"),

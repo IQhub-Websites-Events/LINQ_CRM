@@ -74,7 +74,7 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        invoice = serializer.save()
+        invoice = serializer.save(updated_by=self.request.user)
         from accounts.models import ActionLog
         ActionLog.objects.create(
             user=self.request.user,
@@ -88,7 +88,7 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         invoice = self.get_object()
         ser = PaymentUpdateSerializer(invoice, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
-        ser.save()
+        ser.save(updated_by=request.user)
 
         from accounts.models import ActionLog
         ActionLog.objects.create(
@@ -424,6 +424,21 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
         def _delegate_fields(row, ev_code):
             name_raw = _clean(row, "contact_name")
             parts    = name_raw.split(" ", 1) if name_raw else []
+            
+            try:
+                d_discount = Decimal(str(row.get("discount") or "0.00").strip() or "0.00")
+            except Exception:
+                d_discount = Decimal("0.00")
+
+            attendance_raw = _clean(row, "attendance")
+            attendance_normalized = "Pending"
+            if attendance_raw.lower() in ("yes", "true", "1", "confirmed"):
+                attendance_normalized = "Confirmed"
+            elif attendance_raw.lower() in ("no-show", "noshow"):
+                attendance_normalized = "No-show"
+            elif attendance_raw.lower() == "cancelled":
+                attendance_normalized = "Cancelled"
+
             return dict(
                 event_code=ev_code,
                 first_name=parts[0] if parts else "",
@@ -431,6 +446,12 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                 email=_clean(row, "contact_email").lower(),
                 phone_number=_clean(row, "contact_phone"),
                 company_name_raw=_clean(row, "company_name"),
+                position=_clean(row, "position"),
+                notes=_clean(row, "notes"),
+                discount=d_discount,
+                add_ons=_clean(row, "add_ons"),
+                reference=_clean(row, "reference"),
+                attendance=attendance_normalized,
             )
 
         def _safe_create_delegate(book_event, fields):
@@ -516,6 +537,35 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             # aborts the outer PostgreSQL transaction for subsequent rows.
             try:
                 with transaction.atomic():
+                    from decimal import Decimal
+                    from django.utils import timezone
+
+                    # Parse new fields for the row
+                    try:
+                        edition_val = int(row.get("edition")) if row.get("edition") else None
+                    except (ValueError, TypeError):
+                        edition_val = None
+
+                    try:
+                        discount_val = Decimal(str(row.get("discount") or "0.00").strip() or "0.00")
+                    except Exception:
+                        discount_val = Decimal("0.00")
+
+                    attendance_raw = _clean(row, "attendance")
+                    attendance_normalized = "Pending"
+                    if attendance_raw.lower() in ("yes", "true", "1", "confirmed"):
+                        attendance_normalized = "Confirmed"
+                    elif attendance_raw.lower() in ("no-show", "noshow"):
+                        attendance_normalized = "No-show"
+                    elif attendance_raw.lower() == "cancelled":
+                        attendance_normalized = "Cancelled"
+
+                    created_at_val = None
+                    if row.get("created_at"):
+                        parsed_dt = _parse_date(row.get("created_at"))
+                        if parsed_dt:
+                            created_at_val = timezone.make_aware(datetime.combine(parsed_dt, datetime.min.time()))
+
                     existing = BookEvent.objects.filter(invoice_number=inv_no).first()
 
                     if existing:
@@ -536,6 +586,11 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                             existing.discount_code          = _clean(row, "discount_code") or existing.discount_code
                             existing.add_ons                = _clean(row, "add_ons") or existing.add_ons
                             existing.reference              = _clean(row, "reference") or existing.reference
+                            existing.edition                = edition_val or existing.edition
+                            existing.discount               = discount_val or existing.discount
+                            existing.attendance             = attendance_normalized or existing.attendance
+                            if created_at_val:
+                                existing.created_at = created_at_val
                             pd = _parse_date(row.get("payment_date"))
                             if pd: existing.payment_date = pd
                             rd = _parse_date(row.get("request_date"))
@@ -587,6 +642,10 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                             delegate_count         = dc,
                             sales_executive        = sales_exec,
                             source                 = BookEvent.Source.MANUAL,
+                            edition                = edition_val,
+                            discount               = discount_val,
+                            attendance             = attendance_normalized,
+                            **(dict(created_at=created_at_val) if created_at_val else {}),
                         )
                         _save_delegate(book_event, row, event_code_val, nth=_nth)
 

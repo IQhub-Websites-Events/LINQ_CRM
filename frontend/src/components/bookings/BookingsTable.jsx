@@ -8,9 +8,19 @@ import { fmt } from "../../utils/helpers";
 import { BookingEditModal } from "./BookingEditModal";
 import { AddBookingModal } from "./AddBookingModal";
 import { DatePopup } from "./DatePopup";
-import { PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE, PAYMENT_STATUSES } from "../../utils/constants";
+import { PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE, PAYMENT_STATUSES, DISCOUNT_OPTIONS } from "../../utils/constants";
 
 const PAGE_SIZE = 50;
+
+const getEditionFromCode = (code) => {
+  if (!code) return "—";
+  const match = code.match(/(\d{2,4})$/);
+  if (match) {
+    const numStr = match[1];
+    return numStr.length === 2 ? `20${numStr}` : numStr;
+  }
+  return "—";
+};
 
 export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const toast = useToast();
@@ -27,6 +37,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const [colFilters, setColFilters] = useState({
     invoice_number: "",
     event_code: "",
+    edition: "",
     booking_code: "",
     first_name: "",
     last_name: "",
@@ -43,6 +54,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
     request_date: "",
     invoice_date: "",
     payment_date: "",
+    delegate_count: "",
+    discount: "",
   });
 
   const [events, setEvents] = useState([]);
@@ -122,10 +135,12 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   useEffect(() => { onTotalChange?.(total); }, [total, onTotalChange]);
 
   useEffect(() => {
-    eventsApi.list({ page_size: 100 })
+    eventsApi.list({ page_size: 5000 })
       .then((res) => setEvents(res.results || []))
       .catch(() => { });
   }, []);
+
+  const uniqueEditions = ["2024", "2025", "2026"];
 
   const handleColFilter = (key, val) => {
     setColFilters(prev => ({ ...prev, [key]: val }));
@@ -207,6 +222,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                 <SortTh sortKey="_sort_status" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 130 }}>Status</SortTh>
                 <SortTh sortKey="_sort_invoice" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
                 <Th style={{ minWidth: 100 }}>Event</Th>
+                <Th style={{ minWidth: 90 }}>Edition</Th>
                 <Th style={{ minWidth: 130 }}>Booking Code</Th>
                 <SortTh sortKey="_sort_request_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Request Date</SortTh>
                 <SortTh sortKey="_sort_date" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 120 }}>Invoice Date</SortTh>
@@ -254,6 +270,16 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     value={colFilters.event_code || ""}
                     onChange={(e) => handleColFilter("event_code", e.target.value)}
                   />
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select
+                    style={colFilterInput}
+                    value={colFilters.edition || ""}
+                    onChange={(e) => handleColFilter("edition", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {uniqueEditions.map(yr => <option key={yr} value={yr}>{yr}</option>)}
+                  </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
                   <input
@@ -334,10 +360,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     onChange={(e) => handleColFilter("attendance", e.target.value)}
                   >
                     <option value="">All</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Confirmed">Confirmed</option>
-                    <option value="No-show">No-show</option>
-                    <option value="Cancelled">Cancelled</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
                   </select>
                 </td>
                 <td style={{ padding: "4px 14px" }}>
@@ -378,8 +402,27 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     {PAYMENT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </td>
-                <td style={{ padding: "4px 14px" }}></td>
-                <td style={{ padding: "4px 14px" }}></td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select
+                    style={colFilterInput}
+                    value={colFilters.delegate_count || ""}
+                    onChange={(e) => handleColFilter("delegate_count", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                  </select>
+                </td>
+                <td style={{ padding: "4px 14px" }}>
+                  <select
+                    style={colFilterInput}
+                    value={colFilters.discount || ""}
+                    onChange={(e) => handleColFilter("discount", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {DISCOUNT_OPTIONS.map(o => <option key={o} value={o.replace("%", "")}>{o}</option>)}
+                  </select>
+                </td>
                 <td style={{ padding: "4px 14px" }}></td>
                 <td style={{ padding: "4px 14px" }}></td>
               </tr>
@@ -500,6 +543,12 @@ const DelegateRow = memo(({ delegate, onEdit }) => {
       <td style={cell}>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)" }}>
           {delegate.event_code || "—"}
+        </span>
+      </td>
+
+      <td style={cell}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)" }}>
+          {delegate.edition || "—"}
         </span>
       </td>
 

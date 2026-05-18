@@ -28,6 +28,7 @@ class BookDelegate(models.Model):
         db_constraint=False,
     )
     event_code       = models.CharField(max_length=50, db_index=True)
+    edition          = models.IntegerField(null=True, blank=True, db_index=True)
     company          = models.ForeignKey(
         "companies.Company", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="delegates",
@@ -56,6 +57,16 @@ class BookDelegate(models.Model):
         # Force delegate_count to 0 if payment status is Cancelled
         if self.delegate_payment_status == "Cancelled":
             self.delegate_count = 0
+        if self.event_code:
+            import re
+            match = re.search(r'(\d{2,4})$', self.event_code)
+            if match:
+                num_str = match.group(1)
+                self.edition = int(f"20{num_str}" if len(num_str) == 2 else num_str)
+                self.event_code = re.sub(r'\s*-?\s*\d{2,4}$', '', self.event_code).strip()
+        elif self.invoice:
+            self.event_code = self.invoice.event_code
+            self.edition = self.invoice.edition
         super().save(*args, **kwargs)
 
     # Per-delegate payment overrides (null = inherit from invoice)
@@ -74,6 +85,7 @@ class BookDelegate(models.Model):
         indexes = [
             models.Index(fields=["invoice", "email"]),
             models.Index(fields=["event_code"]),
+            models.Index(fields=["edition"]),
             models.Index(fields=["email"]),
             models.Index(fields=["company"]),
             models.Index(fields=["attendance"]),

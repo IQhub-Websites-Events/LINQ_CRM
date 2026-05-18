@@ -33,6 +33,47 @@ export function EventsPage() {
   const [allUsers, setAllUsers] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "desc");
 
+  const [colFilters, setColFilters] = useState({
+    event_code: "",
+    name: "",
+    official_name: "",
+    city: "",
+    year: "",
+    accepting_web_bookings: "",
+    status: "",
+    sales_executive: "",
+  });
+
+  const [filterOptions, setFilterOptions] = useState({
+    codes: [],
+    names: [],
+    officialNames: [],
+    cities: [],
+    years: [],
+  });
+
+  const handleColFilter = (key, val) => {
+    setColFilters(prev => ({ ...prev, [key]: val }));
+    setPage(1);
+    setItems([]);
+  };
+
+  useEffect(() => {
+    eventsApi.list({ page_size: 500 }).then(r => {
+      const results = r?.results || [];
+      const codes = [...new Set(results.map(e => e.event_code).filter(Boolean))].sort();
+      const names = [...new Set(results.map(e => e.name).filter(Boolean))].sort();
+      const officialNames = [...new Set(results.map(e => e.official_name).filter(Boolean))].sort();
+      const cities = [...new Set(results.map(e => e.city).filter(Boolean))].sort();
+      const years = [...new Set(results.map(e => {
+        if (!e.event_date) return null;
+        return new Date(e.event_date).getFullYear();
+      }).filter(Boolean))].sort((a, b) => b - a);
+
+      setFilterOptions({ codes, names, officialNames, cities, years });
+    }).catch(() => {});
+  }, []);
+
   // ── Infinite scroll state ────────────────────────────────────────────────
   const [items,       setItems]       = useState([]);
   const [page,        setPage]        = useState(1);
@@ -51,10 +92,15 @@ export function EventsPage() {
       setLoadingMore(true);
     }
 
+    const activeFilters = Object.fromEntries(
+      Object.entries(colFilters).filter(([_, v]) => v !== "" && v !== null && v !== undefined)
+    );
+
     eventsApi.list({
       page, page_size: PAGE_SIZE,
       ...(search ? { search } : {}),
       ...(status ? { status } : {}),
+      ...activeFilters,
       ordering: sort.dir === "asc" ? sort.key : `-${sort.key}`,
     }).then(data => {
       if (cancelled) return;
@@ -66,7 +112,7 @@ export function EventsPage() {
     });
 
     return () => { cancelled = true; };
-  }, [page, search, status, sort.key, sort.dir]);
+  }, [page, search, status, sort.key, sort.dir, colFilters]);
 
   // IntersectionObserver — fires setPage(+1) when sentinel comes into view
   useEffect(() => {
@@ -109,11 +155,79 @@ export function EventsPage() {
   ];
 
   const openCreate = () => setModal({ mode: "create", data: {
-    event_code: "", name: "", official_name: "", city: "", country: "",
+    eventType: "new",
+    event_code: "", master_code: "", name: "", official_name: "", city: "", country: "",
     venue: "", event_date: "", end_date: "", sales_executive: null,
     speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
     content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
   } });
+
+  const yr = new Date().getFullYear().toString().slice(-2);
+
+  // Helper to replace year in name/official_name
+  const replaceYear = (str, newYear) => {
+    if (!str) return "";
+    const fourDigitRegex = /\b20\d{2}\b/g;
+    if (fourDigitRegex.test(str)) {
+      return str.replace(fourDigitRegex, String(newYear));
+    }
+    const twoDigitRegex = /\b\d{2}\b/g;
+    if (twoDigitRegex.test(str)) {
+      return str.replace(twoDigitRegex, String(newYear).slice(-2));
+    }
+    return `${str} ${newYear}`;
+  };
+
+  // Auto-populate when previous edition master_code is entered
+  useEffect(() => {
+    if (modal?.mode !== "create" || modal?.data?.eventType !== "old") return;
+    const code = modal?.data?.master_code;
+    if (!code || code.length < 3) return;
+
+    const timer = setTimeout(() => {
+      eventsApi.list({ event_code: code, page_size: 1 })
+        .then(res => {
+          const pastEvent = res.results?.[0];
+          if (pastEvent) {
+            const targetYear = 2000 + parseInt(yr);
+            const newName = replaceYear(pastEvent.name, targetYear);
+            const newOfficialName = replaceYear(pastEvent.official_name, targetYear);
+
+            setModal(m => {
+              if (m?.data?.master_code !== code) return m;
+              return {
+                ...m,
+                data: {
+                  ...m.data,
+                  name: newName,
+                  official_name: newOfficialName,
+                  city: pastEvent.city || "",
+                  country: pastEvent.country || "",
+                  venue: pastEvent.venue || "",
+                  sales_executive: pastEvent.sales_executive ? String(pastEvent.sales_executive) : null,
+                  speaker_sales_team: pastEvent.speaker_sales_team || "",
+                  spex_team: pastEvent.spex_team || "",
+                  tele_marketing_team: pastEvent.tele_marketing_team || "",
+                  market_research_team: pastEvent.market_research_team || "",
+                  content_check: pastEvent.content_check || "",
+                  marketing_check: pastEvent.marketing_check || "",
+                  sales_check: pastEvent.sales_check || "",
+                  accepting_web_bookings: !!pastEvent.accepting_web_bookings,
+                }
+              };
+            });
+          }
+        })
+        .catch(() => {});
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [modal?.data?.master_code, modal?.data?.eventType, modal?.mode, yr]);
+
+  const setMasterCode = (v) => {
+    const upper = v.toUpperCase();
+    setModal(m => ({ ...m, data: { ...m.data, master_code: upper, event_code: upper + yr } }));
+  };
 
   const openEdit = (ev) => {
     const data = { ...ev };
@@ -150,6 +264,8 @@ export function EventsPage() {
   const save = async () => {
     try {
       const payload = { ...modal.data };
+      delete payload.eventType;  // UI-only, not a model field
+
       // Build assigned_user_ids from all team dropdowns + sales_executive
       const assignedIds = [];
       if (payload.sales_executive) assignedIds.push(parseInt(payload.sales_executive));
@@ -157,7 +273,6 @@ export function EventsPage() {
         const id = parseInt(payload[field]);
         if (!isNaN(id)) {
           assignedIds.push(id);
-          // Replace ID with display name for storage in the text field
           const user = allUsers.find(u => u.id === id);
           if (user) payload[field] = user.full_name;
         }
@@ -226,6 +341,94 @@ export function EventsPage() {
               <SortableTh noSort>Status</SortableTh>
               <SortableTh sortKey="sales_executive" sort={sort} onSort={handleSort}>Sales Executive</SortableTh>
               <SortableTh noSort></SortableTh>
+            </tr>
+            <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.event_code}
+                  onChange={(e) => handleColFilter("event_code", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {filterOptions.codes.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.name}
+                  onChange={(e) => handleColFilter("name", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {filterOptions.names.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.official_name}
+                  onChange={(e) => handleColFilter("official_name", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {filterOptions.officialNames.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.city}
+                  onChange={(e) => handleColFilter("city", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.year}
+                  onChange={(e) => handleColFilter("year", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.accepting_web_bookings}
+                  onChange={(e) => handleColFilter("accepting_web_bookings", e.target.value)}
+                >
+                  <option value="">All</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.status}
+                  onChange={(e) => handleColFilter("status", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </td>
+              <td style={{ padding: "4px 8px" }}>
+                <select
+                  style={colFilterSelect}
+                  value={colFilters.sales_executive}
+                  onChange={(e) => handleColFilter("sales_executive", e.target.value)}
+                >
+                  <option value="">All</option>
+                  {salesUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.username}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td></td>
             </tr>
           </thead>
 
@@ -313,18 +516,70 @@ export function EventsPage() {
         footer={<><Button onClick={closeModal}>Cancel</Button><Button variant="primary" onClick={save}>Save event</Button></>}>
         {modal && (
           <div style={{ display: "grid", gap: 12, maxHeight: "70vh", overflowY: "auto", padding: "4px" }}>
+
+            {/* ── Event type selector (create only) ───────────────────── */}
+            {modal.mode === "create" && (
+              <div style={{ display: "flex", gap: 8 }}>
+                {["new", "old"].map(type => (
+                  <button key={type} onClick={() => setField("eventType", type)} style={{
+                    flex: 1, padding: "9px 0", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                    cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
+                    border: modal.data.eventType === type ? "2px solid #405189" : "2px solid var(--border)",
+                    background: modal.data.eventType === type ? "#405189" : "var(--surface)",
+                    color: modal.data.eventType === type ? "#fff" : "var(--text)",
+                  }}>
+                    {type === "new" ? "New Event" : "Previous Edition"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* ── Code fields — vary by create mode ───────────────────── */}
+            {modal.mode === "create" && modal.data.eventType === "old" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Base Event Code" required>
+                  <Input
+                    value={modal.data.master_code}
+                    onChange={setMasterCode}
+                    placeholder="SAFU - JS"
+                  />
+                </FormField>
+                <FormField label={`Event Code (auto · ${yr})`}>
+                  <Input
+                    value={modal.data.event_code}
+                    readOnly
+                    style={{ background: "var(--surface-alt)", color: "var(--text-faint)", cursor: "default" }}
+                  />
+                </FormField>
+              </div>
+            ) : modal.mode === "create" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Event Code" required>
+                  <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
+                </FormField>
+                <FormField label="Master Code">
+                  <Input value={modal.data.master_code} onChange={(v) => setField("master_code", v.toUpperCase())} placeholder="GFS" />
+                </FormField>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <FormField label="Event Code" required>
+                  <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
+                </FormField>
+                <FormField label="Master Code">
+                  <Input value={modal.data.master_code || ""} onChange={(v) => setField("master_code", v.toUpperCase())} placeholder="GFS" />
+                </FormField>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Event code" required>
-                <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
-              </FormField>
               <FormField label="Event name" required>
                 <Input value={modal.data.name} onChange={(v) => setField("name", v)} placeholder="Global Finance Summit 2027" />
               </FormField>
+              <FormField label="Official Name">
+                <Input value={modal.data.official_name || ""} onChange={(v) => setField("official_name", v)} placeholder="Official Name" />
+              </FormField>
             </div>
-
-            <FormField label="Official Name">
-              <Input value={modal.data.official_name || ""} onChange={(v) => setField("official_name", v)} placeholder="Official Name" />
-            </FormField>
 
             <FormField label="City">
               <Input value={modal.data.city} onChange={(v) => setField("city", v)} placeholder="London" />
@@ -439,4 +694,18 @@ export function EventsPage() {
 const iconBtn = {
   border: "none", background: "none", cursor: "pointer",
   padding: "3px 5px", borderRadius: 4, color: "#94a3b8", fontSize: 12,
+};
+
+const colFilterSelect = {
+  width: "100%",
+  height: 28,
+  padding: "0 4px",
+  fontSize: 11,
+  border: "1px solid var(--border)",
+  borderRadius: 4,
+  background: "var(--surface)",
+  color: "var(--text)",
+  fontFamily: "inherit",
+  outline: "none",
+  transition: "border-color 0.1s",
 };
