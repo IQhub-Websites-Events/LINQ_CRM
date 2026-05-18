@@ -373,49 +373,57 @@ class WebsiteBookingSerializer(serializers.Serializer):
     # Booking identifiers
     InvoiceNumber = serializers.CharField(max_length=100)
     Eventcode     = serializers.CharField(max_length=50)
-    Eventname     = serializers.CharField(max_length=255, required=False, default="")
-    Date          = serializers.DateField(required=False, allow_null=True, default=None)
+    Eventname     = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    Date          = serializers.CharField(required=False, allow_blank=True, default="")
     # Financial amounts
-    PreTaxAmount       = serializers.CharField(required=False, default="")
-    TaxAmount          = serializers.CharField(required=False, default="")
-    TotalAmount        = serializers.CharField(required=False, default="")
-    AddOnsTotalAmount  = serializers.CharField(required=False, default="")
-    Discount           = serializers.CharField(required=False, default="0")
-    DiscountCode       = serializers.CharField(max_length=100, required=False, default="")
-    Currency           = serializers.CharField(max_length=10, required=False, default="USD")
-    PaymentStatus      = serializers.CharField(max_length=30, required=False, default="")
+    PreTaxAmount       = serializers.CharField(required=False, allow_blank=True, default="")
+    TaxAmount          = serializers.CharField(required=False, allow_blank=True, default="")
+    TotalAmount        = serializers.CharField(required=False, allow_blank=True, default="")
+    AddOnsTotalAmount  = serializers.CharField(required=False, allow_blank=True, default="")
+    Discount           = serializers.CharField(required=False, allow_blank=True, default="0")
+    DiscountCode       = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    Currency           = serializers.CharField(max_length=10, required=False, allow_blank=True, default="USD")
+    PaymentStatus      = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     # Form metadata
-    FormName = serializers.CharField(max_length=255, required=False, default="")
-    FormURL  = serializers.CharField(max_length=500, required=False, default="")
+    FormName = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    FormURL  = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
     Packages = serializers.JSONField(required=False, default=list)
     # Company
-    DelegateCompanyName = serializers.CharField(max_length=255, required=False, default="")
-    Address             = serializers.CharField(max_length=500, required=False, default="")
-    City                = serializers.CharField(max_length=100, required=False, default="")
-    StateRegion         = serializers.CharField(max_length=100, required=False, default="")
-    Country             = serializers.CharField(max_length=100, required=False, default="")
-    PostalCode          = serializers.CharField(max_length=20, required=False, default="")
+    DelegateCompanyName = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    Address             = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+    City                = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    StateRegion         = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    Country             = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    PostalCode          = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
     CompanyWebAddress   = serializers.CharField(required=False, allow_blank=True, default="")
     # Contact
     AccountsContactEmail = serializers.EmailField(required=False, allow_blank=True, default="")
     # Invoice-level ticket/payment classification
-    TicketTier = serializers.CharField(max_length=50, required=False, default="")
-    PaidOrFree = serializers.CharField(max_length=20, required=False, default="")
-    PaymentType = serializers.CharField(max_length=30, required=False, default="")
+    TicketTier = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
+    PaidOrFree = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    PaymentType = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
     # Delegates
     Delegates = DelegatePayloadSerializer(many=True, required=False, default=list)
 
     def _decimal_or_none(self, value, name):
         if not value and value != 0:
             return None
+        s_val = str(value).replace(",", "").replace("%", "").strip()
+        if not s_val:
+            return None
         try:
-            return Decimal(str(value).replace(",", "").replace("%", "").strip() or "0")
+            return Decimal(s_val)
         except InvalidOperation:
             raise serializers.ValidationError({name: f"Invalid decimal: {value}"})
 
     def _decimal(self, value, name):
+        if not value and value != 0:
+            return Decimal("0")
+        s_val = str(value).replace(",", "").replace("%", "").strip()
+        if not s_val:
+            return Decimal("0")
         try:
-            return Decimal(str(value).replace(",", "").replace("%", "").strip() or "0")
+            return Decimal(s_val)
         except InvalidOperation:
             raise serializers.ValidationError({name: f"Invalid decimal: {value}"})
 

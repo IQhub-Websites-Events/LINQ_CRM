@@ -231,12 +231,35 @@ class WebhookProcessor:
         
         return code
 
+    def parse_webhook_date(self, val):
+        if not val:
+            return None
+        s = str(val).strip()
+        fmts = [
+            "%Y-%m-%d",      # 2026-05-08
+            "%d/%m/%Y",      # 08/05/2026
+            "%m/%d/%Y",      # 05/08/2026
+            "%d-%b-%Y",      # 08-May-2026
+            "%d %b %Y",      # 08 May 2026
+            "%d %B %Y",      # 08 May 2026 (Full month)
+            "%B %d, %Y",     # May 08, 2026
+            "%b %d, %Y",     # May 08, 2026 (Short month)
+            "%d/%m/%y",      # 08/05/26
+            "%m/%d/%y",      # 05/08/26
+        ]
+        for fmt in fmts:
+            try:
+                return datetime.strptime(s, fmt).date()
+            except ValueError:
+                continue
+        return None
+
     def _create_booking(self, d, event_code, payment_status, sales_exec):
         invoice = BookEvent.objects.create(
             invoice_number         = d["InvoiceNumber"],
             event_code             = event_code,
             event_name             = d.get("Eventname", ""),
-            event_date             = d.get("Date"),
+            event_date             = self.parse_webhook_date(d.get("Date")),
             company_name           = d.get("DelegateCompanyName", ""),
             accounts_contact_email = d.get("AccountsContactEmail", ""),
             discount               = d.get("Discount", 0),
@@ -262,7 +285,7 @@ class WebhookProcessor:
         field_map = {
             "event_code":             self.normalize_event_code(d.get("Eventcode", "")),
             "event_name":             d.get("Eventname", ""),
-            "event_date":             d.get("Date"),
+            "event_date":             self.parse_webhook_date(d.get("Date")),
             "company_name":           d.get("DelegateCompanyName", ""),
             "accounts_contact_email": d.get("AccountsContactEmail", ""),
             "discount":               d.get("Discount", 0),
