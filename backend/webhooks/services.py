@@ -79,9 +79,27 @@ class WebhookProcessor:
 
         payment_status = ps_map.get(d.get("PaymentStatus", "").strip().lower(), BookEvent.PaymentStatus.PENDING)
         
-        # Inject normalized values back into validated_data for use in helpers
-        d["TicketTier"] = tier_map.get(d.get("TicketTier", "").strip().lower(), d.get("TicketTier", ""))
-        d["PaidOrFree"] = pof_map.get(d.get("PaidOrFree", "").strip().lower(), d.get("PaidOrFree", ""))
+        # Resolve ticket tier from both TicketTier and Packages
+        packages_val = d.get("Packages", "")
+        if isinstance(packages_val, list):
+            packages_str = " ".join([str(p) for p in packages_val]).lower()
+        else:
+            packages_str = str(packages_val).lower()
+            
+        ticket_tier_raw = d.get("TicketTier", "").strip().lower()
+        
+        resolved_tier = ""
+        if "super early" in packages_str or "seb" in packages_str or "seb" in ticket_tier_raw or "super early" in ticket_tier_raw:
+            resolved_tier = "SEB"
+        elif "early" in packages_str or "eb" in packages_str or "eb" in ticket_tier_raw or "early" in ticket_tier_raw:
+            resolved_tier = "EB"
+        elif "regular" in packages_str or "standard" in packages_str or "regular" in ticket_tier_raw or "standard" in ticket_tier_raw:
+            resolved_tier = "Regular"
+        else:
+            resolved_tier = tier_map.get(ticket_tier_raw, "Regular")
+            
+        d["TicketTier"] = resolved_tier
+        d["PaidOrFree"] = pof_map.get(d.get("PaidOrFree", "").strip().lower(), "Paid")
 
         # ── 3. Sales exec assignment ───────────────────────────────────────────
         sales_exec = BookEvent.auto_assign_sales(event_code)
@@ -338,6 +356,18 @@ class WebhookProcessor:
                 if existing:
                     # Update existing delegate
                     changed = []
+                    del_tier_raw = dp.get("TicketTier", "").strip().lower()
+                    del_package_raw = dp.get("TicketPackage", "").strip().lower()
+                    del_resolved_tier = ""
+                    if "super early" in del_package_raw or "seb" in del_package_raw or "seb" in del_tier_raw or "super early" in del_tier_raw:
+                        del_resolved_tier = "SEB"
+                    elif "early" in del_package_raw or "eb" in del_package_raw or "eb" in del_tier_raw or "early" in del_tier_raw:
+                        del_resolved_tier = "EB"
+                    elif "regular" in del_package_raw or "standard" in del_package_raw or "regular" in del_tier_raw or "standard" in del_tier_raw:
+                        del_resolved_tier = "Regular"
+                    else:
+                        del_resolved_tier = tier_map.get(del_tier_raw, invoice.ticket_tier or "Regular")
+
                     upd = {
                         "first_name":        dp.get("FirstName", "").strip(),
                         "last_name":         dp.get("LastName", "").strip(),
@@ -346,8 +376,8 @@ class WebhookProcessor:
                         "ticket_package":    dp.get("TicketPackage", "").strip(),
                         "sponsorship_level": dp.get("SponsorshipLevel", "").strip(),
                         "company_name_raw":  company_name,
-                        "delegate_ticket_tier": tier_map.get(dp.get("TicketTier", "").strip().lower(), dp.get("TicketTier", "").strip()),
-                        "delegate_paid_or_free": pof_map.get(dp.get("PaidOrFree", "").strip().lower(), dp.get("PaidOrFree", "").strip()),
+                        "delegate_ticket_tier": del_resolved_tier,
+                        "delegate_paid_or_free": pof_map.get(dp.get("PaidOrFree", "").strip().lower(), "Paid"),
                     }
                     for attr, val in upd.items():
                         if getattr(existing, attr, None) != val:
@@ -360,6 +390,18 @@ class WebhookProcessor:
                         self._note(f"Delegate #{i+1} unchanged: {email}")
                     skipped += 1
                 else:
+                    del_tier_raw = dp.get("TicketTier", "").strip().lower()
+                    del_package_raw = dp.get("TicketPackage", "").strip().lower()
+                    del_resolved_tier = ""
+                    if "super early" in del_package_raw or "seb" in del_package_raw or "seb" in del_tier_raw or "super early" in del_tier_raw:
+                        del_resolved_tier = "SEB"
+                    elif "early" in del_package_raw or "eb" in del_package_raw or "eb" in del_tier_raw or "early" in del_tier_raw:
+                        del_resolved_tier = "EB"
+                    elif "regular" in del_package_raw or "standard" in del_package_raw or "regular" in del_tier_raw or "standard" in del_tier_raw:
+                        del_resolved_tier = "Regular"
+                    else:
+                        del_resolved_tier = tier_map.get(del_tier_raw, invoice.ticket_tier or "Regular")
+
                     BookDelegate.objects.create(
                         invoice           = invoice,
                         event_code        = event_code,
@@ -372,8 +414,8 @@ class WebhookProcessor:
                         position          = dp.get("Position", "").strip(),
                         ticket_package    = dp.get("TicketPackage", "").strip(),
                         sponsorship_level = dp.get("SponsorshipLevel", "").strip(),
-                        delegate_ticket_tier = tier_map.get(dp.get("TicketTier", "").strip().lower(), dp.get("TicketTier", "").strip()),
-                        delegate_paid_or_free = pof_map.get(dp.get("PaidOrFree", "").strip().lower(), dp.get("PaidOrFree", "").strip()),
+                        delegate_ticket_tier = del_resolved_tier,
+                        delegate_paid_or_free = pof_map.get(dp.get("PaidOrFree", "").strip().lower(), "Paid"),
                     )
                     inserted += 1
                     self._note(f"Delegate #{i+1} inserted: {email}")
