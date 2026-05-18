@@ -19,7 +19,6 @@ class BookEvent(models.Model):
         PENDING              = "Pending",              "Pending"
         PAID                 = "Paid",                 "Paid"
         UNPAID               = "Unpaid",               "Unpaid"
-        PARTIAL              = "Partial",              "Partial"
         CANCELLED            = "Cancelled",            "Cancelled"
         REFUNDED             = "Refunded",             "Refunded"
         FREE                 = "Free",                 "Free"
@@ -31,13 +30,6 @@ class BookEvent(models.Model):
     class PaymentType(models.TextChoices):
         STRIPE        = "Stripe",        "Stripe"
         BANK          = "Bank",          "Bank"
-        BANK_TRANSFER = "Bank Transfer", "Bank Transfer"
-        CREDIT_CARD   = "Credit Card",   "Credit Card"
-        CASH          = "Cash",          "Cash"
-        COMPLIMENTARY = "Complimentary", "Complimentary"
-        MANUAL        = "Manual",        "Manual"
-        INVOICE       = "Invoice",       "Invoice"
-        WIRE_TRANSFER = "Wire Transfer", "Wire Transfer"
 
     class PaidOrFree(models.TextChoices):
         PAID = "Paid", "Paid"

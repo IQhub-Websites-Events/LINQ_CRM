@@ -2,7 +2,6 @@ export const PAYMENT_STATUSES = [
   "Pending",
   "Paid",
   "Unpaid",
-  "Partial",
   "Cancelled",
   "Refunded",
   "Free",
@@ -15,13 +14,6 @@ export const PAYMENT_STATUSES = [
 export const PAYMENT_TYPES = [
   "Stripe",
   "Bank",
-  "Bank Transfer",
-  "Credit Card",
-  "Cash",
-  "Complimentary",
-  "Manual",
-  "Invoice",
-  "Wire Transfer",
 ];
 
 export const TICKET_TIERS = [
@@ -48,7 +40,6 @@ export const STATUS_CONFIG = {
   Paid: { color: "green", dot: "#22c55e" },
   Pending: { color: "amber", dot: "#f59e0b" },
   Unpaid: { color: "red", dot: "#ef4444" },
-  Partial: { color: "amber", dot: "#f59e0b" },
   Cancelled: { color: "red", dot: "#ef4444" },
   Refunded: { color: "slate", dot: "#94a3b8" },
   Free: { color: "blue", dot: "#3b82f6" },
