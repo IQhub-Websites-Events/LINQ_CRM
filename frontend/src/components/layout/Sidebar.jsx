@@ -69,14 +69,13 @@ export function Sidebar({ current, onNav, badges = {} }) {
         {/* Logo tile */}
         <div style={{
           width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-          background: "linear-gradient(135deg,#34d399 0%,#0d7a4f 100%)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <span style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", color: "#fff", fontSize: 15, lineHeight: 1 }}>L</span>
+          <img src="/logo-dark.png" alt="Logo" style={{ width: "100%", height: "auto" }} />
         </div>
         <div>
-          <div style={{ fontFamily: "var(--font-serif)", fontStyle: "italic", color: "var(--sidebar-text)", fontSize: 18, lineHeight: 1 }}>
-            Linq
+          <div style={{ fontFamily: "var(--font-serif)", color: "var(--sidebar-text)", fontSize: 18, fontWeight: 600, lineHeight: 1 }}>
+            IQ-Hub
           </div>
           <div style={{ fontFamily: "var(--font-sans)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--sidebar-dim)", marginTop: 1 }}>
             CRM Workspace
