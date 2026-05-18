@@ -202,10 +202,13 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
                     d["last_name"] = parts[1]
             if not d.get("first_name") and not d.get("full_name"):
                 raise serializers.ValidationError(f"Delegate #{i+1} is missing a name.")
-            if not d.get("email"):
-                raise serializers.ValidationError(f"Delegate #{i+1} is missing an email.")
-            if "@" not in d.get("email", ""):
-                raise serializers.ValidationError(f"Delegate #{i+1} has an invalid email.")
+            # Only require email for new delegates (existing ones have an id)
+            is_existing = d.get("id") and str(d.get("id")).isdigit()
+            if not is_existing:
+                if not d.get("email"):
+                    raise serializers.ValidationError(f"Delegate #{i+1} is missing an email.")
+                if "@" not in d.get("email", ""):
+                    raise serializers.ValidationError(f"Delegate #{i+1} has an invalid email.")
         return value
 
     def update(self, instance, validated_data):
@@ -256,17 +259,14 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
                 emails_seen = set()
 
                 for d_data in delegates_data:
-                    email = d_data.get("email", "").strip().lower()
-                    if not email or email in emails_seen:
-                        continue
-                    emails_seen.add(email)
-
                     d_id = d_data.get("id")
                     d_id = int(d_id) if d_id and str(d_id).isdigit() else None
                     clean = {k: v for k, v in d_data.items() if k in _ALLOWED_DELEGATE}
 
                     if d_id and d_id in existing:
-                        if BookDelegate.objects.filter(
+                        # Existing delegate — update by ID, email not required
+                        email = d_data.get("email", "").strip().lower()
+                        if email and BookDelegate.objects.filter(
                             invoice=instance, email=email
                         ).exclude(id=d_id).exists():
                             raise serializers.ValidationError(
@@ -275,6 +275,11 @@ class BookEventDetailSerializer(serializers.ModelSerializer):
                         BookDelegate.objects.filter(id=d_id).update(**clean)
                         updated_count += 1
                     else:
+                        # New delegate — email required and must be unique on this invoice
+                        email = d_data.get("email", "").strip().lower()
+                        if not email or email in emails_seen:
+                            continue
+                        emails_seen.add(email)
                         if not BookDelegate.objects.filter(invoice=instance, email=email).exists():
                             BookDelegate.objects.create(
                                 invoice=instance,
@@ -375,6 +380,8 @@ class WebsiteBookingSerializer(serializers.Serializer):
     Eventcode     = serializers.CharField(max_length=50)
     Eventname     = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     Date          = serializers.CharField(required=False, allow_blank=True, default="")
+    RequestDate   = serializers.CharField(required=False, allow_blank=True, default="")
+    InvoiceDate   = serializers.CharField(required=False, allow_blank=True, default="")
     # Financial amounts
     PreTaxAmount       = serializers.CharField(required=False, allow_blank=True, default="")
     TaxAmount          = serializers.CharField(required=False, allow_blank=True, default="")

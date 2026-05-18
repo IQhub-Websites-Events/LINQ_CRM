@@ -81,6 +81,8 @@ class EventWriteSerializer(serializers.ModelSerializer):
     assigned_user_ids = serializers.ListField(
         child=serializers.IntegerField(), write_only=True, required=False, default=list
     )
+    city    = serializers.CharField(required=False, allow_blank=True, default="")
+    country = serializers.CharField(required=False, allow_blank=True, default="")
 
     class Meta:
         model  = Event

@@ -157,79 +157,11 @@ export function EventsPage() {
   ];
 
   const openCreate = () => setModal({ mode: "create", data: {
-    eventType: "new",
-    event_code: "", master_code: "", name: "", official_name: "", city: "", country: "",
+    event_code: "", name: "", city: "", country: "",
     venue: "", event_date: "", end_date: "", sales_executive: null,
     speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
     content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
   } });
-
-  const yr = new Date().getFullYear().toString().slice(-2);
-
-  // Helper to replace year in name/official_name
-  const replaceYear = (str, newYear) => {
-    if (!str) return "";
-    const fourDigitRegex = /\b20\d{2}\b/g;
-    if (fourDigitRegex.test(str)) {
-      return str.replace(fourDigitRegex, String(newYear));
-    }
-    const twoDigitRegex = /\b\d{2}\b/g;
-    if (twoDigitRegex.test(str)) {
-      return str.replace(twoDigitRegex, String(newYear).slice(-2));
-    }
-    return `${str} ${newYear}`;
-  };
-
-  // Auto-populate when previous edition master_code is entered
-  useEffect(() => {
-    if (modal?.mode !== "create" || modal?.data?.eventType !== "old") return;
-    const code = modal?.data?.master_code;
-    if (!code || code.length < 3) return;
-
-    const timer = setTimeout(() => {
-      eventsApi.list({ event_code: code, page_size: 1 })
-        .then(res => {
-          const pastEvent = res.results?.[0];
-          if (pastEvent) {
-            const targetYear = 2000 + parseInt(yr);
-            const newName = replaceYear(pastEvent.name, targetYear);
-            const newOfficialName = replaceYear(pastEvent.official_name, targetYear);
-
-            setModal(m => {
-              if (m?.data?.master_code !== code) return m;
-              return {
-                ...m,
-                data: {
-                  ...m.data,
-                  name: newName,
-                  official_name: newOfficialName,
-                  city: pastEvent.city || "",
-                  country: pastEvent.country || "",
-                  venue: pastEvent.venue || "",
-                  sales_executive: pastEvent.sales_executive ? String(pastEvent.sales_executive) : null,
-                  speaker_sales_team: pastEvent.speaker_sales_team || "",
-                  spex_team: pastEvent.spex_team || "",
-                  tele_marketing_team: pastEvent.tele_marketing_team || "",
-                  market_research_team: pastEvent.market_research_team || "",
-                  content_check: pastEvent.content_check || "",
-                  marketing_check: pastEvent.marketing_check || "",
-                  sales_check: pastEvent.sales_check || "",
-                  accepting_web_bookings: !!pastEvent.accepting_web_bookings,
-                }
-              };
-            });
-          }
-        })
-        .catch(() => {});
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [modal?.data?.master_code, modal?.data?.eventType, modal?.mode, yr]);
-
-  const setMasterCode = (v) => {
-    const upper = v.toUpperCase();
-    setModal(m => ({ ...m, data: { ...m.data, master_code: upper, event_code: upper + yr } }));
-  };
 
   const openEdit = (ev) => {
     const data = { ...ev };
@@ -266,7 +198,21 @@ export function EventsPage() {
   const save = async () => {
     try {
       const payload = { ...modal.data };
-      delete payload.eventType;  // UI-only, not a model field
+
+      // Strip UI-only and read-only fields the backend serializer doesn't accept
+      delete payload.eventType;
+      delete payload.event_status;
+      delete payload.assigned_sales_users;
+      delete payload.sales_executive_name;
+      delete payload.created_at;
+      delete payload.updated_at;
+
+      // Nullable date fields must be null, not "", when cleared
+      if (!payload.end_date) payload.end_date = null;
+      if (!payload.event_date) payload.event_date = null;
+
+      // FK field — must be null (not "") when unassigned
+      if (!payload.sales_executive) payload.sales_executive = null;
 
       // Build assigned_user_ids from all team dropdowns + sales_executive
       const assignedIds = [];
@@ -286,7 +232,16 @@ export function EventsPage() {
       toast.success(modal.mode === "create" ? "Event created" : "Event updated");
       closeModal(); refetch();
     } catch (err) {
-      toast.error("Save failed: " + (err.response?.data?.event_code?.[0] || err.message));
+      const data = err.response?.data;
+      let msg = err.message;
+      if (data && typeof data === "object") {
+        const firstKey = Object.keys(data)[0];
+        const firstVal = data[firstKey];
+        msg = Array.isArray(firstVal) ? `${firstKey}: ${firstVal[0]}` : String(firstVal);
+      } else if (typeof data === "string") {
+        msg = data;
+      }
+      toast.error("Save failed: " + msg);
     }
   };
 
@@ -572,72 +527,17 @@ export function EventsPage() {
         {modal && (
           <div style={{ display: "grid", gap: 12, maxHeight: "70vh", overflowY: "auto", padding: "4px" }}>
 
-            {/* ── Event type selector (create only) ───────────────────── */}
-            {modal.mode === "create" && (
-              <div style={{ display: "flex", gap: 8 }}>
-                {["new", "old"].map(type => (
-                  <button key={type} onClick={() => setField("eventType", type)} style={{
-                    flex: 1, padding: "9px 0", borderRadius: 6, fontSize: 13, fontWeight: 600,
-                    cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
-                    border: modal.data.eventType === type ? "2px solid #405189" : "2px solid var(--border)",
-                    background: modal.data.eventType === type ? "#405189" : "var(--surface)",
-                    color: modal.data.eventType === type ? "#fff" : "var(--text)",
-                  }}>
-                    {type === "new" ? "New Event" : "Previous Edition"}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* ── Code + Name ───────────────────────────────────────── */}
+            <FormField label="Event Code" required>
+              <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
+            </FormField>
 
-            {/* ── Code fields — vary by create mode ───────────────────── */}
-            {modal.mode === "create" && modal.data.eventType === "old" ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <FormField label="Base Event Code" required>
-                  <Input
-                    value={modal.data.master_code}
-                    onChange={setMasterCode}
-                    placeholder="SAFU - JS"
-                  />
-                </FormField>
-                <FormField label={`Event Code (auto · ${yr})`}>
-                  <Input
-                    value={modal.data.event_code}
-                    readOnly
-                    style={{ background: "var(--surface-alt)", color: "var(--text-faint)", cursor: "default" }}
-                  />
-                </FormField>
-              </div>
-            ) : modal.mode === "create" ? (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <FormField label="Event Code" required>
-                  <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
-                </FormField>
-                <FormField label="Master Code">
-                  <Input value={modal.data.master_code} onChange={(v) => setField("master_code", v.toUpperCase())} placeholder="GFS" />
-                </FormField>
-              </div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <FormField label="Event Code" required>
-                  <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
-                </FormField>
-                <FormField label="Master Code">
-                  <Input value={modal.data.master_code || ""} onChange={(v) => setField("master_code", v.toUpperCase())} placeholder="GFS" />
-                </FormField>
-              </div>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Event name" required>
-                <Input value={modal.data.name} onChange={(v) => setField("name", v)} placeholder="Global Finance Summit 2027" />
-              </FormField>
-              <FormField label="Official Name">
-                <Input value={modal.data.official_name || ""} onChange={(v) => setField("official_name", v)} placeholder="Official Name" />
-              </FormField>
-            </div>
+            <FormField label="Event Name" required>
+              <Input value={modal.data.name} onChange={(v) => setField("name", v)} placeholder="Global Finance Summit 2027" />
+            </FormField>
 
             <FormField label="City">
-              <Input value={modal.data.city} onChange={(v) => setField("city", v)} placeholder="London" />
+              <Input value={modal.data.city || ""} onChange={(v) => setField("city", v)} placeholder="London" />
             </FormField>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -751,11 +651,6 @@ export function EventsPage() {
     </div>
   );
 }
-
-const iconBtn = {
-  border: "none", background: "none", cursor: "pointer",
-  padding: "3px 5px", borderRadius: 4, color: "#94a3b8", fontSize: 12,
-};
 
 const colFilterSelect = {
   width: "100%",

@@ -24,13 +24,25 @@ class IsSalesOrAdmin(BasePermission):
         return request.user and request.user.is_authenticated
 
 
+class IsSalesOrAdminOrReadOnly(BasePermission):
+    message = "Only sales teams and admins are allowed to edit bookings."
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        from rest_framework.permissions import SAFE_METHODS
+        if request.method in SAFE_METHODS:
+            return True
+        return request.user.role in ("admin", "sales")
+
+
 class RBACMixin:
     """
     Mixin for ViewSets.
     Adds rbac_filter() and rbac_filter_invoice() helpers that
     transparently scope querysets based on user role.
     """
-    permission_classes = [IsSalesOrAdmin]
+    permission_classes = [IsSalesOrAdminOrReadOnly]
 
     def rbac_filter(self, qs, event_code_field="event_code"):
         user = self.request.user

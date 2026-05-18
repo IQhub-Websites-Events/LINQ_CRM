@@ -23,7 +23,6 @@ const COLS = [
   { key: "_booking_code",            label: "Booking Code",   width: 130, invoiceLevel: true },
   { key: "_request_date",            label: "Request Date",   width: 130, type: "date",   invoiceLevel: true },
   { key: "_invoice_date",            label: "Invoice Date",   width: 130, type: "date",   invoiceLevel: true },
-  { key: "delegate_payment_date",    label: "Pay Date",       width: 120, type: "date" },
   { key: "_full_name",               label: "Name",           width: 160, virtual: "name" },
   { key: "position",                 label: "Job Title",      width: 180 },
   { key: "_company_name",            label: "Company",        width: 180, invoiceLevel: true },
@@ -31,6 +30,7 @@ const COLS = [
   { key: "_accounts_contact_email",  label: "Accounts Email", width: 200, invoiceLevel: true },
   { key: "phone_number",             label: "Direct Line",    width: 150, mono: true },
   { key: "delegate_paid_or_free",    label: "Paid/Free",      width: 90,  type: "select", options: ["", ...PAID_OR_FREE] },
+  { key: "delegate_payment_date",    label: "Pay Date",       width: 120, type: "date" },
   { key: "delegate_payment_type",    label: "Pay Type",       width: 130, type: "select", options: ["", ...PAYMENT_TYPES] },
   { key: "delegate_ticket_tier",     label: "Ticket Tier",    width: 120, type: "select", options: ["", ...TICKET_TIERS] },
   { key: "attendance",               label: "Attendance",     width: 80,  type: "checkbox" },
@@ -78,6 +78,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
   const toast = useToast();
   const { user } = useAuth();
   const canEditInvoiceNumber = user?.role === "admin" || user?.role === "sales";
+  const isEditable = user?.role === "admin" || user?.role === "sales";
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
@@ -282,6 +283,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
                 value={form.event_code}
                 events={events}
                 compact
+                disabled={!isEditable}
                 onChange={(code, ev) => {
                   set("event_code", code);
                   set("event_name", ev?.name || "");
@@ -312,7 +314,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
 
         {/* ── DELEGATE DETAILS ── */}
         <div style={delegateWrap}>
-          <DelegateHeader count={form.delegates.length} onAdd={addDelegate} />
+          <DelegateHeader count={form.delegates.length} onAdd={isEditable ? addDelegate : null} />
           <div style={{ overflowX: "auto" }}>
             <DelegateTable
               delegates={form.delegates}
@@ -320,6 +322,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
               onSetInvoice={set}
               onRowChange={setDelegate}
               onRemoveRow={removeDelegate}
+              isEditable={isEditable}
             />
           </div>
         </div>
@@ -327,7 +330,7 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
         {/* ── FOOTER ── */}
         <div style={footerWrap}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <button onClick={handleDelete} style={btnDelete}>Delete booking</button>
+            {isEditable && <button onClick={handleDelete} style={btnDelete}>Delete booking</button>}
             <span style={footerMeta}>
               {form.delegates.length} delegate{form.delegates.length !== 1 ? "s" : ""}
               {form.updated_at && (
@@ -338,10 +341,16 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
             </span>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={onClose} style={btnOutline}>Cancel</button>
-            <button onClick={handleUpdate} disabled={saving} style={btnPrimary}>
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
+            {isEditable ? (
+              <>
+                <button onClick={onClose} style={btnOutline}>Cancel</button>
+                <button onClick={handleUpdate} disabled={saving} style={btnPrimary}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </button>
+              </>
+            ) : (
+              <button onClick={onClose} style={btnPrimary}>Close</button>
+            )}
           </div>
         </div>
 
@@ -367,12 +376,12 @@ function DelegateHeader({ count, onAdd }) {
         <span style={sectionLabelStyle}>Delegate Details</span>
         <span style={countBadge}>{count}</span>
       </div>
-      <button onClick={onAdd} style={addDelegateBtn}>+ Add Delegate</button>
+      {onAdd && <button onClick={onAdd} style={addDelegateBtn}>+ Add Delegate</button>}
     </div>
   );
 }
 
-function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRemoveRow }) {
+function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRemoveRow, isEditable }) {
   return (
     <table style={{ borderCollapse: "collapse", tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
       <thead>
@@ -391,7 +400,8 @@ function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRem
             invoiceCtx={invoiceCtx}
             onSetInvoice={onSetInvoice}
             onChange={(field, val) => onRowChange(idx, field, val)}
-            onRemove={delegates.length > 1 ? () => onRemoveRow(idx) : null}
+            onRemove={isEditable && delegates.length > 1 ? () => onRemoveRow(idx) : null}
+            isEditable={isEditable}
           />
         ))}
       </tbody>
@@ -399,7 +409,7 @@ function DelegateTable({ delegates, invoiceCtx, onSetInvoice, onRowChange, onRem
   );
 }
 
-function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemove }) {
+function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemove, isEditable }) {
   return (
     <tr style={{ background: idx % 2 === 0 ? "var(--surface)" : BG_ALT }}>
       <td style={{ ...tdCell, textAlign: "center", width: 36, padding: 0 }}>
@@ -416,42 +426,42 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         if (c.key === "_request_date") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput type="date" value={fmt.dateInput(invoiceCtx.request_date || "")} onChange={v => onSetInvoice("request_date", v)} />
+              <CellInput type="date" value={fmt.dateInput(invoiceCtx.request_date || "")} onChange={v => onSetInvoice("request_date", v)} readOnly={!isEditable} />
             </td>
           );
         }
         if (c.key === "_booking_code") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellSelect value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} options={BOOKING_CODES} />
+              <CellSelect value={invoiceCtx.booking_code || ""} onChange={v => onSetInvoice("booking_code", v)} options={BOOKING_CODES} disabled={!isEditable} />
             </td>
           );
         }
         if (c.key === "_invoice_date") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput type="date" value={fmt.dateInput(invoiceCtx.invoice_date || "")} onChange={v => onSetInvoice("invoice_date", v)} />
+              <CellInput type="date" value={fmt.dateInput(invoiceCtx.invoice_date || "")} onChange={v => onSetInvoice("invoice_date", v)} readOnly={!isEditable} />
             </td>
           );
         }
         if (c.key === "_company_name") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput value={invoiceCtx.company_name || ""} onChange={v => onSetInvoice("company_name", v)} />
+              <CellInput value={invoiceCtx.company_name || ""} onChange={v => onSetInvoice("company_name", v)} readOnly={!isEditable} />
             </td>
           );
         }
         if (c.key === "_accounts_contact_email") {
           return (
             <td key={c.key} style={tdCell}>
-              <CellInput type="email" value={invoiceCtx.accounts_contact_email || ""} onChange={v => onSetInvoice("accounts_contact_email", v)} />
+              <CellInput type="email" value={invoiceCtx.accounts_contact_email || ""} onChange={v => onSetInvoice("accounts_contact_email", v)} readOnly={!isEditable} />
             </td>
           );
         }
         if (c.virtual === "name") {
           return (
             <td key={c.key} style={tdCell}>
-              <NameCellInput delegate={delegate} onChange={onChange} />
+              <NameCellInput delegate={delegate} onChange={onChange} readOnly={!isEditable} />
             </td>
           );
         }
@@ -462,7 +472,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             <td key={c.key} style={tdCell}>
               <CellSelect 
                 value={String(currentVal)} 
-                disabled={isCancelled}
+                disabled={!isEditable || isCancelled}
                 onChange={v => onChange(c.key, parseInt(v))} 
                 options={["0", "1"]} 
               />
@@ -476,6 +486,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             <td key={c.key} style={tdCell}>
               <CellSelect 
                 value={DISCOUNT_OPTIONS.includes(val) ? val : "0%"} 
+                disabled={!isEditable}
                 onChange={v => onChange(c.key, parseFloat(v.replace("%", "")))} 
                 options={DISCOUNT_OPTIONS} 
               />
@@ -487,9 +498,10 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
             <td key={c.key} style={{ ...tdCell, textAlign: "center" }}>
               <input
                 type="checkbox"
+                disabled={!isEditable}
                 checked={delegate[c.key] === "Confirmed"}
                 onChange={e => onChange(c.key, e.target.checked ? "Confirmed" : "Pending")}
-                style={{ width: 14, height: 14, cursor: "pointer", accentColor: "var(--accent)" }}
+                style={{ width: 14, height: 14, cursor: !isEditable ? "default" : "pointer", accentColor: "var(--accent)" }}
               />
             </td>
           );
@@ -512,6 +524,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
                 <CellSelectOverride 
                   value={delegate[c.key] ?? ""} 
                   inheritedValue={invVal}
+                  disabled={!isEditable}
                   onChange={v => onChange(c.key, v)} 
                   options={c.options.filter(o => o !== "")} 
                 />
@@ -521,7 +534,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
 
           return (
             <td key={c.key} style={tdCell}>
-              <CellSelect value={delegate[c.key] ?? ""} onChange={v => onChange(c.key, v)} options={c.options} />
+              <CellSelect value={delegate[c.key] ?? ""} disabled={!isEditable} onChange={v => onChange(c.key, v)} options={c.options} />
             </td>
           );
         }
@@ -531,6 +544,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
               <CellDateOverride 
                 value={delegate[c.key] ?? ""} 
                 inheritedValue={invoiceCtx.payment_date} 
+                disabled={!isEditable}
                 onChange={v => onChange(c.key, v)} 
               />
             </td>
@@ -538,7 +552,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
         }
         return (
           <td key={c.key} style={tdCell}>
-            <CellInput type={c.type || "text"} mono={c.mono}
+            <CellInput type={c.type || "text"} mono={c.mono} readOnly={!isEditable || c.readOnly}
               value={delegate[c.key] ?? ""} onChange={v => onChange(c.key, v)} />
           </td>
         );
@@ -552,7 +566,7 @@ function DelegateRow({ idx, delegate, invoiceCtx, onSetInvoice, onChange, onRemo
    Event Code rich picker
 ═══════════════════════════════════════════════════════════ */
 
-function EventCodePicker({ value, events, onChange, compact }) {
+function EventCodePicker({ value, events, onChange, compact, disabled }) {
   const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -580,20 +594,22 @@ function EventCodePicker({ value, events, onChange, compact }) {
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => { setOpen(o => !o); setSearch(""); }}
+        disabled={disabled}
+        onClick={() => { if (!disabled) { setOpen(o => !o); setSearch(""); } }}
         style={{
           width: "100%", height: compact ? 34 : 38, padding: "0 32px 0 10px",
           border: `1px solid ${open ? "var(--accent)" : BORDER}`,
           borderRadius: 4, background: "var(--surface)",
           display: "flex", alignItems: "center", gap: 8,
-          cursor: "pointer", textAlign: "left",
+          cursor: disabled ? "default" : "pointer", textAlign: "left",
           boxShadow: open ? "0 0 0 2px var(--accent-soft)" : "none",
           transition: "border-color .12s, box-shadow .12s",
           boxSizing: "border-box", fontFamily: "var(--font-sans)",
-          backgroundImage: chevron,
+          backgroundImage: disabled ? "none" : chevron,
           backgroundRepeat: "no-repeat", backgroundPosition: "right 9px center",
           backgroundSize: "10px 6px",
           overflow: "hidden",
+          opacity: disabled ? 0.75 : 1,
         }}
       >
         {selected ? (
@@ -791,7 +807,7 @@ function FGroup({ label, req, compact, children }) {
    Table cell inputs
 ═══════════════════════════════════════════════════════════ */
 
-function NameCellInput({ delegate, onChange }) {
+function NameCellInput({ delegate, onChange, readOnly }) {
   const computed = [delegate.first_name, delegate.last_name].filter(Boolean).join(" ");
   const [val, setVal] = useState(computed);
   const [f, setF] = useState(false);
@@ -804,10 +820,12 @@ function NameCellInput({ delegate, onChange }) {
     <input
       type="text"
       value={val}
+      readOnly={readOnly}
       placeholder="First Last"
       spellCheck={false}
       autoComplete="off"
       onChange={e => {
+        if (readOnly) return;
         const v = e.target.value;
         setVal(v);
         const sp = v.indexOf(" ");
@@ -819,9 +837,10 @@ function NameCellInput({ delegate, onChange }) {
           onChange("last_name", v.slice(sp + 1));
         }
       }}
-      onFocus={() => setF(true)}
+      onFocus={() => { if (!readOnly) setF(true); }}
       onBlur={() => {
         setF(false);
+        if (readOnly) return;
         const parts = val.trim().split(/\s+/);
         const fn = parts[0] || "";
         const ln = parts.slice(1).join(" ");
@@ -833,11 +852,11 @@ function NameCellInput({ delegate, onChange }) {
         width: "100%", height: 32, padding: "0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "var(--surface)" : "transparent",
-        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        background: readOnly ? "transparent" : (f ? "var(--surface)" : "transparent"),
+        color: readOnly ? TEXT_DIM : TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
         boxShadow: "none",
-        cursor: "text",
+        cursor: readOnly ? "default" : "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
       }}
@@ -905,12 +924,13 @@ function CellSelect({ value, onChange, options, disabled }) {
   );
 }
 
-function CellSelectOverride({ value, inheritedValue, onChange, options }) {
+function CellSelectOverride({ value, inheritedValue, onChange, options, disabled }) {
   const [f, setF] = useState(false);
   const isEmpty = !value;
   return (
     <select
       value={value ?? ""}
+      disabled={disabled}
       onChange={e => onChange?.(e.target.value)}
       onFocus={() => setF(true)}
       onBlur={() => setF(false)}
@@ -918,12 +938,12 @@ function CellSelectOverride({ value, inheritedValue, onChange, options }) {
         width: "100%", height: 32, padding: "0 18px 0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "var(--surface)" : "transparent",
-        color: isEmpty ? TEXT_DIM : TEXT,
+        background: disabled ? "transparent" : (f ? "var(--surface)" : "transparent"),
+        color: disabled ? TEXT_DIM : (isEmpty ? TEXT_DIM : TEXT),
         fontSize: 12, fontFamily: "var(--font-sans)",
-        outline: "none", appearance: "none", cursor: "pointer",
+        outline: "none", appearance: "none", cursor: disabled ? "default" : "pointer",
         boxShadow: "none",
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+        backgroundImage: disabled ? "none" : `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 5' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%239a978f' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat", backgroundPosition: "right 4px center",
         backgroundSize: "8px 5px",
         transition: "border-color .1s, background .1s",
@@ -936,19 +956,19 @@ function CellSelectOverride({ value, inheritedValue, onChange, options }) {
   );
 }
 
-function CellDateOverride({ value, inheritedValue, onChange }) {
+function CellDateOverride({ value, inheritedValue, onChange, disabled }) {
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState(false);
   const isEmpty = !value;
   if (!editing && isEmpty) {
     return (
       <div
-        onClick={() => setEditing(true)}
+        onClick={() => { if (!disabled) setEditing(true); }}
         style={{
           width: "100%", height: 32, padding: "0 6px",
           display: "flex", alignItems: "center",
           color: TEXT_DIM, fontSize: 12,
-          cursor: "text", boxSizing: "border-box",
+          cursor: disabled ? "default" : "text", boxSizing: "border-box",
         }}
       >
         {inheritedValue ? fmt.date(inheritedValue) : "— Select —"}
@@ -960,6 +980,7 @@ function CellDateOverride({ value, inheritedValue, onChange }) {
       type="date"
       autoFocus={editing && isEmpty}
       value={value ?? ""}
+      readOnly={disabled}
       onChange={e => onChange?.(e.target.value)}
       onFocus={() => setF(true)}
       onBlur={() => { setF(false); if (!value) setEditing(false); }}
@@ -967,11 +988,11 @@ function CellDateOverride({ value, inheritedValue, onChange }) {
         width: "100%", height: 32, padding: "0 6px",
         border: `1px solid ${f ? "var(--accent)" : "transparent"}`,
         borderRadius: 3,
-        background: f ? "var(--surface)" : "transparent",
-        color: TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
+        background: disabled ? "transparent" : (f ? "var(--surface)" : "transparent"),
+        color: disabled ? TEXT_DIM : TEXT, fontSize: 12, fontFamily: "var(--font-sans)",
         outline: "none",
         boxShadow: "none",
-        cursor: "text",
+        cursor: disabled ? "default" : "text",
         transition: "border-color .1s, background .1s",
         boxSizing: "border-box",
       }}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, memo } from "react";
 import { delegatesApi, invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { StatusBadge } from "../ui/Badge";
 import { Avatar } from "../ui/Avatar";
 import { Pager } from "../ui/Table";
@@ -24,6 +25,8 @@ const getEditionFromCode = (code) => {
 
 export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const toast = useToast();
+  const { user } = useAuth();
+  const isSalesOrAdmin = user?.role === "admin" || user?.role === "sales";
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -190,12 +193,14 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           )}
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          style={primaryBtnStyle}
-        >
-          + Add Booking
-        </button>
+        {isSalesOrAdmin && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={primaryBtnStyle}
+          >
+            + Add Booking
+          </button>
+        )}
       </div>
 
       {/* Table container */}
