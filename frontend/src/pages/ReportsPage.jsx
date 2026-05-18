@@ -206,9 +206,7 @@ function OverviewTab() {
             <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
               <span>CRM Summary (Global)</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
-              <StatCard key="g1" label="Global Revenue" value={loadingDash ? "…" : fmt.currency(inv.revenue_paid)} sub="Total paid" color="var(--success)" />
-              <StatCard key="g2" label="Awaiting Payment" value={loadingDash ? "…" : fmt.currency(inv.revenue_pending)} sub="Pending revenue" color="#d97706" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
               <StatCard key="g3" label="Total Invoices" value={loadingDash ? "…" : (inv.total || 0)} sub={`${inv.paid || 0} paid`} color="var(--accent)" />
               <StatCard key="g4" label="Live Events" value={loadingDash ? "…" : (ev.live || 0)} sub={`${ev.upcoming || 0} historical`} color="#6366f1" />
             </div>
