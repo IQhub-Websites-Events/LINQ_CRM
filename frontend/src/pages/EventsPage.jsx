@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { eventsApi, usersApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
+import { EventSmartImportModal } from "../components/events/EventSmartImportModal";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { SortableTh, EmptyState, Td } from "../components/ui/Table";
@@ -25,10 +26,11 @@ function resolveNameToId(val, users) {
 
 export function EventsPage() {
   const toast = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [search, setSearch]     = useState("");
   const [status, setStatus]     = useState("");
   const [modal,  setModal]      = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const { sort, toggle: sortToggle } = useSort("event_date", "desc");
@@ -294,6 +296,18 @@ export function EventsPage() {
     catch { toast.error("Delete failed"); }
   };
 
+  const handleClearAll = async () => {
+    if (!window.confirm("WARNING: This will delete ALL events from the database. This action cannot be undone. Are you sure you want to proceed?")) return;
+
+    try {
+      await eventsApi.clearAll();
+      toast.success("Successfully cleared all event data.");
+      refetch();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to clear event data.");
+    }
+  };
+
   const setField = (k, v) => setModal((m) => ({ ...m, data: { ...m.data, [k]: v } }));
 
   return (
@@ -303,7 +317,48 @@ export function EventsPage() {
           <h4 style={{ margin: 0, fontSize: 18, color: "var(--text)", textTransform: "uppercase", fontWeight: 700 }}>Events</h4>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-faint)" }}>Manage and track all company events and their capacities.</p>
         </div>
-        {isAdmin && <button className="btn btn-primary" onClick={openCreate}>+ New Event</button>}
+        {isAdmin && (
+          <div style={{ display: "flex", gap: 10 }}>
+            {user?.username === 'HP' && (
+              <button
+                onClick={handleClearAll}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "7px 16px", fontSize: 12.5, fontWeight: 600,
+                  background: "var(--danger-soft)", border: "1px solid var(--danger)",
+                  borderRadius: 8, cursor: "pointer", color: "var(--danger)",
+                  fontFamily: "inherit", transition: "all 0.15s", flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--danger)"; e.currentTarget.style.color = "#fff"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--danger-soft)"; e.currentTarget.style.color = "var(--danger)"; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                </svg>
+                Clear All Data
+              </button>
+            )}
+            <button
+              onClick={() => setImportOpen(true)}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 16px", fontSize: 12.5, fontWeight: 600,
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: 8, cursor: "pointer", color: "var(--text-dim)",
+                fontFamily: "inherit", transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6.5 1v8M3 6l3.5 3.5L10 6" />
+                <path d="M1 11h11" />
+              </svg>
+              Import Events
+            </button>
+            <button className="btn btn-primary" onClick={openCreate}>+ New Event</button>
+          </div>
+        )}
       </div>
 
 
@@ -687,6 +742,12 @@ export function EventsPage() {
           </div>
         )}
       </Modal>
+
+      <EventSmartImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={refetch}
+      />
     </div>
   );
 }

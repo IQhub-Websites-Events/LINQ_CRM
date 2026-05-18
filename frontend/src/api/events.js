@@ -96,6 +96,12 @@ export const eventsApi = {
 
   delete: (id) =>
     client.delete(`/events/${id}/`).then((r) => r.data),
+
+  bulkImport: (payload) =>
+    client.post("/events/bulk_import/", payload).then((r) => r.data),
+
+  clearAll: () =>
+    client.delete("/events/clear_all/").then((r) => r.data),
 };
 
 export const historicalEventsApi = {

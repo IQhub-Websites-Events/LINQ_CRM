@@ -1,4 +1,6 @@
+from datetime import datetime
 from decimal import Decimal
+from django.db import transaction
 from django.db.models import Count, Q, Sum, DecimalField
 from django.db.models.functions import Coalesce
 from rest_framework import viewsets
@@ -18,7 +20,7 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
     ordering        = ["-event_date"]
 
     def get_permissions(self):
-        if self.action in ("create", "update", "partial_update", "destroy", "all_edition_growth"):
+        if self.action in ("create", "update", "partial_update", "destroy", "all_edition_growth", "bulk_import"):
             return [IsAdminRole()]
         return [IsSalesOrAdmin()]
 
@@ -187,3 +189,281 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
                 for r in rev_by_status
             ],
         })
+
+    @action(detail=False, methods=["post"], url_path="bulk_import")
+    def bulk_import(self, request):
+        """
+        POST /api/events/bulk_import/
+        Bulk-insert up to 500 Event rows per call.
+        Body: { rows: [...], duplicate_strategy: "skip"|"upsert", batch_number: int }
+        """
+        rows               = request.data.get("rows", [])
+        strategy           = request.data.get("duplicate_strategy", "skip")
+        batch_number       = request.data.get("batch_number", 1)
+
+        if not rows:
+            return Response({"success": False, "detail": "No rows provided."}, status=400)
+
+        DATE_FMTS = ["%d %b %Y", "%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y",
+                     "%d-%b-%Y", "%d %B %Y"]
+
+        def _parse_date(val):
+            if not val:
+                return None
+            s = str(val).strip()
+            for fmt in DATE_FMTS:
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
+        def _clean(d, key, default=""):
+            return str(d.get(key) or default).strip()
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Cache users to avoid N+1 queries during user resolution
+        all_users = list(User.objects.all())
+
+        def _resolve_user(name_str):
+            if not name_str:
+                return None
+            name_str = str(name_str).strip()
+            
+            # Exact matches first
+            for u in all_users:
+                if u.username.lower() == name_str.lower():
+                    return u
+                if u.email.lower() == name_str.lower():
+                    return u
+                full = (u.get_full_name() or u.username).lower()
+                if full == name_str.lower():
+                    return u
+            
+            # Substring matches
+            for u in all_users:
+                full = (u.get_full_name() or u.username).lower()
+                if name_str.lower() in full or full in name_str.lower():
+                    return u
+                if name_str.lower() in u.username.lower():
+                    return u
+            return None
+
+        inserted = 0
+        skipped = 0
+        errors = []
+        auto_gen_rows = []
+
+        for i, row in enumerate(rows):
+            event_code = _clean(row, "event_code").upper()
+            auto_code = False
+            if not event_code:
+                import uuid
+                event_code = f"IMP-EV-{uuid.uuid4().hex[:10].upper()}"
+                auto_code = True
+
+            name = _clean(row, "name")
+            auto_name = False
+            if not name:
+                name = f"Untitled Event - {event_code}"
+                auto_name = True
+
+            try:
+                with transaction.atomic():
+                    # Parse dates
+                    event_date_val = row.get("event_date")
+                    event_date = _parse_date(event_date_val)
+                    auto_date = False
+                    if not event_date:
+                        from django.utils import timezone
+                        event_date = timezone.now().date()
+                        auto_date = True
+
+                    end_date = _parse_date(row.get("end_date"))
+
+                    # Resolve Sales Executive
+                    se_name = _clean(row, "sales_executive")
+                    sales_exec = _resolve_user(se_name)
+
+                    # Resolve other team members for M2M assignments and string values
+                    speaker_sales_user = _resolve_user(_clean(row, "speaker_sales_team"))
+                    spex_user = _resolve_user(_clean(row, "spex_team"))
+                    tele_marketing_user = _resolve_user(_clean(row, "tele_marketing_team"))
+                    market_research_user = _resolve_user(_clean(row, "market_research_team"))
+                    content_check_user = _resolve_user(_clean(row, "content_check"))
+                    marketing_check_user = _resolve_user(_clean(row, "marketing_check"))
+                    sales_check_user = _resolve_user(_clean(row, "sales_check"))
+
+                    # Sub Company normalization
+                    sub_company_val = _clean(row, "sub_company")
+                    # Try to match choice or fallback
+                    sub_company = Event.SubCompany.CONFERENCES
+                    for choice in Event.SubCompany.values:
+                        if choice.lower() == sub_company_val.lower() or sub_company_val.lower() in choice.lower():
+                            sub_company = choice
+                            break
+
+                    # Accepting Web Bookings
+                    awb_raw = _clean(row, "accepting_web_bookings")
+                    accepting_web_bookings = awb_raw.lower() in ("yes", "true", "1")
+
+                    existing = Event.objects.filter(event_code=event_code).first()
+
+                    assigned_users_to_set = []
+                    if sales_exec:
+                        assigned_users_to_set.append(sales_exec)
+                    if speaker_sales_user:
+                        assigned_users_to_set.append(speaker_sales_user)
+                    if spex_user:
+                        assigned_users_to_set.append(spex_user)
+                    if tele_marketing_user:
+                        assigned_users_to_set.append(tele_marketing_user)
+                    if market_research_user:
+                        assigned_users_to_set.append(market_research_user)
+                    if content_check_user:
+                        assigned_users_to_set.append(content_check_user)
+                    if marketing_check_user:
+                        assigned_users_to_set.append(marketing_check_user)
+                    if sales_check_user:
+                        assigned_users_to_set.append(sales_check_user)
+
+                    # Deduplicate assigned users
+                    assigned_users_to_set = list(set(assigned_users_to_set))
+
+                    if existing:
+                        if strategy == "upsert":
+                            existing.name = name
+                            existing.master_code = _clean(row, "master_code").upper() or existing.master_code
+                            existing.official_name = _clean(row, "official_name") or existing.official_name
+                            existing.sub_company = sub_company
+                            existing.city = _clean(row, "city") or existing.city
+                            existing.country = _clean(row, "country") or existing.country
+                            existing.venue = _clean(row, "venue") or existing.venue
+                            existing.event_date = event_date
+                            existing.end_date = end_date or existing.end_date
+                            existing.accepting_web_bookings = accepting_web_bookings
+                            existing.sales_executive = sales_exec or existing.sales_executive
+
+                            # String display fields
+                            existing.speaker_sales_team = speaker_sales_user.get_full_name() or speaker_sales_user.username if speaker_sales_user else _clean(row, "speaker_sales_team") or existing.speaker_sales_team
+                            existing.spex_team = spex_user.get_full_name() or spex_user.username if spex_user else _clean(row, "spex_team") or existing.spex_team
+                            existing.tele_marketing_team = tele_marketing_user.get_full_name() or tele_marketing_user.username if tele_marketing_user else _clean(row, "tele_marketing_team") or existing.tele_marketing_team
+                            existing.market_research_team = market_research_user.get_full_name() or market_research_user.username if market_research_user else _clean(row, "market_research_team") or existing.market_research_team
+                            existing.content_check = content_check_user.get_full_name() or content_check_user.username if content_check_user else _clean(row, "content_check") or existing.content_check
+                            existing.marketing_check = marketing_check_user.get_full_name() or marketing_check_user.username if marketing_check_user else _clean(row, "marketing_check") or existing.marketing_check
+                            existing.sales_check = sales_check_user.get_full_name() or sales_check_user.username if sales_check_user else _clean(row, "sales_check") or existing.sales_check
+
+                            existing.save()
+
+                            if assigned_users_to_set:
+                                existing.assigned_users.set(assigned_users_to_set)
+
+                            inserted += 1
+                        else:
+                            skipped += 1
+                    else:
+                        event = Event.objects.create(
+                            event_code=event_code,
+                            master_code=_clean(row, "master_code").upper(),
+                            name=name,
+                            official_name=_clean(row, "official_name"),
+                            sub_company=sub_company,
+                            city=_clean(row, "city"),
+                            country=_clean(row, "country"),
+                            venue=_clean(row, "venue"),
+                            event_date=event_date,
+                            end_date=end_date,
+                            accepting_web_bookings=accepting_web_bookings,
+                            sales_executive=sales_exec,
+                            speaker_sales_team=speaker_sales_user.get_full_name() or speaker_sales_user.username if speaker_sales_user else _clean(row, "speaker_sales_team"),
+                            spex_team=spex_user.get_full_name() or spex_user.username if spex_user else _clean(row, "spex_team"),
+                            tele_marketing_team=tele_marketing_user.get_full_name() or tele_marketing_user.username if tele_marketing_user else _clean(row, "tele_marketing_team"),
+                            market_research_team=market_research_user.get_full_name() or market_research_user.username if market_research_user else _clean(row, "market_research_team"),
+                            content_check=content_check_user.get_full_name() or content_check_user.username if content_check_user else _clean(row, "content_check"),
+                            marketing_check=marketing_check_user.get_full_name() or marketing_check_user.username if marketing_check_user else _clean(row, "marketing_check"),
+                            sales_check=sales_check_user.get_full_name() or sales_check_user.username if sales_check_user else _clean(row, "sales_check"),
+                        )
+
+                        if assigned_users_to_set:
+                            event.assigned_users.set(assigned_users_to_set)
+
+                        inserted += 1
+
+                    if auto_code or auto_name or auto_date:
+                        se_display = _clean(row, "sales_executive") or (
+                            f"{sales_exec.get_full_name() or sales_exec.username}" if sales_exec else "Unknown"
+                        )
+                        auto_gen_rows.append({
+                            "event_code": event_code,
+                            "sales_executive": se_display,
+                            "auto_code": auto_code,
+                            "auto_name": auto_name,
+                            "auto_date": auto_date,
+                        })
+
+            except Exception as exc:
+                errors.append({"row_index": i, "event_code": event_code, "message": str(exc)})
+
+        # Send alert email for any auto-generated fields
+        if auto_gen_rows:
+            try:
+                from django.core.mail import send_mail
+                from django.conf import settings as django_settings
+                recipient = getattr(django_settings, "IMPORT_ALERT_EMAIL", "harrison.peck@iq-hub.com")
+                lines = []
+                for entry in auto_gen_rows:
+                    details = []
+                    if entry.get("auto_code"):
+                        details.append(f"Auto-Code: {entry['event_code']}")
+                    else:
+                        details.append(f"Event Code: {entry['event_code']}")
+
+                    if entry.get("auto_name"):
+                        details.append("Empty Name filled as Untitled")
+                    if entry.get("auto_date"):
+                        details.append("Empty Date filled as Today")
+
+                    lines.append(
+                        f"  • " + " | ".join(details) +
+                        f"  |  Added by: @{entry['sales_executive']}"
+                    )
+                body = (
+                    f"Hi Harrison,\n\n"
+                    f"{len(auto_gen_rows)} new event entr{'y was' if len(auto_gen_rows) == 1 else 'ies were'} "
+                    f"imported with missing required fields — auto-generated or default values assigned:\n\n"
+                    + "\n".join(lines)
+                    + "\n\nThese entries were created via the Smart Import tool and may need manual corrections assigned.\n\n"
+                    f"— Linq CRM"
+                )
+                send_mail(
+                    subject=f"[Linq CRM] {len(auto_gen_rows)} Event Import{'s' if len(auto_gen_rows) != 1 else ''} With Auto-Generated Fields",
+                    message=body,
+                    from_email=django_settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[recipient],
+                    fail_silently=True,
+                )
+            except Exception:
+                pass  # never block the response over an email failure
+
+        return Response({
+            "success":            len(errors) == 0,
+            "batch_number":       batch_number,
+            "inserted":           inserted,
+            "skipped_duplicates": skipped,
+            "errors":             errors[:20],
+        })
+
+    @action(detail=False, methods=["delete"], url_path="clear_all")
+    def clear_all(self, request):
+        """DELETE /api/events/clear_all/ — restricted to 'HP' username"""
+        if request.user.username != 'HP':
+            return Response({"detail": "Only the administrator can clear all events."}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            with transaction.atomic():
+                Event.objects.all().delete()
+            return Response({"detail": "Successfully removed all event data."})
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
