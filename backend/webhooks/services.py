@@ -252,6 +252,7 @@ class WebhookProcessor:
             ticket_tier            = d.get("TicketTier", ""),
             paid_or_free           = d.get("PaidOrFree", ""),
             payment_type           = d.get("PaymentType", ""),
+            request_date           = timezone.localdate(),
         )
         return invoice, WebhookLog.DbInsertStatus.INSERTED, f"Booking CREATED: id={invoice.id}"
 
@@ -286,6 +287,10 @@ class WebhookProcessor:
                 if getattr(invoice, attr) != val:
                     setattr(invoice, attr, val)
                     update_fields.append(attr)
+
+        if not invoice.request_date:
+            invoice.request_date = timezone.localdate()
+            update_fields.append("request_date")
 
         if update_fields:
             invoice.save(update_fields=update_fields)
