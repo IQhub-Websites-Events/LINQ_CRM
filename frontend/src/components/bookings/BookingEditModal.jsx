@@ -930,7 +930,7 @@ function CellSelectOverride({ value, inheritedValue, onChange, options }) {
         boxSizing: "border-box",
       }}
     >
-      <option value="">{inheritedValue ? `Inherit: ${inheritedValue}` : "— Select —"}</option>
+      <option value="">{inheritedValue ? inheritedValue : "— Select —"}</option>
       {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
   );
@@ -951,7 +951,7 @@ function CellDateOverride({ value, inheritedValue, onChange }) {
           cursor: "text", boxSizing: "border-box",
         }}
       >
-        {inheritedValue ? `Inherit: ${fmt.date(inheritedValue)}` : "— Select —"}
+        {inheritedValue ? fmt.date(inheritedValue) : "— Select —"}
       </div>
     );
   }

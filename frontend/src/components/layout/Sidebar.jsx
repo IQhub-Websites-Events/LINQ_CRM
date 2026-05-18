@@ -71,7 +71,7 @@ export function Sidebar({ current, onNav, badges = {} }) {
           width: 26, height: 26, borderRadius: 6, flexShrink: 0,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <img src="/logo-dark.png" alt="Logo" style={{ width: "100%", height: "auto" }} />
+          <img src="/favicon.png" alt="Logo" style={{ width: "100%", height: "100%" }} />
         </div>
         <div>
           <div style={{ fontFamily: "var(--font-serif)", color: "var(--sidebar-text)", fontSize: 18, fontWeight: 600, lineHeight: 1 }}>
