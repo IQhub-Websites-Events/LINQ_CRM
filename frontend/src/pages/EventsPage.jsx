@@ -109,7 +109,9 @@ export function EventsPage() {
       const newItems = data?.results || [];
       setItems(prev => page === 1 ? newItems : [...prev, ...newItems]);
       setHasMore(!!data?.next);
-    }).catch(() => {}).finally(() => {
+    }).catch(() => {
+      if (!cancelled) setHasMore(false);
+    }).finally(() => {
       if (!cancelled) { setLoading(false); setLoadingMore(false); }
     });
 
@@ -152,15 +154,19 @@ export function EventsPage() {
   const marketResUsers    = allUsers.filter(u => u.role === "market_research");
 
   const TEAM_FIELDS = [
-    "speaker_sales_team", "spex_team", "tele_marketing_team",
-    "market_research_team", "content_check", "marketing_check", "sales_check",
+    "speaker_sales_team", "spex_team", "telemarketing_team",
+    "market_research_senior", "market_research_junior", "event_management_team",
+    "sales_check", "team_leader"
   ];
 
   const openCreate = () => setModal({ mode: "create", data: {
-    event_code: "", name: "", city: "", country: "",
-    venue: "", event_date: "", end_date: "", sales_executive: null,
-    speaker_sales_team: "", spex_team: "", tele_marketing_team: "", market_research_team: "",
-    content_check: "", marketing_check: "", sales_check: "", accepting_web_bookings: false
+    event_code: "", event_date: "", end_date: "", location: "", website: "", web_bookings: false,
+    nearest_related_event: "", event_type: "", website_live_date: "", sales_check: "", vr1_sent_status: "",
+    sales_team: "", team_leader: "", speaker_sales_team: "", telemarketing_team: "", spex_team: "",
+    market_research_senior: "", market_research_junior: "", event_management_team: "", official_event_name: "",
+    email_marketing_name: "", branding_name: "", annualisation: "", date_format: "", related_event_1: "",
+    related_event_2: "", related_event_3: "", upcoming_event_1: "", upcoming_event_2: "", upcoming_event_3: "",
+    status: "Draft", sales_executive: null
   } });
 
   const openEdit = (ev) => {
@@ -171,8 +177,7 @@ export function EventsPage() {
     const roleToField = {
       speaker_sales:   "speaker_sales_team",
       spex:            "spex_team",
-      telemarketing:   "tele_marketing_team",
-      market_research: "market_research_team",
+      telemarketing:   "telemarketing_team",
     };
     Object.values(roleToField).forEach(f => { data[f] = ""; });
     assigned.forEach(u => {
@@ -180,14 +185,19 @@ export function EventsPage() {
       if (field && !data[field]) data[field] = String(u.id);
     });
 
+    // Market Research fields
+    const mrUsers = assigned.filter(x => x.role === "market_research");
+    data.market_research_senior = mrUsers[0] ? String(mrUsers[0].id) : resolveNameToId(ev.market_research_senior, allUsers);
+    data.market_research_junior = mrUsers[1] ? String(mrUsers[1].id) : resolveNameToId(ev.market_research_junior, allUsers);
+
     // sales_check: a sales-role user who isn't the sales_executive
     const salesExecId = data.sales_executive ? parseInt(data.sales_executive) : null;
     const salesCheckUser = assigned.find(u => u.role === "sales" && u.id !== salesExecId);
-    data.sales_check = salesCheckUser ? String(salesCheckUser.id) : resolveNameToId(data.sales_check, allUsers);
+    data.sales_check = salesCheckUser ? String(salesCheckUser.id) : resolveNameToId(ev.sales_check, allUsers);
 
-    // content_check / marketing_check — no specific role, fall back to stored value
-    ["content_check", "marketing_check"].forEach(field => {
-      data[field] = resolveNameToId(data[field], allUsers);
+    // Other names
+    ["team_leader", "event_management_team"].forEach(field => {
+      data[field] = resolveNameToId(ev[field], allUsers);
     });
 
     setModal({ mode: "edit", data });
@@ -527,118 +537,215 @@ export function EventsPage() {
         {modal && (
           <div style={{ display: "grid", gap: 12, maxHeight: "70vh", overflowY: "auto", padding: "4px" }}>
 
-            {/* ── Code + Name ───────────────────────────────────────── */}
+            {/* 1. Event Code */}
             <FormField label="Event Code" required>
               <Input value={modal.data.event_code} onChange={(v) => setField("event_code", v.toUpperCase())} placeholder="GFS-2027" />
             </FormField>
 
-            <FormField label="Event Name" required>
-              <Input value={modal.data.name} onChange={(v) => setField("name", v)} placeholder="Global Finance Summit 2027" />
+            {/* 2. Event Start Date */}
+            <FormField label="Event Start Date" required>
+              <Input type="date" value={modal.data.event_date || ""} onChange={(v) => setField("event_date", v)} />
             </FormField>
 
-            <FormField label="City">
-              <Input value={modal.data.city || ""} onChange={(v) => setField("city", v)} placeholder="London" />
+            {/* 3. Event End Date */}
+            <FormField label="Event End Date">
+              <Input type="date" value={modal.data.end_date || ""} onChange={(v) => setField("end_date", v)} />
             </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Country">
-                <Input value={modal.data.country || ""} onChange={(v) => setField("country", v)} placeholder="United Kingdom" />
-              </FormField>
-              <FormField label="Venue">
-                <Input value={modal.data.venue || ""} onChange={(v) => setField("venue", v)} placeholder="ExCeL London" />
-              </FormField>
-            </div>
+            {/* 4. Location */}
+            <FormField label="Location">
+              <Input value={modal.data.location || ""} onChange={(v) => setField("location", v)} placeholder="London, United Kingdom" />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Start Date" required>
-                <Input type="date" value={modal.data.event_date} onChange={(v) => setField("event_date", v)} />
-              </FormField>
-              <FormField label="End Date">
-                <Input type="date" value={modal.data.end_date || ""} onChange={(v) => setField("end_date", v)} />
-              </FormField>
-            </div>
+            {/* 5. Website */}
+            <FormField label="Website">
+              <Input value={modal.data.website || ""} onChange={(v) => setField("website", v)} placeholder="https://example.com" />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Accepting Web Bookings">
-                <Select value={String(modal.data.accepting_web_bookings)} onChange={(v) => setField("accepting_web_bookings", v === 'true')} options={[{label:'Yes', value:'true'}, {label:'No', value:'false'}]} />
-              </FormField>
-            </div>
+            {/* 6. Web Bookings */}
+            <FormField label="Web Bookings">
+              <Select
+                value={String(modal.data.web_bookings)}
+                onChange={(v) => setField("web_bookings", v === 'true')}
+                options={[{label:'Yes', value:'true'}, {label:'No', value:'false'}]}
+              />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Sales Executive">
-                <Select
-                  value={modal.data.sales_executive ? String(modal.data.sales_executive) : ""}
-                  onChange={(v) => setField("sales_executive", v || null)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-              <FormField label="Speaker Sales Team">
-                <Select
-                  value={modal.data.speaker_sales_team || ""}
-                  onChange={(v) => setField("speaker_sales_team", v)}
-                  options={speakerSalesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-            </div>
+            {/* 7. Nearest Related Event */}
+            <FormField label="Nearest Related Event">
+              <Input value={modal.data.nearest_related_event || ""} onChange={(v) => setField("nearest_related_event", v)} placeholder="GFS-2026" />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="SpEx Team">
-                <Select
-                  value={modal.data.spex_team || ""}
-                  onChange={(v) => setField("spex_team", v)}
-                  options={spexUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-              <FormField label="Tele Marketing Team">
-                <Select
-                  value={modal.data.tele_marketing_team || ""}
-                  onChange={(v) => setField("tele_marketing_team", v)}
-                  options={telemarketUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-            </div>
+            {/* 8. Event Type */}
+            <FormField label="Event Type">
+              <Input value={modal.data.event_type || ""} onChange={(v) => setField("event_type", v)} placeholder="Conference" />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Market Research Team">
-                <Select
-                  value={modal.data.market_research_team || ""}
-                  onChange={(v) => setField("market_research_team", v)}
-                  options={marketResUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-              <FormField label="Content Check">
-                <Select
-                  value={modal.data.content_check || ""}
-                  onChange={(v) => setField("content_check", v)}
-                  options={allUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-            </div>
+            {/* 9. Website Live Date */}
+            <FormField label="Website Live Date">
+              <Input type="date" value={modal.data.website_live_date || ""} onChange={(v) => setField("website_live_date", v)} />
+            </FormField>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <FormField label="Marketing Check">
-                <Select
-                  value={modal.data.marketing_check || ""}
-                  onChange={(v) => setField("marketing_check", v)}
-                  options={allUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-              <FormField label="Sales Check">
-                <Select
-                  value={modal.data.sales_check || ""}
-                  onChange={(v) => setField("sales_check", v)}
-                  options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
-                  placeholder="— Unassigned —"
-                />
-              </FormField>
-            </div>
+            {/* 10. Sales Check */}
+            <FormField label="Sales Check">
+              <Select
+                value={modal.data.sales_check || ""}
+                onChange={(v) => setField("sales_check", v)}
+                options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 11. VR1 Sent Status */}
+            <FormField label="VR1 Sent Status">
+              <Input value={modal.data.vr1_sent_status || ""} onChange={(v) => setField("vr1_sent_status", v)} placeholder="Sent" />
+            </FormField>
+
+            {/* 12. Sales Team */}
+            <FormField label="Sales Team">
+              <Input value={modal.data.sales_team || ""} onChange={(v) => setField("sales_team", v)} placeholder="Sales Team A" />
+            </FormField>
+
+            {/* 13. Team Leader */}
+            <FormField label="Team Leader">
+              <Select
+                value={modal.data.team_leader || ""}
+                onChange={(v) => setField("team_leader", v)}
+                options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 14. Speaker Sales Team */}
+            <FormField label="Speaker Sales Team">
+              <Select
+                value={modal.data.speaker_sales_team || ""}
+                onChange={(v) => setField("speaker_sales_team", v)}
+                options={speakerSalesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 15. Telemarketing Team */}
+            <FormField label="Telemarketing Team">
+              <Select
+                value={modal.data.telemarketing_team || ""}
+                onChange={(v) => setField("telemarketing_team", v)}
+                options={telemarketUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 16. SpEx Team */}
+            <FormField label="SpEx Team">
+              <Select
+                value={modal.data.spex_team || ""}
+                onChange={(v) => setField("spex_team", v)}
+                options={spexUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 17. Market Research (Senior) */}
+            <FormField label="Market Research (Senior)">
+              <Select
+                value={modal.data.market_research_senior || ""}
+                onChange={(v) => setField("market_research_senior", v)}
+                options={marketResUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 18. Market Research (Junior) */}
+            <FormField label="Market Research (Junior)">
+              <Select
+                value={modal.data.market_research_junior || ""}
+                onChange={(v) => setField("market_research_junior", v)}
+                options={marketResUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 19. Event Management Team */}
+            <FormField label="Event Management Team">
+              <Select
+                value={modal.data.event_management_team || ""}
+                onChange={(v) => setField("event_management_team", v)}
+                options={allUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                placeholder="— Unassigned —"
+              />
+            </FormField>
+
+            {/* 20. Official Event Name */}
+            <FormField label="Official Event Name" required>
+              <Input value={modal.data.official_event_name || modal.data.name || ""} onChange={(v) => { setField("official_event_name", v); setField("name", v); }} placeholder="Global Finance Summit 2027" />
+            </FormField>
+
+            {/* 21. Event Name for Email Marketing */}
+            <FormField label="Event Name for Email Marketing">
+              <Input value={modal.data.email_marketing_name || ""} onChange={(v) => setField("email_marketing_name", v)} placeholder="Global Finance Summit" />
+            </FormField>
+
+            {/* 22. Event Name for Branding */}
+            <FormField label="Event Name for Branding">
+              <Input value={modal.data.branding_name || ""} onChange={(v) => setField("branding_name", v)} placeholder="GFS 27" />
+            </FormField>
+
+            {/* 23. Annualisation */}
+            <FormField label="Annualisation">
+              <Input value={modal.data.annualisation || ""} onChange={(v) => setField("annualisation", v)} placeholder="Annual" />
+            </FormField>
+
+            {/* 24. Date Format */}
+            <FormField label="Date Format">
+              <Input value={modal.data.date_format || ""} onChange={(v) => setField("date_format", v)} placeholder="DD-MM-YYYY" />
+            </FormField>
+
+            {/* 25. Related Event 1 */}
+            <FormField label="Related Event 1">
+              <Input value={modal.data.related_event_1 || ""} onChange={(v) => setField("related_event_1", v)} placeholder="Related Event A" />
+            </FormField>
+
+            {/* 26. Related Event 2 */}
+            <FormField label="Related Event 2">
+              <Input value={modal.data.related_event_2 || ""} onChange={(v) => setField("related_event_2", v)} placeholder="Related Event B" />
+            </FormField>
+
+            {/* 27. Related Event 3 */}
+            <FormField label="Related Event 3">
+              <Input value={modal.data.related_event_3 || ""} onChange={(v) => setField("related_event_3", v)} placeholder="Related Event C" />
+            </FormField>
+
+            {/* 28. Upcoming Event 1 */}
+            <FormField label="Upcoming Event 1">
+              <Input value={modal.data.upcoming_event_1 || ""} onChange={(v) => setField("upcoming_event_1", v)} placeholder="Upcoming Event A" />
+            </FormField>
+
+            {/* 29. Upcoming Event 2 */}
+            <FormField label="Upcoming Event 2">
+              <Input value={modal.data.upcoming_event_2 || ""} onChange={(v) => setField("upcoming_event_2", v)} placeholder="Upcoming Event B" />
+            </FormField>
+
+            {/* 30. Upcoming Event 3 */}
+            <FormField label="Upcoming Event 3">
+              <Input value={modal.data.upcoming_event_3 || ""} onChange={(v) => setField("upcoming_event_3", v)} placeholder="Upcoming Event C" />
+            </FormField>
+
+            {/* 31. Event Status */}
+            <FormField label="Event Status">
+              <Select
+                value={modal.data.status || "Draft"}
+                onChange={(v) => setField("status", v)}
+                options={[
+                  { label: "Draft", value: "Draft" },
+                  { label: "Upcoming", value: "Upcoming" },
+                  { label: "Live", value: "Live" },
+                  { label: "Completed", value: "Completed" },
+                  { label: "Cancelled", value: "Cancelled" }
+                ]}
+              />
+            </FormField>
+
           </div>
         )}
       </Modal>

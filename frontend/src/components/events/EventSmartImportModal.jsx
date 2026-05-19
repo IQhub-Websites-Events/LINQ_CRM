@@ -8,46 +8,70 @@ import { useToast } from "../../contexts/ToastContext";
 
 const APP_FIELDS = [
   { key: "event_code",             label: "Event Code",             required: true  },
-  { key: "name",                   label: "Event Name",             required: true  },
-  { key: "master_code",            label: "Master Code",            required: false },
-  { key: "official_name",          label: "Official Name",          required: false },
-  { key: "sub_company",            label: "Sub Company",            required: false },
-  { key: "city",                   label: "City",                   required: false },
-  { key: "country",                label: "Country",                required: false },
-  { key: "venue",                  label: "Venue",                  required: false },
-  { key: "event_date",             label: "Start Date",             required: true  },
-  { key: "end_date",               label: "End Date",               required: false },
-  { key: "accepting_web_bookings", label: "Accepting Web Bookings", required: false },
-  { key: "sales_executive",        label: "Sales Executive",        required: false },
-  { key: "speaker_sales_team",     label: "Speaker Sales Team",     required: false },
-  { key: "spex_team",              label: "SpEx Team",              required: false },
-  { key: "tele_marketing_team",    label: "Tele Marketing Team",    required: false },
-  { key: "market_research_team",   label: "Market Research Team",   required: false },
-  { key: "content_check",          label: "Content Check",          required: false },
-  { key: "marketing_check",        label: "Marketing Check",        required: false },
+  { key: "event_date",             label: "Event Start Date",       required: true  },
+  { key: "end_date",               label: "Event End Date",         required: false },
+  { key: "location",               label: "Location",               required: false },
+  { key: "website",                label: "Website",                required: false },
+  { key: "web_bookings",           label: "Web Bookings",           required: false },
+  { key: "nearest_related_event",  label: "Nearest Related Event",  required: false },
+  { key: "event_type",             label: "Event Type",             required: false },
+  { key: "website_live_date",      label: "Website Live Date",      required: false },
   { key: "sales_check",            label: "Sales Check",            required: false },
+  { key: "vr1_sent_status",        label: "VR1 Sent Status",        required: false },
+  { key: "sales_team",             label: "Sales Team",             required: false },
+  { key: "team_leader",            label: "Team Leader",            required: false },
+  { key: "speaker_sales_team",     label: "Speaker Sales Team",     required: false },
+  { key: "telemarketing_team",     label: "Telemarketing Team",     required: false },
+  { key: "spex_team",              label: "SpEx Team",              required: false },
+  { key: "market_research_senior", label: "Market Research (Senior)", required: false },
+  { key: "market_research_junior", label: "Market Research (Junior)", required: false },
+  { key: "event_management_team",  label: "Event Management Team",  required: false },
+  { key: "official_event_name",    label: "Official Event Name",    required: true  },
+  { key: "email_marketing_name",   label: "Event Name for Email Marketing", required: false },
+  { key: "branding_name",          label: "Event Name for Branding", required: false },
+  { key: "annualisation",          label: "Annualisation",          required: false },
+  { key: "date_format",            label: "Date Format",            required: false },
+  { key: "related_event_1",        label: "Related Event 1",        required: false },
+  { key: "related_event_2",        label: "Related Event 2",        required: false },
+  { key: "related_event_3",        label: "Related Event 3",        required: false },
+  { key: "upcoming_event_1",       label: "Upcoming Event 1",       required: false },
+  { key: "upcoming_event_2",       label: "Upcoming Event 2",       required: false },
+  { key: "upcoming_event_3",       label: "Upcoming Event 3",       required: false },
+  { key: "status",                 label: "Event Status",           required: false },
 ];
 
 const ALIAS_MAP = {
   event_code:             ["event code", "eventcode", "code", "event_code"],
-  name:                   ["event name", "name", "eventname", "event title", "title"],
-  master_code:            ["master code", "mastercode", "base code", "master_code"],
-  official_name:          ["official name", "officialname", "official_name"],
-  sub_company:            ["sub company", "subcompany", "company division", "division", "sub_company"],
-  city:                   ["city", "location city", "town"],
-  country:                ["country", "nation"],
-  venue:                  ["venue", "hotel", "location venue"],
-  event_date:             ["start date", "event date", "date", "startdate", "event_date", "event date start"],
-  end_date:               ["end date", "enddate", "end_date"],
-  accepting_web_bookings: ["accepting web bookings", "web bookings", "accepting_web_bookings", "web bookings?", "allow web bookings"],
-  sales_executive:        ["sales executive", "salesexecutive", "sales rep", "assigned sales", "sales_executive"],
-  speaker_sales_team:     ["speaker sales team", "speaker sales", "speaker_sales_team"],
-  spex_team:              ["spex team", "spex_team", "spex"],
-  tele_marketing_team:    ["tele marketing team", "telemarketing team", "telemarketing", "tele_marketing_team"],
-  market_research_team:   ["market research team", "market research", "market_research_team"],
-  content_check:          ["content check", "content_check"],
-  marketing_check:        ["marketing check", "marketing_check"],
+  event_date:             ["start date", "event date", "date", "startdate", "event_date", "event date start", "event start date"],
+  end_date:               ["end date", "enddate", "end_date", "event end date"],
+  location:               ["location", "city", "country", "venue", "city country venue"],
+  website:                ["website", "site", "web"],
+  web_bookings:           ["web bookings", "accepting web bookings", "accepting_web_bookings", "web bookings?", "allow web bookings", "web_bookings"],
+  nearest_related_event:  ["nearest related event", "nearest_related_event", "closest event"],
+  event_type:             ["event type", "type", "event_type"],
+  website_live_date:      ["website live date", "live date", "website_live_date"],
   sales_check:            ["sales check", "sales_check"],
+  vr1_sent_status:        ["vr1 sent status", "vr1_sent_status", "vr1 status"],
+  sales_team:             ["sales team", "sales_team"],
+  team_leader:            ["team leader", "teamleader", "team_leader", "leader"],
+  speaker_sales_team:     ["speaker sales team", "speaker sales", "speaker_sales_team"],
+  telemarketing_team:     ["telemarketing team", "telemarketing", "tele marketing", "telemarketing_team", "tele_marketing_team"],
+  spex_team:              ["spex team", "spex_team", "spex"],
+  market_research_senior: ["market research senior", "market_research_senior", "mr senior", "research senior"],
+  market_research_junior: ["market research junior", "market_research_junior", "mr junior", "research junior"],
+  event_management_team:  ["event management team", "event_management_team", "event management", "management team"],
+  official_event_name:    ["official event name", "official_event_name", "official name", "officialname", "event name", "name"],
+  email_marketing_name:   ["event name for email marketing", "email_marketing_name", "email name"],
+  branding_name:          ["event name for branding", "branding_name", "branding name"],
+  annualisation:          ["annualisation", "annualization"],
+  date_format:            ["date format", "date_format"],
+  related_event_1:        ["related event 1", "related_event_1", "related 1"],
+  related_event_2:        ["related event 2", "related_event_2", "related 2"],
+  related_event_3:        ["related event 3", "related_event_3", "related 3"],
+  upcoming_event_1:       ["upcoming event 1", "upcoming_event_1", "upcoming 1"],
+  upcoming_event_2:       ["upcoming event 2", "upcoming_event_2", "upcoming 2"],
+  upcoming_event_3:       ["upcoming event 3", "upcoming_event_3", "upcoming 3"],
+  status:                 ["status", "event status", "event_status"],
 };
 
 const ACCEPT_EXTS = [".xlsx", ".xls", ".csv", ".json"];
@@ -745,7 +769,7 @@ function Step3Validation({ data, mapping, fileName, strategy, setStrategy, onBac
 function Step4Progress({ data, mapping, strategy, fileName, onDone }) {
   const toast    = useToast();
   const started  = useRef(false);
-  const [progress, setProgress] = useState({ processed: 0, total: data.length, inserted: 0, skipped: 0, errors: [], problemRows: [] });
+  const [progress, setProgress] = useState({ processed: 0, total: data.length, inserted: 0, skipped: 0, errors: [], problemRows: [], skippedRecords: [] });
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -760,6 +784,7 @@ function Step4Progress({ data, mapping, strategy, fileName, onDone }) {
     let skipped        = 0;
     const allErrors    = [];
     const allProblemRows = [];
+    const allSkippedRecords = [];
 
     for (let i = 0; i < total; i += BATCH_SIZE) {
       const batchRows  = data.slice(i, i + BATCH_SIZE).map(row => transformRow(row, mapping));
@@ -775,6 +800,17 @@ function Step4Progress({ data, mapping, strategy, fileName, onDone }) {
         });
         inserted += result.inserted || 0;
         skipped  += result.skipped_duplicates || 0;
+        
+        if (result.skipped_records?.length) {
+          result.skipped_records.forEach(sr => {
+            allSkippedRecords.push({
+              row_index:           i + (sr.row_index ?? 0),
+              event_code:          sr.event_code || "",
+              official_event_name: sr.official_event_name || "",
+            });
+          });
+        }
+
         if (result.errors?.length) {
           allErrors.push(...result.errors);
           result.errors.forEach(e => allProblemRows.push({
@@ -791,7 +827,7 @@ function Step4Progress({ data, mapping, strategy, fileName, onDone }) {
       }
 
       const processed = Math.min(i + BATCH_SIZE, total);
-      setProgress({ processed, total, inserted, skipped, errors: allErrors, problemRows: allProblemRows });
+      setProgress({ processed, total, inserted, skipped, errors: allErrors, problemRows: allProblemRows, skippedRecords: allSkippedRecords });
 
       await new Promise(r => requestAnimationFrame(r));
     }
@@ -903,6 +939,28 @@ function Step4Progress({ data, mapping, strategy, fileName, onDone }) {
           {progress.errors.length > 20 && (
             <div style={{ fontSize: 11, color: TF, marginTop: 4 }}>
               … and {progress.errors.length - 20} more
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Skipped Duplicates list */}
+      {progress.skippedRecords && progress.skippedRecords.length > 0 && (
+        <div style={{
+          background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)",
+          borderRadius: 8, padding: "10px 14px", maxHeight: 160, overflowY: "auto",
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+            Skipped Duplicates (Already in Database)
+          </div>
+          {progress.skippedRecords.slice(0, 50).map((item, i) => (
+            <div key={i} style={{ fontSize: 11, color: T, padding: "2px 0" }}>
+              Row {item.row_index}: Event Code <strong style={{ color: "var(--text)" }}>{item.event_code}</strong> {item.official_event_name ? `(${item.official_event_name})` : ""}
+            </div>
+          ))}
+          {progress.skippedRecords.length > 50 && (
+            <div style={{ fontSize: 11, color: TF, marginTop: 4 }}>
+              … and {progress.skippedRecords.length - 50} more
             </div>
           )}
         </div>

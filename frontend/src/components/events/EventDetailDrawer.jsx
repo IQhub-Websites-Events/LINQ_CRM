@@ -192,8 +192,7 @@ function CurrentEditionMetrics({ edition }) {
   const canc    = edition.total_cancelled ?? 0;
   const pending = edition.total_pending   ?? 0;
   const dels    = edition.total_delegates ?? 0;
-  const sales   = edition.total_sales     ?? 0;
-  const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
@@ -202,10 +201,9 @@ function CurrentEditionMetrics({ edition }) {
         <MetricTile label="Unpaid"    value={unpaid} color="#f59e0b" />
         <MetricTile label="Cancelled" value={canc}   color="#ef4444" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <MetricTile label="Pending"   value={pending} color="#6366f1" />
         <MetricTile label="Delegates" value={dels} />
-        <MetricTile label="Revenue"   value={`$${Number(sales).toLocaleString("en-US", { maximumFractionDigits: 0 })}`} />
       </div>
       {total > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
@@ -292,30 +290,100 @@ export function EventDetailDrawer({ eventId, onClose }) {
           </div>
         ) : event ? (
           <>
-            <InfoSection title="Event Info">
+            <InfoSection title="Event Specifications">
               <InfoGrid>
-                <InfoItem label="Event Code" value={event.event_code} mono />
-                <InfoItem label="Status"     value={<EventStatusBadge status={event.event_status} />} />
-                <InfoItem label="Event Name" value={event.name} span />
-                <InfoItem label="Official Name" value={event.official_name} span />
-                <InfoItem label="Date"       value={fmt.date(event.event_date)} mono />
-                {event.end_date && <InfoItem label="End Date" value={fmt.date(event.end_date)} mono />}
-                <InfoItem label="City"        value={event.city} />
-                {event.venue && <InfoItem label="Venue" value={event.venue} span />}
-                <InfoItem label="Sales Executive" value={event.sales_executive_name || "—"} />
-                <InfoItem label="Accepting Web Bookings" value={event.accepting_web_bookings ? "YES" : "NO"} />
-              </InfoGrid>
-            </InfoSection>
+                {/* 1. Event Code */}
+                <InfoItem label="Event Code" value={event.event_code || "—"} mono />
 
-            <InfoSection title="Team & Checks">
-              <InfoGrid>
+                {/* 2. Event Start Date */}
+                <InfoItem label="Event Start Date" value={fmt.date(event.event_date) || "—"} mono />
+
+                {/* 3. Event End Date */}
+                <InfoItem label="Event End Date" value={fmt.date(event.end_date) || "—"} mono />
+
+                {/* 4. Location */}
+                <InfoItem label="Location" value={event.location || "—"} />
+
+                {/* 5. Website */}
+                <InfoItem label="Website" value={event.website ? <a href={event.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>{event.website}</a> : "—"} span />
+
+                {/* 6. Web Bookings */}
+                <InfoItem label="Web Bookings" value={event.web_bookings ? "Yes" : "No"} />
+
+                {/* 7. Nearest Related Event */}
+                <InfoItem label="Nearest Related Event" value={event.nearest_related_event || "—"} />
+
+                {/* 8. Event Type */}
+                <InfoItem label="Event Type" value={event.event_type || "—"} />
+
+                {/* 9. Website Live Date */}
+                <InfoItem label="Website Live Date" value={fmt.date(event.website_live_date) || "—"} mono />
+
+                {/* 10. Sales Check */}
+                <InfoItem label="Sales Check" value={event.sales_check || "—"} />
+
+                {/* 11. VR1 Sent Status */}
+                <InfoItem label="VR1 Sent Status" value={event.vr1_sent_status || "—"} />
+
+                {/* 12. Sales Team */}
+                <InfoItem label="Sales Team" value={event.sales_team || "—"} />
+
+                {/* 13. Team Leader */}
+                <InfoItem label="Team Leader" value={event.team_leader || "—"} />
+
+                {/* 14. Speaker Sales Team */}
                 <InfoItem label="Speaker Sales Team" value={event.speaker_sales_team || "—"} />
-                <InfoItem label="SpEx Team"          value={event.spex_team || "—"} />
-                <InfoItem label="Tele Marketing"     value={event.tele_marketing_team || "—"} />
-                <InfoItem label="Market Research"    value={event.market_research_team || "—"} />
-                <InfoItem label="Content Check"      value={event.content_check || "—"} />
-                <InfoItem label="Marketing Check"    value={event.marketing_check || "—"} />
-                <InfoItem label="Sales Check"        value={event.sales_check || "—"} />
+
+                {/* 15. Telemarketing Team */}
+                <InfoItem label="Telemarketing Team" value={event.telemarketing_team || "—"} />
+
+                {/* 16. SpEx Team */}
+                <InfoItem label="SpEx Team" value={event.spex_team || "—"} />
+
+                {/* 17. Market Research (Senior) */}
+                <InfoItem label="Market Research (Senior)" value={event.market_research_senior || "—"} />
+
+                {/* 18. Market Research (Junior) */}
+                <InfoItem label="Market Research (Junior)" value={event.market_research_junior || "—"} />
+
+                {/* 19. Event Management Team */}
+                <InfoItem label="Event Management Team" value={event.event_management_team || "—"} />
+
+                {/* 20. Official Event Name */}
+                <InfoItem label="Official Event Name" value={event.official_event_name || "—"} span />
+
+                {/* 21. Event Name for Email Marketing */}
+                <InfoItem label="Event Name for Email Marketing" value={event.email_marketing_name || "—"} span />
+
+                {/* 22. Event Name for Branding */}
+                <InfoItem label="Event Name for Branding" value={event.branding_name || "—"} span />
+
+                {/* 23. Annualisation */}
+                <InfoItem label="Annualisation" value={event.annualisation || "—"} />
+
+                {/* 24. Date Format */}
+                <InfoItem label="Date Format" value={event.date_format || "—"} />
+
+                {/* 25. Related Event 1 */}
+                <InfoItem label="Related Event 1" value={event.related_event_1 || "—"} />
+
+                {/* 26. Related Event 2 */}
+                <InfoItem label="Related Event 2" value={event.related_event_2 || "—"} />
+
+                {/* 27. Related Event 3 */}
+                <InfoItem label="Related Event 3" value={event.related_event_3 || "—"} />
+
+                {/* 28. Upcoming Event 1 */}
+                <InfoItem label="Upcoming Event 1" value={event.upcoming_event_1 || "—"} />
+
+                {/* 29. Upcoming Event 2 */}
+                <InfoItem label="Upcoming Event 2" value={event.upcoming_event_2 || "—"} />
+
+                {/* 30. Upcoming Event 3 */}
+                <InfoItem label="Upcoming Event 3" value={event.upcoming_event_3 || "—"} />
+
+                {/* 31. Event Status */}
+                <InfoItem label="Event Status" value={<EventStatusBadge status={event.status || event.event_status} />} />
               </InfoGrid>
             </InfoSection>
 
@@ -395,7 +463,7 @@ export function EventDetailDrawer({ eventId, onClose }) {
               )}
             </InfoSection>
 
-            <InfoSection title="Sales Team">
+            <InfoSection title="IQ-Hub Team">
               {(event.sales_executive || event.assigned_sales_users?.length > 0) ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {event.sales_executive && (

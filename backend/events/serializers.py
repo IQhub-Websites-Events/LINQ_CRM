@@ -23,13 +23,17 @@ class EventListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Event
         fields = [
-            "id", "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
-            "event_date", "end_date", "event_status",
-            "sales_executive", "sales_executive_name",
-            "assigned_sales_users",
-            "speaker_sales_team", "spex_team", "tele_marketing_team",
-            "market_research_team", "content_check", "marketing_check",
-            "sales_check", "accepting_web_bookings",
+            "id", "event_code", "event_date", "end_date", "location", "website", "web_bookings",
+            "nearest_related_event", "event_type", "website_live_date", "sales_check", "vr1_sent_status",
+            "sales_team", "team_leader", "speaker_sales_team", "telemarketing_team", "spex_team",
+            "market_research_senior", "market_research_junior", "event_management_team", "official_event_name",
+            "email_marketing_name", "branding_name", "annualisation", "date_format", "related_event_1",
+            "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
+            "status", "event_status",
+            # Legacy/system fields for full-stack API contract safety
+            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
+            "sales_executive", "sales_executive_name", "assigned_sales_users",
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -50,14 +54,18 @@ class EventDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Event
         fields = [
-            "id", "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
-            "venue", "event_date", "end_date", "event_status",
-            "sales_executive", "sales_executive_name",
-            "assigned_sales_users",
+            "id", "event_code", "event_date", "end_date", "location", "website", "web_bookings",
+            "nearest_related_event", "event_type", "website_live_date", "sales_check", "vr1_sent_status",
+            "sales_team", "team_leader", "speaker_sales_team", "telemarketing_team", "spex_team",
+            "market_research_senior", "market_research_junior", "event_management_team", "official_event_name",
+            "email_marketing_name", "branding_name", "annualisation", "date_format", "related_event_1",
+            "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
+            "status", "event_status",
+            # Legacy/system fields for full-stack API contract safety
+            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
+            "sales_executive", "sales_executive_name", "assigned_sales_users",
             "total_bookings", "pending_bookings",
-            "speaker_sales_team", "spex_team", "tele_marketing_team",
-            "market_research_team", "content_check", "marketing_check",
-            "sales_check", "accepting_web_bookings",
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -81,19 +89,21 @@ class EventWriteSerializer(serializers.ModelSerializer):
     assigned_user_ids = serializers.ListField(
         child=serializers.IntegerField(), write_only=True, required=False, default=list
     )
-    city    = serializers.CharField(required=False, allow_blank=True, default="")
-    country = serializers.CharField(required=False, allow_blank=True, default="")
 
     class Meta:
         model  = Event
         fields = [
-            "event_code", "master_code", "name", "official_name", "sub_company", "city", "country",
-            "venue", "event_date", "end_date",
-            "sales_executive",
-            "speaker_sales_team", "spex_team", "tele_marketing_team",
-            "market_research_team", "content_check", "marketing_check",
-            "sales_check", "accepting_web_bookings",
-            "assigned_user_ids",
+            "event_code", "event_date", "end_date", "location", "website", "web_bookings",
+            "nearest_related_event", "event_type", "website_live_date", "sales_check", "vr1_sent_status",
+            "sales_team", "team_leader", "speaker_sales_team", "telemarketing_team", "spex_team",
+            "market_research_senior", "market_research_junior", "event_management_team", "official_event_name",
+            "email_marketing_name", "branding_name", "annualisation", "date_format", "related_event_1",
+            "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
+            "status",
+            # Legacy/system fields
+            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
+            "sales_executive", "assigned_user_ids",
         ]
 
     def validate_event_code(self, value):

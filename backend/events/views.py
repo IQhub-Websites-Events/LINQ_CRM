@@ -253,6 +253,7 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
 
         inserted = 0
         skipped = 0
+        skipped_records = []
         errors = []
         auto_gen_rows = []
 
@@ -283,6 +284,35 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
 
                     end_date = _parse_date(row.get("end_date"))
 
+                    # Upgraded 31 Fields
+                    location = _clean(row, "location")
+                    website = _clean(row, "website")
+                    nearest_related_event = _clean(row, "nearest_related_event")
+                    event_type = _clean(row, "event_type")
+                    website_live_date = _parse_date(row.get("website_live_date"))
+                    vr1_sent_status = _clean(row, "vr1_sent_status")
+                    sales_team = _clean(row, "sales_team")
+                    team_leader = _clean(row, "team_leader")
+                    market_research_senior = _clean(row, "market_research_senior")
+                    market_research_junior = _clean(row, "market_research_junior")
+                    event_management_team = _clean(row, "event_management_team")
+                    official_event_name = _clean(row, "official_event_name")
+                    email_marketing_name = _clean(row, "email_marketing_name")
+                    branding_name = _clean(row, "branding_name")
+                    annualisation = _clean(row, "annualisation")
+                    date_format = _clean(row, "date_format")
+                    related_event_1 = _clean(row, "related_event_1")
+                    related_event_2 = _clean(row, "related_event_2")
+                    related_event_3 = _clean(row, "related_event_3")
+                    upcoming_event_1 = _clean(row, "upcoming_event_1")
+                    upcoming_event_2 = _clean(row, "upcoming_event_2")
+                    upcoming_event_3 = _clean(row, "upcoming_event_3")
+                    status = _clean(row, "status") or Event.Status.DRAFT
+
+                    # Accepting Web Bookings
+                    awb_raw = _clean(row, "web_bookings") or _clean(row, "accepting_web_bookings")
+                    web_bookings = awb_raw.lower() in ("yes", "true", "1")
+
                     # Resolve Sales Executive
                     se_name = _clean(row, "sales_executive")
                     sales_exec = _resolve_user(se_name)
@@ -290,24 +320,53 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
                     # Resolve other team members for M2M assignments and string values
                     speaker_sales_user = _resolve_user(_clean(row, "speaker_sales_team"))
                     spex_user = _resolve_user(_clean(row, "spex_team"))
-                    tele_marketing_user = _resolve_user(_clean(row, "tele_marketing_team"))
-                    market_research_user = _resolve_user(_clean(row, "market_research_team"))
-                    content_check_user = _resolve_user(_clean(row, "content_check"))
-                    marketing_check_user = _resolve_user(_clean(row, "marketing_check"))
+                    tele_marketing_user = _resolve_user(_clean(row, "telemarketing_team") or _clean(row, "tele_marketing_team"))
+                    market_research_senior_user = _resolve_user(market_research_senior)
+                    market_research_junior_user = _resolve_user(market_research_junior)
                     sales_check_user = _resolve_user(_clean(row, "sales_check"))
+                    team_leader_user = _resolve_user(team_leader)
+                    event_management_user = _resolve_user(event_management_team)
 
-                    # Sub Company normalization
-                    sub_company_val = _clean(row, "sub_company")
-                    # Try to match choice or fallback
-                    sub_company = Event.SubCompany.CONFERENCES
-                    for choice in Event.SubCompany.values:
-                        if choice.lower() == sub_company_val.lower() or sub_company_val.lower() in choice.lower():
-                            sub_company = choice
-                            break
+                    # Assign resolved user names to fields for absolute integrity
+                    if speaker_sales_user:
+                        speaker_sales_team = speaker_sales_user.get_full_name() or speaker_sales_user.username
+                    else:
+                        speaker_sales_team = _clean(row, "speaker_sales_team")
 
-                    # Accepting Web Bookings
-                    awb_raw = _clean(row, "accepting_web_bookings")
-                    accepting_web_bookings = awb_raw.lower() in ("yes", "true", "1")
+                    if spex_user:
+                        spex_team = spex_user.get_full_name() or spex_user.username
+                    else:
+                        spex_team = _clean(row, "spex_team")
+
+                    if tele_marketing_user:
+                        telemarketing_team = tele_marketing_user.get_full_name() or tele_marketing_user.username
+                    else:
+                        telemarketing_team = _clean(row, "telemarketing_team") or _clean(row, "tele_marketing_team")
+
+                    if market_research_senior_user:
+                        market_research_senior = market_research_senior_user.get_full_name() or market_research_senior_user.username
+                    else:
+                        market_research_senior = _clean(row, "market_research_senior")
+
+                    if market_research_junior_user:
+                        market_research_junior = market_research_junior_user.get_full_name() or market_research_junior_user.username
+                    else:
+                        market_research_junior = _clean(row, "market_research_junior")
+
+                    if sales_check_user:
+                        sales_check = sales_check_user.get_full_name() or sales_check_user.username
+                    else:
+                        sales_check = _clean(row, "sales_check")
+
+                    if team_leader_user:
+                        team_leader = team_leader_user.get_full_name() or team_leader_user.username
+                    else:
+                        team_leader = _clean(row, "team_leader")
+
+                    if event_management_user:
+                        event_management_team = event_management_user.get_full_name() or event_management_user.username
+                    else:
+                        event_management_team = _clean(row, "event_management_team")
 
                     existing = Event.objects.filter(event_code=event_code).first()
 
@@ -320,14 +379,16 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
                         assigned_users_to_set.append(spex_user)
                     if tele_marketing_user:
                         assigned_users_to_set.append(tele_marketing_user)
-                    if market_research_user:
-                        assigned_users_to_set.append(market_research_user)
-                    if content_check_user:
-                        assigned_users_to_set.append(content_check_user)
-                    if marketing_check_user:
-                        assigned_users_to_set.append(marketing_check_user)
+                    if market_research_senior_user:
+                        assigned_users_to_set.append(market_research_senior_user)
+                    if market_research_junior_user:
+                        assigned_users_to_set.append(market_research_junior_user)
                     if sales_check_user:
                         assigned_users_to_set.append(sales_check_user)
+                    if team_leader_user:
+                        assigned_users_to_set.append(team_leader_user)
+                    if event_management_user:
+                        assigned_users_to_set.append(event_management_user)
 
                     # Deduplicate assigned users
                     assigned_users_to_set = list(set(assigned_users_to_set))
@@ -335,25 +396,37 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
                     if existing:
                         if strategy == "upsert":
                             existing.name = name
-                            existing.master_code = _clean(row, "master_code").upper() or existing.master_code
-                            existing.official_name = _clean(row, "official_name") or existing.official_name
-                            existing.sub_company = sub_company
-                            existing.city = _clean(row, "city") or existing.city
-                            existing.country = _clean(row, "country") or existing.country
-                            existing.venue = _clean(row, "venue") or existing.venue
+                            existing.official_event_name = official_event_name
                             existing.event_date = event_date
                             existing.end_date = end_date or existing.end_date
-                            existing.accepting_web_bookings = accepting_web_bookings
+                            existing.location = location
+                            existing.website = website
+                            existing.web_bookings = web_bookings
+                            existing.nearest_related_event = nearest_related_event
+                            existing.event_type = event_type
+                            existing.website_live_date = website_live_date or existing.website_live_date
+                            existing.sales_check = _clean(row, "sales_check") or existing.sales_check
+                            existing.vr1_sent_status = vr1_sent_status or existing.vr1_sent_status
+                            existing.sales_team = sales_team or existing.sales_team
+                            existing.team_leader = team_leader or existing.team_leader
+                            existing.speaker_sales_team = _clean(row, "speaker_sales_team") or existing.speaker_sales_team
+                            existing.telemarketing_team = _clean(row, "telemarketing_team") or existing.telemarketing_team
+                            existing.spex_team = _clean(row, "spex_team") or existing.spex_team
+                            existing.market_research_senior = market_research_senior or existing.market_research_senior
+                            existing.market_research_junior = market_research_junior or existing.market_research_junior
+                            existing.event_management_team = event_management_team or existing.event_management_team
+                            existing.email_marketing_name = email_marketing_name or existing.email_marketing_name
+                            existing.branding_name = branding_name or existing.branding_name
+                            existing.annualisation = annualisation or existing.annualisation
+                            existing.date_format = date_format or existing.date_format
+                            existing.related_event_1 = related_event_1 or existing.related_event_1
+                            existing.related_event_2 = related_event_2 or existing.related_event_2
+                            existing.related_event_3 = related_event_3 or existing.related_event_3
+                            existing.upcoming_event_1 = upcoming_event_1 or existing.upcoming_event_1
+                            existing.upcoming_event_2 = upcoming_event_2 or existing.upcoming_event_2
+                            existing.upcoming_event_3 = upcoming_event_3 or existing.upcoming_event_3
+                            existing.status = status or existing.status
                             existing.sales_executive = sales_exec or existing.sales_executive
-
-                            # String display fields
-                            existing.speaker_sales_team = speaker_sales_user.get_full_name() or speaker_sales_user.username if speaker_sales_user else _clean(row, "speaker_sales_team") or existing.speaker_sales_team
-                            existing.spex_team = spex_user.get_full_name() or spex_user.username if spex_user else _clean(row, "spex_team") or existing.spex_team
-                            existing.tele_marketing_team = tele_marketing_user.get_full_name() or tele_marketing_user.username if tele_marketing_user else _clean(row, "tele_marketing_team") or existing.tele_marketing_team
-                            existing.market_research_team = market_research_user.get_full_name() or market_research_user.username if market_research_user else _clean(row, "market_research_team") or existing.market_research_team
-                            existing.content_check = content_check_user.get_full_name() or content_check_user.username if content_check_user else _clean(row, "content_check") or existing.content_check
-                            existing.marketing_check = marketing_check_user.get_full_name() or marketing_check_user.username if marketing_check_user else _clean(row, "marketing_check") or existing.marketing_check
-                            existing.sales_check = sales_check_user.get_full_name() or sales_check_user.username if sales_check_user else _clean(row, "sales_check") or existing.sales_check
 
                             existing.save()
 
@@ -363,27 +436,45 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
                             inserted += 1
                         else:
                             skipped += 1
+                            skipped_records.append({
+                                "row_index": i + 1,
+                                "event_code": event_code,
+                                "official_event_name": official_event_name or name
+                            })
                     else:
                         event = Event.objects.create(
                             event_code=event_code,
-                            master_code=_clean(row, "master_code").upper(),
-                            name=name,
-                            official_name=_clean(row, "official_name"),
-                            sub_company=sub_company,
-                            city=_clean(row, "city"),
-                            country=_clean(row, "country"),
-                            venue=_clean(row, "venue"),
                             event_date=event_date,
                             end_date=end_date,
-                            accepting_web_bookings=accepting_web_bookings,
+                            location=location,
+                            website=website,
+                            web_bookings=web_bookings,
+                            nearest_related_event=nearest_related_event,
+                            event_type=event_type,
+                            website_live_date=website_live_date,
+                            sales_check=_clean(row, "sales_check"),
+                            vr1_sent_status=vr1_sent_status,
+                            sales_team=sales_team,
+                            team_leader=team_leader,
+                            speaker_sales_team=_clean(row, "speaker_sales_team"),
+                            telemarketing_team=_clean(row, "telemarketing_team"),
+                            spex_team=_clean(row, "spex_team"),
+                            market_research_senior=market_research_senior,
+                            market_research_junior=market_research_junior,
+                            event_management_team=event_management_team,
+                            official_event_name=official_event_name,
+                            email_marketing_name=email_marketing_name,
+                            branding_name=branding_name,
+                            annualisation=annualisation,
+                            date_format=date_format,
+                            related_event_1=related_event_1,
+                            related_event_2=related_event_2,
+                            related_event_3=related_event_3,
+                            upcoming_event_1=upcoming_event_1,
+                            upcoming_event_2=upcoming_event_2,
+                            upcoming_event_3=upcoming_event_3,
+                            status=status,
                             sales_executive=sales_exec,
-                            speaker_sales_team=speaker_sales_user.get_full_name() or speaker_sales_user.username if speaker_sales_user else _clean(row, "speaker_sales_team"),
-                            spex_team=spex_user.get_full_name() or spex_user.username if spex_user else _clean(row, "spex_team"),
-                            tele_marketing_team=tele_marketing_user.get_full_name() or tele_marketing_user.username if tele_marketing_user else _clean(row, "tele_marketing_team"),
-                            market_research_team=market_research_user.get_full_name() or market_research_user.username if market_research_user else _clean(row, "market_research_team"),
-                            content_check=content_check_user.get_full_name() or content_check_user.username if content_check_user else _clean(row, "content_check"),
-                            marketing_check=marketing_check_user.get_full_name() or marketing_check_user.username if marketing_check_user else _clean(row, "marketing_check"),
-                            sales_check=sales_check_user.get_full_name() or sales_check_user.username if sales_check_user else _clean(row, "sales_check"),
                         )
 
                         if assigned_users_to_set:
@@ -452,6 +543,7 @@ class EventViewSet(RBACMixin, viewsets.ModelViewSet):
             "batch_number":       batch_number,
             "inserted":           inserted,
             "skipped_duplicates": skipped,
+            "skipped_records":    skipped_records,
             "errors":             errors[:20],
         })
 
