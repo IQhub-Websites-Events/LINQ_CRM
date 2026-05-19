@@ -121,6 +121,53 @@ function OverviewTab() {
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 28px 28px" }}>
 
+      {/* Personal Details Profile Card */}
+      <div style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 14,
+        padding: "20px 24px",
+        marginBottom: 32,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 20,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.01)"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%",
+            background: "rgba(13,122,79,0.1)", color: "var(--accent)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 700, fontSize: 18, fontFamily: "var(--font-serif)"
+          }}>
+            {(user?.first_name?.[0] || user?.username?.[0] || "").toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>
+              {user?.first_name ? `${user.first_name} ${user.last_name || ""}` : user?.username}
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ textTransform: "capitalize" }}>{(user?.role || "").replace(/_/g, " ")}</span>
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--border)" }} />
+              <span>{user?.email}</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 24 }}>
+          {user?.team_name && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", color: "var(--text-faint)", letterSpacing: "0.04em" }}>Team</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginTop: 2 }}>{user.team_name}</div>
+            </div>
+          )}
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", color: "var(--text-faint)", letterSpacing: "0.04em" }}>Status</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--success)", marginTop: 2, textTransform: "capitalize" }}>{user?.status || "Active"}</div>
+          </div>
+        </div>
+      </div>
+
       {/* Role-Specific Dashboard KPIs */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -197,6 +244,89 @@ function OverviewTab() {
             </div>
           ) : null}
         </div>
+      </div>
+
+      {/* Team Productivity Report */}
+      <div key="team-productivity-report-wrapper">
+        {stats?.team_productivity && stats.team_productivity.length > 0 && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-faint)", marginBottom: 12 }}>
+              <span>Team Productivity Report</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {stats.team_productivity.map(team => (
+                <div key={team.team_id} style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 14,
+                  overflow: "hidden"
+                }}>
+                  <div style={{
+                    padding: "14px 20px",
+                    background: "var(--surface-alt)",
+                    borderBottom: "1px solid var(--border)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--text)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}>
+                    <span>{team.team_name}</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 500,
+                      padding: "2px 8px",
+                      background: "var(--border)",
+                      borderRadius: 6,
+                      color: "var(--text-dim)"
+                    }}>
+                      {team.members.length} member(s)
+                    </span>
+                  </div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-alt)" }}>
+                          <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--text-dim)", fontWeight: 500 }}>Username</th>
+                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Bookings</th>
+                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Paid Bookings</th>
+                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Pending</th>
+                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Total Value</th>
+                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Paid Value</th>
+                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Pending Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {team.members.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
+                              No active members in this team
+                            </td>
+                          </tr>
+                        ) : (
+                          team.members.map(member => (
+                            <tr key={member.username} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ padding: "12px 16px", color: "var(--text)", fontWeight: 500 }}>
+                                <span>{member.full_name}</span> <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 400 }}>({member.username})</span>
+                              </td>
+                              <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--text)", fontWeight: 600 }}>{member.bookings}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{member.paid_bookings}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "center", color: member.pending_bookings > 0 ? "var(--danger)" : "var(--text-faint)" }}>{member.pending_bookings}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "right", color: "var(--text)", fontWeight: 500 }}>${member.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "right", color: "var(--success)", fontWeight: 500 }}>${member.paid_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "right", color: member.pending_value > 0 ? "var(--danger)" : "var(--text-faint)" }}>${member.pending_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CRM Summary (Global) */}

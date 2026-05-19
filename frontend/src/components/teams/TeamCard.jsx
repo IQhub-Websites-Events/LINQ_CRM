@@ -1,7 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { UserDraggable } from "./UserDraggable";
 
-export function TeamCard({ team, members, onTeamMenuClick, onMemberMenuClick }) {
+export function TeamCard({ team, members, onTeamMenuClick, onMemberMenuClick, onAddUser }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `team-${team.id}`,
     data: { team },
@@ -66,6 +66,23 @@ export function TeamCard({ team, members, onTeamMenuClick, onMemberMenuClick }) 
               {members.length}
             </span>
             <button
+              onClick={() => onAddUser?.(team.id)}
+              title="Add user to this team"
+              style={{
+                width: 24, height: 24,
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+                color: "var(--text-faint)",
+                borderRadius: 5,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, lineHeight: 1,
+                fontWeight: 600,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "var(--surface-alt)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-faint)"; }}
+            >+</button>
+            <button
               data-menu-portal="true"
               onMouseDown={e => e.stopPropagation()}
               onClick={e => {
@@ -89,17 +106,18 @@ export function TeamCard({ team, members, onTeamMenuClick, onMemberMenuClick }) 
         </div>
 
         {/* Team lead indicator */}
-        {team.team_lead_name && (
+        {members.filter(m => m.is_team_lead).length > 0 && (
           <div style={{
             fontSize: 10,
             color: "var(--text-faint)",
             display: "flex",
             alignItems: "center",
+            flexWrap: "wrap",
             gap: 4,
             paddingLeft: 16,
           }}>
             <span style={{ color: "#f59e0b", fontSize: 10 }}>★</span>
-            <span>{team.team_lead_name}</span>
+            <span>Leads: {members.filter(m => m.is_team_lead).map(m => m.full_name || m.username).join(", ")}</span>
           </div>
         )}
       </div>
@@ -140,7 +158,7 @@ export function TeamCard({ team, members, onTeamMenuClick, onMemberMenuClick }) 
               <UserDraggable
                 key={member.id}
                 user={member}
-                isLead={member.id === team.team_lead_id}
+                isLead={member.is_team_lead}
                 onMenuClick={onMemberMenuClick}
               />
             ))}

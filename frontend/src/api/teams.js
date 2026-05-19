@@ -10,8 +10,10 @@ export const teamsApi = {
   moveMember: (data)     => client.post("/teams/move-member/", data).then(r => r.data),
   bulkMove:   (id, destId) =>
     client.post(`/teams/${id}/bulk-move/`, { destination_team_id: destId }).then(r => r.data),
-  assignLead: (id, userId) =>
-    client.post(`/teams/${id}/assign-lead/`, { user_id: userId }).then(r => r.data),
+  assignLead: (id, userIds) => {
+    const payload = Array.isArray(userIds) ? { user_ids: userIds } : { user_id: userIds };
+    return client.post(`/teams/${id}/assign-lead/`, payload).then(r => r.data);
+  },
   archive:    (id)       => client.post(`/teams/${id}/archive/`).then(r => r.data),
   activity:   (id)       => client.get(`/teams/${id}/activity/`).then(r => r.data),
 };

@@ -12,6 +12,7 @@ import { TeamCard } from "../components/teams/TeamCard";
 import { UserDraggable } from "../components/teams/UserDraggable";
 import { Avatar } from "../components/ui/Avatar";
 import { useToast } from "../contexts/ToastContext";
+import { UserModal } from "../components/users/UserModal";
 
 // ── Role display helpers ───────────────────────────────────────────────────────
 const ROLES     = ["admin", "sales", "market_research", "spex", "operations"];
@@ -43,6 +44,7 @@ export function TeamsManagementPage() {
   const [moveDialog,      setMoveDialog]      = useState(null);  // { userId }
   const [assignLeadTarget, setAssignLeadTarget] = useState(null); // team obj
   const [activityTeamId,  setActivityTeamId] = useState(null);
+  const [userModal,       setUserModal]       = useState(null);  // { defaultTeamId? }
   const [activityLogs,    setActivityLogs]   = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
 
@@ -216,10 +218,10 @@ export function TeamsManagementPage() {
     }
   };
 
-  const handleAssignLeadConfirm = async (teamId, userId) => {
+  const handleAssignLeadConfirm = async (teamId, userIds) => {
     setAssignLeadTarget(null);
     try {
-      await teamsApi.assignLead(teamId, userId);
+      await teamsApi.assignLead(teamId, userIds);
       toast.success("Team lead updated");
       const updated = await teamsApi.list();
       setTeams(updated.results || updated);
@@ -342,6 +344,7 @@ export function TeamsManagementPage() {
                 members={filtered.filter(u => u.team_id === team.id)}
                 onTeamMenuClick={openTeamMenu}
                 onMemberMenuClick={openMemberMenu}
+                onAddUser={(teamId) => setUserModal({ defaultTeamId: teamId })}
               />
             ))}
 
@@ -415,6 +418,7 @@ export function TeamsManagementPage() {
             setAssignLeadTarget(menuTeam);
           }}
           onViewActivity={() => handleViewActivity(teamMenu.teamId)}
+          onAddUser={() => { setTeamMenu(null); setUserModal({ defaultTeamId: teamMenu.teamId }); }}
         />
       )}
 
@@ -423,7 +427,9 @@ export function TeamsManagementPage() {
         <TeamFormModal
           mode={teamModal.mode}
           team={teamModal.team}
+          members={users.filter(u => u.team_id === teamModal.team?.id)}
           onSave={handleSaveTeam}
+          onAddUser={(teamId) => setUserModal({ defaultTeamId: teamId })}
           onClose={() => setTeamModal(null)}
         />
       )}
@@ -449,6 +455,14 @@ export function TeamsManagementPage() {
           members={users.filter(u => u.team_id === assignLeadTarget.id)}
           onConfirm={handleAssignLeadConfirm}
           onClose={() => setAssignLeadTarget(null)}
+        />
+      )}
+      {userModal && (
+        <UserModal
+          isOpen={!!userModal}
+          defaultTeamId={userModal.defaultTeamId}
+          onClose={() => setUserModal(null)}
+          onSave={fetchData}
         />
       )}
       {activityTeamId && (
@@ -595,12 +609,13 @@ function MemberMenu({ user, x, y, onRemove, onMoveToTeam, onAssignLead }) {
   );
 }
 
-function TeamMenu({ team, x, y, onEdit, onDelete, onArchive, onAssignLead, onViewActivity }) {
+function TeamMenu({ team, x, y, onEdit, onDelete, onArchive, onAssignLead, onViewActivity, onAddUser }) {
   return (
     <PortalMenu x={x} y={y}>
       <MenuLabel text={team.name} />
       <div style={{ padding: "4px 0" }}>
         <MenuItem icon="✎"  label="Edit Team"          onClick={onEdit} />
+        <MenuItem icon="＋" label="Add User"           onClick={onAddUser} />
         <MenuItem icon="★"  label="Assign Team Lead"   onClick={onAssignLead} />
         <MenuItem icon="↺"  label="View Activity"      onClick={onViewActivity} />
         <MenuItem icon="⊙"  label={team.is_archived ? "Restore Team" : "Archive Team"} onClick={onArchive} />
@@ -631,6 +646,9 @@ function Modal({ title, onClose, width = 480, children }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Modal Footer
+// ─────────────────────────────────────────────────────────────────────────────
 function ModalFooter({ onClose, label, submitting, danger }) {
   return (
     <div style={{ padding: "12px 24px", background: "var(--surface-alt)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -645,7 +663,7 @@ function ModalFooter({ onClose, label, submitting, danger }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Team Form Modal (Create / Edit)
 // ─────────────────────────────────────────────────────────────────────────────
-function TeamFormModal({ mode, team, onSave, onClose }) {
+function TeamFormModal({ mode, team, onSave, onClose, members = [], onAddUser }) {
   const [form,   setForm]   = useState({ name: team?.name || "", description: team?.description || "", color: team?.color || "#0d7a4f" });
   const [saving, setSaving] = useState(false);
 
@@ -657,9 +675,9 @@ function TeamFormModal({ mode, team, onSave, onClose }) {
   };
 
   return (
-    <Modal title={mode === "create" ? "New Team" : "Edit Team"} onClose={onClose} width={480}>
+    <Modal title={mode === "create" ? "New Team" : "Edit Team"} onClose={onClose} width={500}>
       <form onSubmit={handleSubmit}>
-        <div style={{ padding: "18px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ padding: "18px 24px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "70vh", overflowY: "auto" }}>
           <Field label="Team Name *">
             <FocusInput required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. SpEx Team" />
           </Field>
@@ -679,6 +697,57 @@ function TeamFormModal({ mode, team, onSave, onClose }) {
               <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>{form.color}</span>
             </div>
           </Field>
+
+          {mode === "edit" && team && (
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 500, letterSpacing: "0.02em", textTransform: "uppercase" }}>
+                  Team Members ({members.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onAddUser?.(team.id)}
+                  style={{
+                    background: "none", border: "none", color: "var(--accent)",
+                    fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0,
+                    fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4
+                  }}
+                >
+                  + Add User
+                </button>
+              </div>
+              
+              {members.length === 0 ? (
+                <div style={{
+                  padding: "16px", border: "1px dashed var(--border)", borderRadius: 8,
+                  textAlign: "center", color: "var(--text-faint)", fontSize: 12
+                }}>
+                  No members in this team yet.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {members.map(m => (
+                    <div key={m.id} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "8px 10px", background: "var(--surface-alt)", borderRadius: 8, border: "1px solid var(--border)"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Avatar name={m.full_name || m.username} size={24} />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                            {m.full_name || m.username} {m.id === team.team_lead_id && <span style={{ color: "#f59e0b" }}>★</span>}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--text-faint)", textTransform: "capitalize" }}>
+                            {(m.role || "").replace(/_/g, " ")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <ModalFooter onClose={onClose} label={mode === "create" ? "Create Team" : "Save Changes"} submitting={saving} />
       </form>
@@ -791,36 +860,83 @@ function MoveToTeamDialog({ currentTeamId, teams, onConfirm, onClose }) {
 // Assign Lead Dialog
 // ─────────────────────────────────────────────────────────────────────────────
 function AssignLeadDialog({ team, members, onConfirm, onClose }) {
-  const [sel, setSel] = useState(team.team_lead_id?.toString() || "");
+  const [selectedIds, setSelectedIds] = useState(() => {
+    if (team.team_leads && team.team_leads.length > 0) {
+      return team.team_leads.map(l => l.id);
+    }
+    return team.team_lead_id ? [team.team_lead_id] : [];
+  });
+
+  const toggleSelect = (memberId) => {
+    setSelectedIds(prev => 
+      prev.includes(memberId)
+        ? prev.filter(id => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
   return (
-    <Modal title={`Assign Lead — ${team.name}`} onClose={onClose} width={400}>
+    <Modal title={`Assign Lead — ${team.name}`} onClose={onClose} width={420}>
       <div style={{ padding: "18px 24px" }}>
-        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 14px" }}>
+        <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 16px" }}>
           {members.length === 0
             ? "This team has no members yet."
-            : "Select a team member to assign as Team Lead:"}
+            : "Select one or more team members to appoint as Team Lead(s):"}
         </p>
         {members.length > 0 && (
-          <Field label="Team Lead">
-            <select value={sel} onChange={e => setSel(e.target.value)} style={{ ...inputStyle, height: 36, padding: "0 10px" }}>
-              <option value="">— None (clear lead) —</option>
-              {members.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.full_name || m.username} · {(m.role || "").replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            maxHeight: 240,
+            overflowY: "auto",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: 12,
+            background: "var(--surface-alt)"
+          }}>
+            {members.map(m => {
+              const isChecked = selectedIds.includes(m.id);
+              return (
+                <label key={m.id} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  cursor: "pointer",
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: isChecked ? "rgba(13,122,79,0.06)" : "var(--surface)",
+                  border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                  transition: "background 0.15s, border-color 0.15s"
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleSelect(m.id)}
+                    style={{ accentColor: "var(--accent)", width: 15, height: 15 }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                      {m.full_name || m.username}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--text-faint)", textTransform: "capitalize" }}>
+                      {(m.role || "").replace(/_/g, " ")}
+                    </span>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
         )}
       </div>
       <div style={{ padding: "12px 24px", background: "var(--surface-alt)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
         <button onClick={onClose} style={ghostBtn}>Cancel</button>
         <button
-          onClick={() => onConfirm(team.id, sel ? parseInt(sel) : null)}
+          onClick={() => onConfirm(team.id, selectedIds)}
           disabled={members.length === 0}
           style={{ ...primaryBtn, opacity: members.length === 0 ? 0.5 : 1 }}
         >
-          Assign Lead
+          Assign Lead(s)
         </button>
       </div>
     </Modal>

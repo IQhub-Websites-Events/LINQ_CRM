@@ -22,18 +22,24 @@ class UserListSerializer(serializers.ModelSerializer):
     team_name       = serializers.ReadOnlyField(source='team.name')
     team_id         = serializers.ReadOnlyField(source='team.id')
     assigned_events_count = serializers.IntegerField(source='assigned_events.count', read_only=True)
+    mapped_lead_id  = serializers.ReadOnlyField(source='mapped_lead.id')
+    mapped_lead_name = serializers.SerializerMethodField()
 
     class Meta:
         model  = User
         fields = [
             "id", "username", "email", "first_name", "last_name", "full_name",
             "role", "status", "is_active", "assigned_events", "assigned_events_count",
-            "date_joined", "last_login", "team_id", "team_name"
+            "date_joined", "last_login", "team_id", "team_name", "is_team_lead",
+            "mapped_lead_id", "mapped_lead_name"
         ]
         read_only_fields = ["id", "date_joined", "last_login"]
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
+
+    def get_mapped_lead_name(self, obj):
+        return obj.mapped_lead.get_full_name() or obj.mapped_lead.username if obj.mapped_lead else None
 
 
 class UserWriteSerializer(serializers.ModelSerializer):
@@ -42,22 +48,27 @@ class UserWriteSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(), required=False, write_only=True
     )
     team_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
+    mapped_lead_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
 
     class Meta:
         model  = User
         fields = [
             "username", "email", "first_name", "last_name",
-            "password", "role", "status", "assigned_event_ids", "team_id"
+            "password", "role", "status", "assigned_event_ids", "team_id", "is_team_lead",
+            "mapped_lead_id"
         ]
 
     def create(self, validated_data):
         event_ids = validated_data.pop("assigned_event_ids", [])
         team_id = validated_data.pop("team_id", None)
+        mapped_lead_id = validated_data.pop("mapped_lead_id", None)
         password  = validated_data.pop("password", None)
         user = User(**validated_data)
         if team_id:
             from teams.models import Team
             user.team = Team.objects.filter(id=team_id).first()
+        if mapped_lead_id:
+            user.mapped_lead = User.objects.filter(id=mapped_lead_id).first()
         if password:
             user.set_password(password)
         user.save()
@@ -68,6 +79,7 @@ class UserWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         event_ids = validated_data.pop("assigned_event_ids", None)
         team_id = validated_data.pop("team_id", None)
+        mapped_lead_id = validated_data.pop("mapped_lead_id", None)
         password  = validated_data.pop("password", None)
         
         for attr, value in validated_data.items():
@@ -76,6 +88,9 @@ class UserWriteSerializer(serializers.ModelSerializer):
         if team_id is not None:
             from teams.models import Team
             instance.team = Team.objects.filter(id=team_id).first() if team_id else None
+
+        if mapped_lead_id is not None:
+            instance.mapped_lead = User.objects.filter(id=mapped_lead_id).first() if mapped_lead_id else None
             
         if password:
             instance.set_password(password)

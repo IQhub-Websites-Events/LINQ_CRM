@@ -205,6 +205,74 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
             paid=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST, invoice__payment_status="Paid")),
         )
 
+        # Team lead productivity calculation
+        from teams.models import Team
+        from django.db.models import Sum
+
+        is_lead = getattr(request.user, "is_team_lead", False) or Team.objects.filter(team_lead=request.user).exists()
+        team_productivity = []
+
+        if is_lead or request.user.role == "admin":
+            if request.user.role == "admin":
+                teams_led = Team.objects.filter(is_archived=False)
+            else:
+                teams_led = Team.objects.filter(
+                    Q(team_lead=request.user) | Q(members__id=request.user.id, members__is_team_lead=True)
+                ).filter(is_archived=False).distinct()
+
+            for t in teams_led:
+                members_stats = []
+                team_leads_count = t.members.filter(status="active", is_team_lead=True).count()
+                if team_leads_count > 1 and not request.user.role == "admin":
+                    members_qs = t.members.filter(status="active", mapped_lead=request.user)
+                else:
+                    members_qs = t.members.filter(status="active")
+
+                for m in members_qs:
+                    m_bookings = BookDelegate.objects.filter(invoice__sales_executive=m)
+                    if period == "today":
+                        m_bookings = m_bookings.filter(invoice__invoice_date=today)
+                    elif period == "yesterday":
+                        from datetime import timedelta
+                        m_bookings = m_bookings.filter(invoice__invoice_date=today - timedelta(days=1))
+                    elif period == "last_7_days":
+                        from datetime import timedelta
+                        m_bookings = m_bookings.filter(invoice__invoice_date__gte=today - timedelta(days=7))
+                    elif period == "last_30_days":
+                        from datetime import timedelta
+                        m_bookings = m_bookings.filter(invoice__invoice_date__gte=today - timedelta(days=30))
+                    elif period == "month":
+                        m_bookings = m_bookings.filter(invoice__invoice_date__year=now.year, invoice__invoice_date__month=now.month)
+                    elif period == "year":
+                        m_bookings = m_bookings.filter(invoice__invoice_date__year=now.year)
+
+                    booking_count = m_bookings.count()
+                    paid_count = m_bookings.filter(invoice__payment_status="Paid").count()
+                    pending_count = max(0, booking_count - paid_count)
+
+                    unique_invoices = qs.filter(sales_executive=m)
+                    total_value = unique_invoices.aggregate(val=Sum("total_amount"))["val"] or 0
+                    paid_value = unique_invoices.filter(payment_status="Paid").aggregate(val=Sum("total_amount"))["val"] or 0
+                    pending_value = max(0, total_value - paid_value)
+
+                    members_stats.append({
+                        "username": m.username,
+                        "full_name": m.get_full_name() or m.username,
+                        "role": m.role,
+                        "bookings": booking_count,
+                        "paid_bookings": paid_count,
+                        "pending_bookings": pending_count,
+                        "total_value": float(total_value),
+                        "paid_value": float(paid_value),
+                        "pending_value": float(pending_value),
+                    })
+
+                team_productivity.append({
+                    "team_id": t.id,
+                    "team_name": t.name,
+                    "members": members_stats
+                })
+
         return Response({
             "sales": {
                 "total": sales["total"] or 0,
@@ -222,7 +290,8 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                 "confirmed": speaker["confirmed"] or 0,
                 "paid": speaker["paid"] or 0,
                 "pending": max(0, (speaker["total"] or 0) - (speaker["paid"] or 0)),
-            }
+            },
+            "team_productivity": team_productivity
         })
 
     @action(

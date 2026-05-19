@@ -6,12 +6,13 @@ class TeamSerializer(serializers.ModelSerializer):
     member_count   = serializers.IntegerField(read_only=True, source="members.count")
     team_lead_id   = serializers.SerializerMethodField()
     team_lead_name = serializers.SerializerMethodField()
+    team_leads     = serializers.SerializerMethodField()
 
     class Meta:
         model  = Team
         fields = [
             "id", "name", "slug", "color", "description",
-            "member_count", "team_lead_id", "team_lead_name",
+            "member_count", "team_lead_id", "team_lead_name", "team_leads",
             "is_archived", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "slug", "created_at", "updated_at"]
@@ -23,6 +24,10 @@ class TeamSerializer(serializers.ModelSerializer):
         if not obj.team_lead:
             return None
         return obj.team_lead.get_full_name() or obj.team_lead.username
+
+    def get_team_leads(self, obj):
+        leads = obj.members.filter(is_team_lead=True)
+        return [{"id": u.id, "name": u.get_full_name() or u.username} for u in leads]
 
 
 class TeamActivityLogSerializer(serializers.ModelSerializer):

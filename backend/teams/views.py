@@ -141,34 +141,58 @@ class TeamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="assign-lead")
     def assign_lead(self, request, pk=None):
         """POST /api/teams/{id}/assign-lead/"""
-        team    = self.get_object()
-        user_id = request.data.get("user_id")
+        team     = self.get_object()
+        user_id  = request.data.get("user_id")
+        user_ids = request.data.get("user_ids")  # list of user IDs
 
-        if user_id:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Clear is_team_lead for all members of the team first
+        team.members.update(is_team_lead=False)
+
+        leads = []
+        if user_ids is not None:
+            # Multi-lead assignment
+            clean_ids = []
+            for uid in user_ids:
+                try:
+                    if uid:
+                        clean_ids.append(int(uid))
+                except (ValueError, TypeError):
+                    pass
+            
+            if clean_ids:
+                leads = list(User.objects.filter(pk__in=clean_ids, team=team))
+                User.objects.filter(pk__in=[u.id for u in leads]).update(is_team_lead=True)
+        elif user_id:
+            # Single-lead assignment (backward compatibility)
             try:
-                lead = User.objects.get(pk=user_id)
+                lead = User.objects.get(pk=user_id, team=team)
+                lead.is_team_lead = True
+                lead.save(update_fields=["is_team_lead"])
+                leads = [lead]
             except User.DoesNotExist:
-                return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
-            team.team_lead = lead
-        else:
-            team.team_lead = None
+                return Response({"detail": "User not found or not in this team."}, status=status.HTTP_404_NOT_FOUND)
 
+        # Sync the primary team_lead ForeignKey to the first lead in the list
+        primary_lead = leads[0] if leads else None
+        team.team_lead = primary_lead
         team.save(update_fields=["team_lead"])
 
         TeamActivityLog.objects.create(
             action_type=TeamActivityLog.ActionType.LEAD_ASSIGNED,
             team=team,
-            user=team.team_lead,
+            user=primary_lead,
             moved_by=request.user,
-            notes=f"Lead set to '{team.team_lead.username if team.team_lead else 'None'}'",
+            notes=f"Leads set to {', '.join([u.username for u in leads]) if leads else 'None'}",
         )
 
         return Response({
             "team_id":        team.id,
             "team_lead_id":   team.team_lead_id,
             "team_lead_name": team.team_lead.username if team.team_lead else None,
+            "team_leads":     [{"id": u.id, "name": u.get_full_name() or u.username} for u in leads],
         })
 
     @action(detail=True, methods=["post"], url_path="archive")

@@ -28,6 +28,16 @@ class User(AbstractUser):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.ACTIVE, db_index=True
     )
+    is_team_lead = models.BooleanField(default=False, db_index=True)
+    mapped_lead = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="team_members",
+        db_index=True,
+        help_text="The specific team lead this user/member is mapped under."
+    )
     team = models.ForeignKey(
         "teams.Team",
         on_delete=models.SET_NULL,
@@ -95,7 +105,7 @@ class User(AbstractUser):
                     new_role = self.Role.OPERATIONS
                 elif "speaker sales" in team_name:
                     new_role = self.Role.SPEAKER_SALES
-                elif "telemarketing" in team_name:
+                elif "telemarketing" in team_name or "tele marketing" in team_name or "tele" in team_name:
                     new_role = self.Role.TELEMARKETING
                 elif "sales" in team_name:
                     new_role = self.Role.SALES

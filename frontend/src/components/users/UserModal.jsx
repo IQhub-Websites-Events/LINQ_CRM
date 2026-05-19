@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { teamsApi, eventsApi, usersApi } from '../../api';
 import { useToast } from '../../contexts/ToastContext';
 
-export function UserModal({ user, isOpen, onClose, onSave }) {
+export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [teams, setTeams] = useState([]);
@@ -12,7 +12,8 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
     first_name: '', last_name: '',
     password: '', confirm_password: '',
     role: 'sales', status: 'active',
-    team_id: '', assigned_event_ids: [],
+    team_id: defaultTeamId || '', assigned_event_ids: [],
+    mapped_lead_id: '',
   });
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
         role: user.role || 'sales', status: user.status || 'active',
         team_id: user.team_id || '',
         assigned_event_ids: user.assigned_events?.map((e) => e.id) || [],
+        mapped_lead_id: user.mapped_lead_id || '',
       });
     } else {
       setFormData({
@@ -33,10 +35,46 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
         first_name: '', last_name: '',
         password: '', confirm_password: '',
         role: 'sales', status: 'active',
-        team_id: '', assigned_event_ids: [],
+        team_id: defaultTeamId || '', assigned_event_ids: [],
+        mapped_lead_id: '',
       });
     }
-  }, [isOpen, user]);
+  }, [isOpen, user, defaultTeamId]);
+
+  const getMappedTeamIdForRole = (role, teamsList) => {
+    if (!role || !teamsList || teamsList.length === 0) return '';
+    let matchKeyword = '';
+    let excludeKeyword = '';
+
+    if (role === 'sales') {
+      matchKeyword = 'sales';
+      excludeKeyword = 'speaker';
+    } else if (role === 'speaker_sales') {
+      matchKeyword = 'speaker';
+    } else if (role === 'telemarketing') {
+      matchKeyword = 'tele';
+    } else if (role === 'market_research') {
+      matchKeyword = 'research';
+    } else if (role === 'spex') {
+      matchKeyword = 'spex';
+    } else if (role === 'operations') {
+      matchKeyword = 'operations';
+    } else if (role === 'admin') {
+      matchKeyword = 'admin';
+    }
+
+    if (!matchKeyword) return '';
+
+    const matched = teamsList.find(t => {
+      const name = (t.name || '').toLowerCase();
+      if (excludeKeyword && name.includes(excludeKeyword.toLowerCase())) {
+        return false;
+      }
+      return name.includes(matchKeyword.toLowerCase());
+    });
+
+    return matched ? matched.id : '';
+  };
 
   const fetchOptions = async () => {
     try {
@@ -44,11 +82,29 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
         teamsApi.list(),
         eventsApi.list({ limit: 1000 }),
       ]);
-      setTeams(teamsRes.results || teamsRes);
+      const list = teamsRes.results || teamsRes;
+      setTeams(list);
       setEvents(eventsRes.results || eventsRes);
+
+      // Auto-assign team on initial load if creating a new user and team_id not set
+      if (!user && !formData.team_id && formData.role) {
+        const mapped = getMappedTeamIdForRole(formData.role, list);
+        if (mapped) {
+          setFormData(f => ({ ...f, team_id: mapped }));
+        }
+      }
     } catch {
       toast.error('Failed to load form options');
     }
+  };
+
+  const handleRoleChange = (newRole) => {
+    const mappedTeamId = getMappedTeamIdForRole(newRole, teams);
+    setFormData(f => ({
+      ...f,
+      role: newRole,
+      team_id: mappedTeamId || ''
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -63,6 +119,7 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
       delete payload.confirm_password;
       if (!payload.password) delete payload.password;
       if (!payload.team_id) payload.team_id = null;
+      if (!payload.mapped_lead_id) payload.mapped_lead_id = null;
 
       if (user) {
         await usersApi.update(user.id, payload);
@@ -81,6 +138,10 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
   };
 
   const set = (field, value) => setFormData((f) => ({ ...f, [field]: value }));
+
+  const selectedTeamObj = teams.find(t => t.id === parseInt(formData.team_id));
+  const teamLeads = selectedTeamObj?.team_leads || [];
+  const showMappedLeadField = teamLeads.length > 1;
 
   if (!isOpen) return null;
 
@@ -153,10 +214,9 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
               </Field>
             </FormSection>
 
-            {/* Section 2 — Organisation */}
-            <FormSection title="Organisation" desc="Role, team, and event access." last>
-              <Field label="Role" span={2}>
-                <MSelect value={formData.role} onChange={(v) => set('role', v)} options={[
+                        <FormSection title="Organisation" desc="Role, team, and event access." last>
+              <Field key="role-field" label="Role" span={2}>
+                <MSelect value={formData.role} onChange={handleRoleChange} options={[
                   { value: 'admin', label: 'Administrator' },
                   { value: 'sales', label: 'Sales Executive' },
                   { value: 'speaker_sales', label: 'Speaker Sales' },
@@ -166,18 +226,26 @@ export function UserModal({ user, isOpen, onClose, onSave }) {
                   { value: 'operations', label: 'Operations' },
                 ]} />
               </Field>
-              <Field label="Team" span={2}>
-                <MSelect value={formData.team_id} onChange={(v) => set('team_id', v)} options={[
+              <Field key="team-field" label="Team" span={2}>
+                <MSelect value={formData.team_id} onChange={(v) => set('team_id', v)} disabled={true} options={[
                   { value: '', label: 'Unassigned' },
                   ...teams.map((t) => ({ value: t.id, label: t.name })),
                 ]} />
               </Field>
-              <Field label="Status" span={2}>
+              <Field key="status-field" label="Status" span={2}>
                 <MSelect value={formData.status} onChange={(v) => set('status', v)}
                   options={['active', 'inactive', 'suspended']} />
               </Field>
+              {showMappedLeadField && (
+                <Field key="mapped-lead-field" label="Mapped Team Lead" span={2}>
+                  <MSelect value={formData.mapped_lead_id} onChange={(v) => set('mapped_lead_id', v)} options={[
+                    { value: '', label: 'Unassigned' },
+                    ...teamLeads.map((l) => ({ value: l.id, label: l.name })),
+                  ]} />
+                </Field>
+              )}
 
-              <Field label="Assigned Events" span={6}>
+              <Field key="assigned-events-field" label="Assigned Events" span={6}>
                 <div style={{
                   maxHeight: 160, overflowY: 'auto',
                   border: '1px solid var(--border)', borderRadius: 8,
@@ -278,18 +346,22 @@ function MInput({ value, onChange, type = 'text', mono, readOnly, placeholder, r
   );
 }
 
-function MSelect({ value, onChange, options }) {
+function MSelect({ value, onChange, options, disabled }) {
   const [focused, setFocused] = useState(false);
   return (
     <select
       value={value ?? ''} onChange={(e) => onChange?.(e.target.value)}
       onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      disabled={disabled}
       style={{
         height: 36, padding: '0 28px 0 12px',
         border: `1px solid ${focused ? 'var(--accent)' : 'var(--border)'}`,
-        borderRadius: 8, background: 'var(--surface)', color: 'var(--text)',
+        borderRadius: 8,
+        background: disabled ? 'var(--surface-alt)' : 'var(--surface)',
+        color: disabled ? 'var(--text-faint)' : 'var(--text)',
         fontSize: 13, fontFamily: 'var(--font-sans)',
-        outline: 'none', width: '100%', appearance: 'none', cursor: 'pointer',
+        outline: 'none', width: '100%', appearance: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         boxShadow: focused ? '0 0 0 3px var(--accent-soft)' : 'none',
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235a5853' stroke-width='1.3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat",
