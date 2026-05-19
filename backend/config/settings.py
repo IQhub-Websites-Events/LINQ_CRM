@@ -18,7 +18,7 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com,http://localhost:3000",
+    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com,http://localhost:3001,http://87.99.135.169",
 ).split(",")
 CORS_ALLOW_CREDENTIALS = True
 
