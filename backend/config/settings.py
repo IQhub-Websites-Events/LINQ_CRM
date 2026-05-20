@@ -18,7 +18,7 @@ ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
 
 CORS_ALLOWED_ORIGINS = os.environ.get(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com,http://localhost:3001,http://87.99.135.169,https://flow.zoho.in/60060817867/flow/webhook/incoming?zapikey=1001.48c7ec6c66f3417f5e4e55f29dce369f.58f387aa65dfaa387287d049417d8d54&isdebug=false",
+    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com,http://localhost:3001,http://87.99.135.169,https://flow.zoho.in",
 ).split(",")
 CORS_ALLOW_CREDENTIALS = True
 
