@@ -445,7 +445,7 @@ function EventPaymentDrawer({ event, onClose }) {
                 {event.event_name}
               </h2>
               <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 4 }}>
-                {event.sub_company} · {event.city} · {fmtDate(event.event_date)}
+                {event.city} · {fmtDate(event.event_date)}
                 {event.sales_rep && event.sales_rep !== "—" && <> · {event.sales_rep}</>}
               </div>
             </div>
@@ -509,7 +509,7 @@ function EventPaymentDrawer({ event, onClose }) {
 
 // ── Filter bar ────────────────────────────────────────────────────────────────
 
-function PaymentActivityFilters({ search, setSearch, statusFilter, setStatusFilter, subCompanyFilter, setSubCompanyFilter }) {
+function PaymentActivityFilters({ search, setSearch, statusFilter, setStatusFilter }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
@@ -528,15 +528,9 @@ function PaymentActivityFilters({ search, setSearch, statusFilter, setStatusFilt
           <option key={s} value={s}>{s}</option>
         ))}
       </select>
-      <select value={subCompanyFilter} onChange={e => setSubCompanyFilter(e.target.value)} style={{ ...inputStyle, width: 160 }}>
-        <option value="">All Sub-Companies</option>
-        {["Linq Conferences", "Linq Training", "Linq Summits", "Linq Live"].map(s => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
-      {(search || statusFilter || subCompanyFilter) && (
+      {(search || statusFilter) && (
         <button
-          onClick={() => { setSearch(""); setStatusFilter(""); setSubCompanyFilter(""); }}
+          onClick={() => { setSearch(""); setStatusFilter(""); }}
           style={{ ...inputStyle, cursor: "pointer", fontSize: 11, color: "var(--text-faint)" }}
         >Clear</button>
       )}
@@ -589,20 +583,18 @@ export function EventPaymentActivityModule() {
   const [loading, setLoading]             = useState(true);
   const [search, setSearch]               = useState("");
   const [statusFilter, setStatusFilter]   = useState("");
-  const [subCompanyFilter, setSubCompanyFilter] = useState("");
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
     paymentActivityApi.list({
-      search:      search      || undefined,
-      status:      statusFilter || undefined,
-      sub_company: subCompanyFilter || undefined,
+      search: search      || undefined,
+      status: statusFilter || undefined,
     })
       .then(setEvents)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, statusFilter, subCompanyFilter]);
+  }, [search, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -615,7 +607,6 @@ export function EventPaymentActivityModule() {
       <PaymentActivityFilters
         search={search}               setSearch={setSearch}
         statusFilter={statusFilter}   setStatusFilter={setStatusFilter}
-        subCompanyFilter={subCompanyFilter} setSubCompanyFilter={setSubCompanyFilter}
       />
 
       {!loading && events.length > 0 && <SummaryStrip events={events} />}

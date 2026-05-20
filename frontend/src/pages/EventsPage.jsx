@@ -27,9 +27,9 @@ function resolveNameToId(val, users) {
 export function EventsPage() {
   const toast = useToast();
   const { isAdmin, user } = useAuth();
-  const [search, setSearch]     = useState("");
-  const [status, setStatus]     = useState("");
-  const [modal,  setModal]      = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [modal, setModal] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -73,14 +73,14 @@ export function EventsPage() {
       }).filter(Boolean))].sort((a, b) => b - a);
 
       setFilterOptions({ codes, names, officialNames, cities, years });
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   // ── Infinite scroll state ────────────────────────────────────────────────
-  const [items,       setItems]       = useState([]);
-  const [page,        setPage]        = useState(1);
-  const [hasMore,     setHasMore]     = useState(true);
-  const [loading,     setLoading]     = useState(true);
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef(null);
 
@@ -137,21 +137,21 @@ export function EventsPage() {
   // Reset to page 1 on filter/sort change (setPage triggers the fetch effect)
   const handleSearch = (v) => { setSearch(v); setPage(1); setItems([]); };
   const handleStatus = (v) => { setStatus(v); setPage(1); setItems([]); };
-  const handleSort   = (key) => { sortToggle(key); setPage(1); setItems([]); };
+  const handleSort = (key) => { sortToggle(key); setPage(1); setItems([]); };
 
   // After create/update/delete — reload from scratch
   const refetch = () => { setPage(1); setItems([]); };
 
   // Fetch all users for dropdown — sales exec (by ID) and team name fields (by full_name)
   useEffect(() => {
-    usersApi.list({ page_size: 500 }).then(r => setAllUsers(r?.results || [])).catch(() => {});
+    usersApi.list({ page_size: 500 }).then(r => setAllUsers(r?.results || [])).catch(() => { });
   }, []);
 
-  const salesUsers        = allUsers.filter(u => u.role === "sales");
+  const salesUsers = allUsers.filter(u => u.role === "sales");
   const speakerSalesUsers = allUsers.filter(u => u.role === "speaker_sales");
-  const spexUsers         = allUsers.filter(u => u.role === "spex");
-  const telemarketUsers   = allUsers.filter(u => u.role === "telemarketing");
-  const marketResUsers    = allUsers.filter(u => u.role === "market_research");
+  const spexUsers = allUsers.filter(u => u.role === "spex");
+  const telemarketUsers = allUsers.filter(u => u.role === "telemarketing");
+  const marketResUsers = allUsers.filter(u => u.role === "market_research");
 
   const TEAM_FIELDS = [
     "speaker_sales_team", "spex_team", "telemarketing_team",
@@ -159,15 +159,17 @@ export function EventsPage() {
     "sales_check", "team_leader"
   ];
 
-  const openCreate = () => setModal({ mode: "create", data: {
-    event_code: "", event_date: "", end_date: "", location: "", website: "", web_bookings: false,
-    nearest_related_event: "", event_type: "", website_live_date: "", sales_check: "", vr1_sent_status: "",
-    sales_team: "", team_leader: "", speaker_sales_team: "", telemarketing_team: "", spex_team: "",
-    market_research_senior: "", market_research_junior: "", event_management_team: "", official_event_name: "",
-    email_marketing_name: "", branding_name: "", annualisation: "", date_format: "", related_event_1: "",
-    related_event_2: "", related_event_3: "", upcoming_event_1: "", upcoming_event_2: "", upcoming_event_3: "",
-    status: "Draft", sales_executive: null
-  } });
+  const openCreate = () => setModal({
+    mode: "create", data: {
+      event_code: "", event_date: "", end_date: "", location: "", website: "", web_bookings: false,
+      nearest_related_event: "", event_type: "", website_live_date: "", sales_check: "", vr1_sent_status: "",
+      sales_team: "", team_leader: "", speaker_sales_team: "", telemarketing_team: "", spex_team: "",
+      market_research_senior: "", market_research_junior: "", event_management_team: "", official_event_name: "",
+      email_marketing_name: "", branding_name: "", annualisation: "", date_format: "", related_event_1: "",
+      related_event_2: "", related_event_3: "", upcoming_event_1: "", upcoming_event_2: "", upcoming_event_3: "",
+      status: "Draft", sales_executive: null
+    }
+  });
 
   const openEdit = (ev) => {
     const data = { ...ev };
@@ -175,9 +177,9 @@ export function EventsPage() {
 
     // Pre-populate role-specific dropdowns from the M2M assigned_sales_users (most reliable)
     const roleToField = {
-      speaker_sales:   "speaker_sales_team",
-      spex:            "spex_team",
-      telemarketing:   "telemarketing_team",
+      speaker_sales: "speaker_sales_team",
+      spex: "spex_team",
+      telemarketing: "telemarketing_team",
     };
     Object.values(roleToField).forEach(f => { data[f] = ""; });
     assigned.forEach(u => {
@@ -237,10 +239,16 @@ export function EventsPage() {
       });
       payload.assigned_user_ids = assignedIds;
 
-      if (modal.mode === "create") await eventsApi.create(payload);
-      else await eventsApi.update(modal.data.id, payload);
+      const saved = modal.mode === "create"
+        ? await eventsApi.create(payload)
+        : await eventsApi.update(modal.data.id, payload);
       toast.success(modal.mode === "create" ? "Event created" : "Event updated");
-      closeModal(); refetch();
+      closeModal();
+      if (modal.mode === "create") {
+        setItems(prev => [saved, ...prev]);
+      } else {
+        setItems(prev => prev.map(item => item.id === saved.id ? saved : item));
+      }
     } catch (err) {
       const data = err.response?.data;
       let msg = err.message;
@@ -257,8 +265,11 @@ export function EventsPage() {
 
   const del = async (ev) => {
     if (!window.confirm(`Delete ${ev.event_code}?`)) return;
-    try { await eventsApi.delete(ev.id); toast.success("Deleted"); refetch(); }
-    catch { toast.error("Delete failed"); }
+    try {
+      await eventsApi.delete(ev.id);
+      toast.success("Deleted");
+      setItems(prev => prev.filter(item => item.id !== ev.id));
+    } catch { toast.error("Delete failed"); }
   };
 
   const handleClearAll = async () => {
@@ -328,157 +339,175 @@ export function EventsPage() {
 
 
       <div className="card" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
-        <div style={{ padding: "20px", background: "var(--surface)", borderBottom: "1px solid var(--border)",
-          display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface-alt)",
-            border: "1px solid var(--border)", borderRadius: 4, padding: "8px 12px", flex: 1, maxWidth: 300 }}>
+        <div style={{
+          padding: "20px", background: "var(--surface)", borderBottom: "1px solid var(--border)",
+          display: "flex", alignItems: "center", gap: 15, flexWrap: "wrap", flexShrink: 0
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10, background: "var(--surface-alt)",
+            border: "1px solid var(--border)", borderRadius: 4, padding: "8px 12px", flex: 1, maxWidth: 300
+          }}>
             <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="var(--text-faint)" strokeWidth="2" strokeLinecap="round">
-              <circle cx="5" cy="5" r="4"/><path d="M9 9l2.5 2.5"/>
+              <circle cx="5" cy="5" r="4" /><path d="M9 9l2.5 2.5" />
             </svg>
             <input value={search} onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search events..." style={{ background: "none", border: "none", outline: "none",
-                fontSize: 13, color: "var(--text)", width: "100%", fontFamily: "inherit" }} />
+              placeholder="Search events..." style={{
+                background: "none", border: "none", outline: "none",
+                fontSize: 13, color: "var(--text)", width: "100%", fontFamily: "inherit"
+              }} />
           </div>
           <select value={status} onChange={(e) => handleStatus(e.target.value)}
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4,
-              padding: "8px 30px 8px 12px", fontSize: 13, color: "var(--text)", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none" }}>
+            style={{
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4,
+              padding: "8px 30px 8px 12px", fontSize: 13, color: "var(--text)", appearance: "none", cursor: "pointer", fontFamily: "inherit", outline: "none"
+            }}>
             <option value="">All Statuses</option>
             {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
 
-      <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-          <thead>
-            <tr style={{ background: "var(--surface-alt)" }}>
-              <SortableTh sortKey="event_code" sort={sort} onSort={handleSort}>Code</SortableTh>
-              <SortableTh sortKey="name"        sort={sort} onSort={handleSort}>Name</SortableTh>
-              <SortableTh sortKey="official_name" sort={sort} onSort={handleSort}>Official Name</SortableTh>
-              <SortableTh sortKey="city"        sort={sort} onSort={handleSort}>City</SortableTh>
-              <SortableTh sortKey="event_date"  sort={sort} onSort={handleSort}>Date</SortableTh>
-              <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={handleSort}>Web Bookings</SortableTh>
-              <SortableTh noSort>Status</SortableTh>
-              <SortableTh sortKey="sales_executive" sort={sort} onSort={handleSort}>Sales Executive</SortableTh>
-              <SortableTh noSort></SortableTh>
-            </tr>
-            <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.event_code}
-                  onChange={(e) => handleColFilter("event_code", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {filterOptions.codes.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.name}
-                  onChange={(e) => handleColFilter("name", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {filterOptions.names.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.official_name}
-                  onChange={(e) => handleColFilter("official_name", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {filterOptions.officialNames.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.city}
-                  onChange={(e) => handleColFilter("city", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.year}
-                  onChange={(e) => handleColFilter("year", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.accepting_web_bookings}
-                  onChange={(e) => handleColFilter("accepting_web_bookings", e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="true">Yes</option>
-                  <option value="false">No</option>
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.status}
-                  onChange={(e) => handleColFilter("status", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </td>
-              <td style={{ padding: "4px 8px" }}>
-                <select
-                  style={colFilterSelect}
-                  value={colFilters.sales_executive}
-                  onChange={(e) => handleColFilter("sales_executive", e.target.value)}
-                >
-                  <option value="">All</option>
-                  {salesUsers.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.full_name || u.username}
-                    </option>
-                  ))}
-                </select>
-              </td>
-              <td></td>
-            </tr>
-          </thead>
+        <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: "var(--surface-alt)" }}>
+                <SortableTh sortKey="event_code" sort={sort} onSort={handleSort}>Code</SortableTh>
+                <SortableTh sortKey="name" sort={sort} onSort={handleSort}>Name</SortableTh>
+                <SortableTh sortKey="official_name" sort={sort} onSort={handleSort}>Official Name</SortableTh>
+                <SortableTh sortKey="city" sort={sort} onSort={handleSort}>City</SortableTh>
+                <SortableTh sortKey="event_date" sort={sort} onSort={handleSort}>Date</SortableTh>
+                <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={handleSort}>Web Bookings</SortableTh>
+                <SortableTh noSort>Status</SortableTh>
+                <SortableTh noSort>Sales Team</SortableTh>
+                <SortableTh noSort></SortableTh>
+              </tr>
+              <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.event_code}
+                    onChange={(e) => handleColFilter("event_code", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.codes.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.name}
+                    onChange={(e) => handleColFilter("name", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.names.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.official_name}
+                    onChange={(e) => handleColFilter("official_name", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.officialNames.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.city}
+                    onChange={(e) => handleColFilter("city", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.year}
+                    onChange={(e) => handleColFilter("year", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.accepting_web_bookings}
+                    onChange={(e) => handleColFilter("accepting_web_bookings", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.status}
+                    onChange={(e) => handleColFilter("status", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td style={{ padding: "4px 8px" }}>
+                  <select
+                    style={colFilterSelect}
+                    value={colFilters.sales_executive}
+                    onChange={(e) => handleColFilter("sales_executive", e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {salesUsers.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name || u.username}
+                      </option>
+                    ))}
+                  </select>
+                </td>
 
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
-            ) : items.length === 0 ? (
-              <EmptyState title="No events found" />
-            ) : items?.map((ev) => (
-              <tr key={ev.id}
-                onClick={() => setSelectedEventId(ev.id)}
-                style={{ borderBottom: "1px solid var(--vz-card-border-color)", cursor: "pointer", transition: "background .2s ease" }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-alt)"}
-                onMouseLeave={(e) => e.currentTarget.style.background = ""}
-              >
-                <Td><span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span></Td>
-                <Td><span style={{ fontWeight: 600, fontSize: 13 }}>{ev.name}</span></Td>
-                <Td muted>{ev.official_name || "—"}</Td>
-                <Td muted>{ev.city}</Td>
-                <Td mono>{fmt.date(ev.event_date)}</Td>
-                <Td><span className={`badge badge-soft-${ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
-                <Td><EventStatusBadge status={ev.event_status} /></Td>
-                <Td muted>{ev.sales_executive_name || "—"}</Td>
+                <td></td>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={9} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+              ) : items.length === 0 ? (
+                <EmptyState title="No events found" />
+              ) : items?.map((ev) => (
+                <tr key={ev.id}
+                  onClick={() => setSelectedEventId(ev.id)}
+                  style={{ borderBottom: "1px solid var(--vz-card-border-color)", cursor: "pointer", transition: "background .2s ease" }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-alt)"}
+                  onMouseLeave={(e) => e.currentTarget.style.background = ""}
+                >
+                  <Td><span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span></Td>
+                  <Td><span style={{ fontWeight: 600, fontSize: 13 }}>{ev.name}</span></Td>
+                  <Td muted>{ev.official_name || "—"}</Td>
+                  <Td muted>{ev.city}</Td>
+                  <Td mono>{fmt.date(ev.event_date)}</Td>
+                  <Td><span className={`badge badge-soft-${ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
+                  <Td><EventStatusBadge status={ev.event_status} /></Td>
+                  <Td>
+                    {ev.sales_executive_name
+                      ? <span style={{
+                          fontSize: 11, fontWeight: 600, padding: "2px 7px",
+                          borderRadius: 20, background: "rgba(64,81,137,0.1)",
+                          color: "var(--accent)", whiteSpace: "nowrap",
+                        }}>{ev.sales_executive_name}</span>
+                      : <span style={{ color: "var(--text-faint)" }}>—</span>
+                    }
+                  </Td>
                   <Td>
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); openEdit(ev); }} 
-                        className="btn-icon" 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEdit(ev); }}
+                        className="btn-icon"
                         title="Edit Event"
-                        style={{ 
+                        style={{
                           background: "var(--surface-alt)", border: "none", borderRadius: 6, padding: "6px",
                           color: "#405189", cursor: "pointer", display: "flex", alignItems: "center"
                         }}
@@ -488,13 +517,13 @@ export function EventsPage() {
                         </svg>
                       </button>
                       {isAdmin && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); del(ev); }} 
-                          className="btn-icon" 
+                        <button
+                          onClick={(e) => { e.stopPropagation(); del(ev); }}
+                          className="btn-icon"
                           title="Delete Event"
-                          style={{ 
+                          style={{
                             background: "rgba(240,101,72,0.1)", border: "none", borderRadius: 6, padding: "6px",
-                          color: "#f06548", cursor: "pointer", display: "flex", alignItems: "center"
+                            color: "#f06548", cursor: "pointer", display: "flex", alignItems: "center"
                           }}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -505,24 +534,26 @@ export function EventsPage() {
                       )}
                     </div>
                   </Td>
-              </tr>
+                </tr>
 
-            ))}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
 
-        {/* Infinite scroll sentinel */}
-        <div ref={sentinelRef} style={{ height: 1 }} />
-        {loadingMore && (
-          <div style={{ padding: "16px", textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
-            Loading more…
-          </div>
-        )}
-        {!hasMore && items.length > 0 && (
-          <div style={{ padding: "14px", textAlign: "center", color: "var(--text-faint)", fontSize: 12 }}>
-            All {items.length} events loaded
-          </div>
-        )}
+          {/* Infinite scroll sentinel */}
+          {!loading && hasMore && items.length > 0 && (
+            <div ref={sentinelRef} style={{ height: 1 }} />
+          )}
+          {loadingMore && (
+            <div style={{ padding: "16px", textAlign: "center", color: "var(--text-faint)", fontSize: 13 }}>
+              Loading more…
+            </div>
+          )}
+          {!hasMore && items.length > 0 && (
+            <div style={{ padding: "14px", textAlign: "center", color: "var(--text-faint)", fontSize: 12 }}>
+              All {items.length} events loaded
+            </div>
+          )}
         </div>
       </div>
 
@@ -567,7 +598,7 @@ export function EventsPage() {
               <Select
                 value={String(modal.data.web_bookings)}
                 onChange={(v) => setField("web_bookings", v === 'true')}
-                options={[{label:'Yes', value:'true'}, {label:'No', value:'false'}]}
+                options={[{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]}
               />
             </FormField>
 
@@ -741,7 +772,8 @@ export function EventsPage() {
                   { label: "Upcoming", value: "Upcoming" },
                   { label: "Live", value: "Live" },
                   { label: "Completed", value: "Completed" },
-                  { label: "Cancelled", value: "Cancelled" }
+                  { label: "Cancelled", value: "Cancelled" },
+                  { label: "Postponed", value: "Postponed" }
                 ]}
               />
             </FormField>

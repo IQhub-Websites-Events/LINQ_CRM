@@ -53,8 +53,8 @@ export function TeamsManagementPage() {
   );
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [td, ud] = await Promise.all([
         teamsApi.list(),
@@ -63,9 +63,9 @@ export function TeamsManagementPage() {
       setTeams(td.results || td);
       setUsers(ud.results || ud);
     } catch {
-      toast.error("Failed to load teams");
+      if (!silent) toast.error("Failed to load teams");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -198,7 +198,7 @@ export function TeamsManagementPage() {
     try {
       const res = await teamsApi.archive(teamId);
       toast.success(`Team ${res.is_archived ? "archived" : "restored"}`);
-      fetchData();
+      fetchData(true);
     } catch {
       toast.error("Failed to archive team");
     }
@@ -212,7 +212,7 @@ export function TeamsManagementPage() {
       }
       await teamsApi.delete(team.id);
       toast.success(`"${team.name}" deleted`);
-      fetchData();
+      fetchData(true);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Failed to delete team");
     }
@@ -249,7 +249,7 @@ export function TeamsManagementPage() {
       teamId ? await teamsApi.update(teamId, data) : await teamsApi.create(data);
       toast.success(teamId ? "Team updated" : "Team created");
       setTeamModal(null);
-      fetchData();
+      fetchData(true);
     } catch {
       toast.error("Failed to save team");
     }

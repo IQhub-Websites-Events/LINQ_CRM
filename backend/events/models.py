@@ -14,19 +14,14 @@ class Event(models.Model):
         LIVE      = "Live",      "Live"
         COMPLETED = "Completed", "Completed"
         CANCELLED = "Cancelled", "Cancelled"
-
-    class SubCompany(models.TextChoices):
-        CONFERENCES = "Linq Conferences", "Linq Conferences"
-        TRAINING    = "Linq Training",    "Linq Training"
-        SUMMITS     = "Linq Summits",     "Linq Summits"
-        LIVE        = "Linq Live",        "Linq Live"
+        POSTPONED = "Postponed", "Postponed"
+        TBP       = "TBP",       "TBP"
 
     event_code  = models.CharField(max_length=50, unique=True, db_index=True)
-    name        = models.CharField(max_length=255)
-    sub_company = models.CharField(max_length=50, choices=SubCompany.choices, default=SubCompany.CONFERENCES)
+    name        = models.CharField(max_length=255, blank=True, default="")
     status      = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, db_index=True)
     city        = models.CharField(max_length=100, blank=True, default="")
-    country     = models.CharField(max_length=100, default="")
+    country     = models.CharField(max_length=100, blank=True, default="")
     venue       = models.CharField(max_length=255, blank=True, default="")
     event_date  = models.DateField()
     end_date    = models.DateField(null=True, blank=True)

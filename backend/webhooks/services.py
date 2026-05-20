@@ -321,12 +321,13 @@ class WebhookProcessor:
         return None
 
     def _create_booking(self, d, event_code, payment_status, sales_exec):
+        invoice_date_val = self.parse_webhook_date(d.get("InvoiceDate")) or self.parse_webhook_date(d.get("Date")) or timezone.localdate()
         invoice = BookEvent.objects.create(
             invoice_number         = d["InvoiceNumber"],
             event_code             = event_code,
             event_name             = d.get("Eventname", ""),
             event_date             = self.parse_webhook_date(d.get("Date")),
-            invoice_date           = self.parse_webhook_date(d.get("InvoiceDate")),
+            invoice_date           = invoice_date_val,
             company_name           = d.get("DelegateCompanyName", ""),
             accounts_contact_email = d.get("AccountsContactEmail", ""),
             discount               = d.get("Discount", 0),
@@ -342,19 +343,21 @@ class WebhookProcessor:
             ticket_tier            = d.get("TicketTier", ""),
             paid_or_free           = d.get("PaidOrFree", ""),
             payment_type           = d.get("PaymentType", ""),
-            request_date           = self.parse_webhook_date(d.get("RequestDate")) or timezone.localdate(),
+            request_date           = invoice_date_val,
+            booking_code           = "delegate",
         )
         return invoice, WebhookLog.DbInsertStatus.INSERTED, f"Booking CREATED: id={invoice.id}"
 
     def _update_booking(self, invoice, d, payment_status):
         """Update non-payment fields on an existing booking."""
         update_fields = []
+        
+        parsed_invoice_date = self.parse_webhook_date(d.get("InvoiceDate")) or self.parse_webhook_date(d.get("Date"))
+        
         field_map = {
             "event_code":             self.normalize_event_code(d.get("Eventcode", "")),
             "event_name":             d.get("Eventname", ""),
             "event_date":             self.parse_webhook_date(d.get("Date")),
-            "invoice_date":           self.parse_webhook_date(d.get("InvoiceDate")),
-            "request_date":           self.parse_webhook_date(d.get("RequestDate")),
             "company_name":           d.get("DelegateCompanyName", ""),
             "accounts_contact_email": d.get("AccountsContactEmail", ""),
             "discount":               d.get("Discount", 0),
@@ -372,17 +375,30 @@ class WebhookProcessor:
             "paid_or_free":           d.get("PaidOrFree", ""),
             "payment_type":           d.get("PaymentType", ""),
         }
+        
+        if parsed_invoice_date:
+            field_map["invoice_date"] = parsed_invoice_date
+            field_map["request_date"] = parsed_invoice_date
+            
+        if not getattr(invoice, "booking_code", ""):
+            field_map["booking_code"] = "delegate"
+            
         for attr, val in field_map.items():
-            # Only update if the incoming value is not empty/None, 
-            # OR if we explicitly want to allow clearing (not for these fields usually)
             if val or val == 0: 
                 if getattr(invoice, attr) != val:
                     setattr(invoice, attr, val)
                     update_fields.append(attr)
-
+ 
         if not invoice.request_date:
-            invoice.request_date = timezone.localdate()
+            if invoice.invoice_date:
+                invoice.request_date = invoice.invoice_date
+            else:
+                invoice.request_date = timezone.localdate()
             update_fields.append("request_date")
+            
+        if not invoice.invoice_date:
+            invoice.invoice_date = invoice.request_date
+            update_fields.append("invoice_date")
 
         if update_fields:
             invoice.save(update_fields=update_fields)

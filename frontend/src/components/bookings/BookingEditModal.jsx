@@ -333,9 +333,9 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
             {isEditable && <button onClick={handleDelete} style={btnDelete}>Delete booking</button>}
             <span style={footerMeta}>
               {form.delegates.length} delegate{form.delegates.length !== 1 ? "s" : ""}
-              {form.updated_at && (
+              {form.updated_by_name && (
                 <span style={{ marginLeft: 8, opacity: 0.7 }}>
-                  · Modified {form.updated_by_name ? `by ${form.updated_by_name} ` : ""}on {new Date(form.updated_at).toLocaleDateString("en-GB")} at {new Date(form.updated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                  · Modified by {form.updated_by_name} on {new Date(form.updated_at).toLocaleDateString("en-GB")} at {new Date(form.updated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                 </span>
               )}
             </span>

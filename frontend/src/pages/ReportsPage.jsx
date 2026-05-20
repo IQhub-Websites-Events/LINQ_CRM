@@ -292,15 +292,12 @@ function OverviewTab() {
                           <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Bookings</th>
                           <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Paid Bookings</th>
                           <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Pending</th>
-                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Total Value</th>
-                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Paid Value</th>
-                          <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--text-dim)", fontWeight: 500 }}>Pending Value</th>
                         </tr>
                       </thead>
                       <tbody>
                         {team.members.length === 0 ? (
                           <tr>
-                            <td colSpan={7} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
+                            <td colSpan={4} style={{ padding: "24px", textAlign: "center", color: "var(--text-faint)" }}>
                               No active members in this team
                             </td>
                           </tr>
@@ -313,9 +310,6 @@ function OverviewTab() {
                               <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--text)", fontWeight: 600 }}>{member.bookings}</td>
                               <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{member.paid_bookings}</td>
                               <td style={{ padding: "12px 16px", textAlign: "center", color: member.pending_bookings > 0 ? "var(--danger)" : "var(--text-faint)" }}>{member.pending_bookings}</td>
-                              <td style={{ padding: "12px 16px", textAlign: "right", color: "var(--text)", fontWeight: 500 }}>${member.total_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td style={{ padding: "12px 16px", textAlign: "right", color: "var(--success)", fontWeight: 500 }}>${member.paid_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td style={{ padding: "12px 16px", textAlign: "right", color: member.pending_value > 0 ? "var(--danger)" : "var(--text-faint)" }}>${member.pending_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </tr>
                           ))
                         )}

@@ -53,6 +53,8 @@ export function EventStatusBadge({ status }) {
     Draft: "badge-soft-secondary",
     Completed: "badge-soft-success",
     Cancelled: "badge-soft-danger",
+    Postponed: "badge-soft-warning",
+    TBP: "badge-soft-warning",
   }[status] || "badge-soft-secondary";
 
   return (

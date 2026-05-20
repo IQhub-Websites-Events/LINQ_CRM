@@ -34,7 +34,7 @@ export const DISCOUNT_OPTIONS = ["0%", "10%", "20%", "25%", "30%", "50%"];
 
 export const CURRENCIES = ["USD", "GBP", "EUR", "AED", "SGD", "INR", "OTHER"];
 export const USER_ROLES = ["admin", "sales"];
-export const EVENT_STATUSES = ["Draft", "Upcoming", "Live", "Completed", "Cancelled"];
+export const EVENT_STATUSES = ["Draft", "Upcoming", "Live", "Completed", "Cancelled", "Postponed", "TBP"];
 
 export const STATUS_CONFIG = {
   Paid: { color: "green", dot: "#22c55e" },

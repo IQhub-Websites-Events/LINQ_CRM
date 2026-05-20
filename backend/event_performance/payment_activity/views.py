@@ -30,7 +30,6 @@ def _build_row(event: Event, metrics: dict) -> dict:
         "event_name":        event.name,
         "event_date":        event.event_date,
         "status":            event.status,
-        "sub_company":       event.sub_company,
         "city":              event.city,
         "sales_rep":         _rep_name(event.sales_executive),
 
@@ -61,13 +60,10 @@ class PaymentActivityViewSet(viewsets.ViewSet):
         qs = Event.objects.select_related("sales_executive").order_by("-event_date")
 
         status_f      = request.query_params.get("status")
-        sub_company_f = request.query_params.get("sub_company")
         search        = request.query_params.get("search", "").strip()
 
         if status_f:
             qs = qs.filter(status=status_f)
-        if sub_company_f:
-            qs = qs.filter(sub_company=sub_company_f)
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(event_code__icontains=search))
 

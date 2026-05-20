@@ -110,7 +110,6 @@ class Command(BaseCommand):
             Event.objects.create(
                 event_code=code,
                 name=name,
-                sub_company=Event.SubCompany.CONFERENCES,
                 status=Event.Status.COMPLETED,
                 city=city,
                 country=country,

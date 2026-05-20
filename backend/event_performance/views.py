@@ -23,7 +23,6 @@ def _build_event_row(event: Event, metrics: dict) -> dict:
         "event_name":          event.name,
         "event_date":          event.event_date,
         "status":              event.status,
-        "sub_company":         event.sub_company,
         "city":                event.city,
         **m,
         "benchmark":           health["benchmark"],
@@ -43,13 +42,10 @@ class EventPerformanceViewSet(viewsets.ViewSet):
         qs = Event.objects.all().order_by("-event_date")
 
         status_filter      = request.query_params.get("status")
-        sub_company_filter = request.query_params.get("sub_company")
         search             = request.query_params.get("search", "").strip()
 
         if status_filter:
             qs = qs.filter(status=status_filter)
-        if sub_company_filter:
-            qs = qs.filter(sub_company=sub_company_filter)
         if search:
             qs = qs.filter(Q(name__icontains=search) | Q(event_code__icontains=search))
 
@@ -97,9 +93,8 @@ class EventPerformanceViewSet(viewsets.ViewSet):
         from .active_edition_service import CurrentActiveEditionResolver
 
         filters = {
-            "status":      request.query_params.get("status"),
-            "sub_company": request.query_params.get("sub_company"),
-            "search":      request.query_params.get("search", ""),
+            "status": request.query_params.get("status"),
+            "search": request.query_params.get("search", ""),
         }
 
         resolver = CurrentActiveEditionResolver()
@@ -166,7 +161,6 @@ class EventPerformanceViewSet(viewsets.ViewSet):
                 "current_city":        event.city or "",
                 "current_event_date":  event.event_date,
                 "event_status":        event.status,
-                "sub_company":         event.sub_company or "",
                 "edition_count":       group["edition_count"],
                 # All-editions aggregated totals
                 **m,
@@ -223,7 +217,6 @@ class EventPerformanceViewSet(viewsets.ViewSet):
                 "city":       event.city or "",
                 "event_date": event.event_date.isoformat() if event.event_date else None,
                 "status":     event.status,
-                "sub_company": event.sub_company or "",
                 "is_current": event.event_code == current.event_code,
                 **m,
                 "benchmark":  health["benchmark"],

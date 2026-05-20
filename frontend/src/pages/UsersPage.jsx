@@ -20,15 +20,15 @@ export function UsersPage() {
 
   useEffect(() => { fetchData(); fetchTeams(); }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await usersApi.list({ page_size: 1000 });
       setUsers(res.results || res);
     } catch {
-      toast.error('Failed to fetch users');
+      if (!silent) toast.error('Failed to fetch users');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -39,23 +39,23 @@ export function UsersPage() {
     } catch {}
   };
 
-  const handleToggleStatus = async (user) => {
-    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+  const handleToggleStatus = async (targetUser) => {
+    const nextStatus = targetUser.status === 'active' ? 'inactive' : 'active';
     try {
-      await usersApi.toggleStatus(user.id, nextStatus);
+      await usersApi.toggleStatus(targetUser.id, nextStatus);
       toast.success(`User ${nextStatus === 'active' ? 'activated' : 'deactivated'}`);
-      fetchData();
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, status: nextStatus } : u));
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to update status');
     }
   };
 
-  const handleDelete = async (user) => {
-    if (!window.confirm(`Delete ${user.username}?`)) return;
+  const handleDelete = async (targetUser) => {
+    if (!window.confirm(`Delete ${targetUser.username}?`)) return;
     try {
-      await usersApi.delete(user.id);
+      await usersApi.delete(targetUser.id);
       toast.success('User deleted');
-      fetchData();
+      setUsers(prev => prev.filter(u => u.id !== targetUser.id));
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to delete user');
     }
@@ -251,7 +251,7 @@ export function UsersPage() {
         </div>
       </div>
 
-      <UserModal user={selectedUser} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={fetchData} />
+      <UserModal user={selectedUser} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={() => fetchData(true)} />
       <UserDetailDrawer user={drawerUser} isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
     </div>
   );

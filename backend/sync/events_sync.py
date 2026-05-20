@@ -31,7 +31,7 @@ def sync_events(full=False):
         headers = [
             "ID", "Event Name", "Event Code", "Event Date", "Event Status",
             "Sales Team", "Speaker Sales Team", "SpEx Team", "Tele Marketing Team", "Market Research Team",
-            "City", "Country", "Venue", "Sub Company", "End Date", "Capacity", "Expected Revenue"
+            "City", "Country", "Venue", "End Date", "Capacity", "Expected Revenue"
         ]
         
         rows = []
@@ -55,7 +55,6 @@ def sync_events(full=False):
                 e.city,
                 e.country,
                 e.venue,
-                e.sub_company,
                 str(e.end_date) if e.end_date else "",
                 e.capacity,
                 float(e.expected_revenue)

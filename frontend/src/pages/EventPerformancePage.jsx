@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { eventPerformanceApi } from "../api/eventPerformance";
 import { EventPaymentActivityModule } from "../components/eventPerformance/EventPaymentActivityModule";
 import { MasterEventDrawer } from "../components/eventPerformance/MasterEventDrawer";
+import { usePolling } from "../hooks/usePolling";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 const fmtCurrency = (n) =>
@@ -53,14 +54,10 @@ const COLS_OVERVIEW = [
   { key: "current_event_name", label: "Event",     sticky: true,  left: 80,  width: 210, ellipsis: true },
   { key: "_edition",           label: "Edition",   width: 120 },
   { key: "event_status",       label: "Status",    width: 96  },
-  { key: "sub_company",        label: "Company",   width: 120, ellipsis: true },
   { key: "paid_count",         label: "Paid",      width: 60  },
   { key: "pending_count",      label: "Pend",      width: 60  },
   { key: "total_delegates",    label: "Delegates", width: 80  },
   { key: "total_revenue",      label: "Revenue",   width: 100 },
-  { key: "pending_value",      label: "Pend £",    width: 100 },
-  { key: "benchmark",          label: "Bench %",   width: 72  },
-  { key: "health",             label: "Health",    width: 90  },
   { key: "edition_count",      label: "Editions",  width: 68  },
 ];
 
@@ -88,8 +85,6 @@ const COLS_HEALTH = [
   { key: "pending_count",        label: "Pending",    width: 70  },
   { key: "total_delegates",      label: "Delegates",  width: 80  },
   { key: "confirmed_delegates",  label: "Confirmed",  width: 90  },
-  { key: "benchmark",            label: "Bench %",    width: 80  },
-  { key: "health",               label: "Health",     width: 90  },
 ];
 
 const TAB_COLS = { overview: COLS_OVERVIEW, payments: COLS_PAYMENTS, health: COLS_HEALTH };
@@ -102,8 +97,6 @@ function cellValue(col, row) {
   if (col.key === "benchmark")       return <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: (HEALTH_STYLE[row.health] || HEALTH_STYLE.unknown).color }}>{row.benchmark != null ? row.benchmark + "%" : "—"}</span>;
   if (col.key === "edition_count")   return <span style={{ fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>{row.edition_count}</span>;
   if (col.key === "current_event_name") return <span style={{ fontSize: 12 }}>{row.current_event_name}</span>;
-  if (col.key === "sub_company")     return <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{row.sub_company}</span>;
-
   const v = row[col.key];
   if (col.key.includes("revenue") || col.key.includes("value")) return <span style={{ fontFamily: "var(--font-mono)" }}>{fmtCurrency(v)}</span>;
   if (typeof v === "number") return <span style={{ fontFamily: "var(--font-mono)" }}>{v}</span>;
@@ -128,7 +121,6 @@ export function EventPerformancePage() {
   const [tab, setTab]               = useState("overview");
   const [search, setSearch]         = useState("");
   const [statusFilter, setStatusFilter]         = useState("");
-  const [subCompanyFilter, setSubCompanyFilter] = useState("");
   const [selectedRow, setSelectedRow]           = useState(null);
   const debounceRef = useRef(null);
 
@@ -137,18 +129,19 @@ export function EventPerformancePage() {
     const params = {};
     if (search)           params.search      = search;
     if (statusFilter)     params.status      = statusFilter;
-    if (subCompanyFilter) params.sub_company = subCompanyFilter;
     eventPerformanceApi.activeEditions(params)
       .then(data => setEvents(Array.isArray(data) ? data : (data.results || [])))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [search, statusFilter, subCompanyFilter]);
+  }, [search, statusFilter]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(loadEvents, 300);
     return () => clearTimeout(debounceRef.current);
   }, [loadEvents]);
+
+  usePolling(loadEvents, 30000);
 
   // Aggregate KPIs from loaded data
   const kpis = events.reduce((acc, e) => {
@@ -200,12 +193,8 @@ export function EventPerformancePage() {
             <option value="">All Statuses</option>
             {["Draft","Upcoming","Live","Completed","Cancelled"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={subCompanyFilter} onChange={e => setSubCompanyFilter(e.target.value)} style={{ ...inputStyle, width: 160 }}>
-            <option value="">All Sub-Companies</option>
-            {["Linq Conferences","Linq Training","Linq Summits","Linq Live"].map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {(search || statusFilter || subCompanyFilter) && (
-            <button onClick={() => { setSearch(""); setStatusFilter(""); setSubCompanyFilter(""); }} style={{ ...cancelBtnStyle, fontSize: 11 }}>Clear</button>
+          {(search || statusFilter) && (
+            <button onClick={() => { setSearch(""); setStatusFilter(""); }} style={{ ...cancelBtnStyle, fontSize: 11 }}>Clear</button>
           )}
         </div>
       </div>

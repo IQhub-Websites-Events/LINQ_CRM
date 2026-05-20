@@ -26,16 +26,22 @@ if (unsupportedPath) {
   window.history.replaceState({}, "", "/");
 }
 
+let reactMounted = false;
+
 window.addEventListener("error", (event) => {
-  showFatalScreen("Frontend bootstrap error", event.error?.stack || event.message);
+  if (!reactMounted) {
+    showFatalScreen("Frontend bootstrap error", event.error?.stack || event.message);
+  }
 });
 
 window.addEventListener("unhandledrejection", (event) => {
-  const reason = event.reason;
-  showFatalScreen(
-    "Unhandled promise rejection",
-    reason?.stack || reason?.message || String(reason)
-  );
+  if (!reactMounted) {
+    const reason = event.reason;
+    showFatalScreen(
+      "Unhandled promise rejection",
+      reason?.stack || reason?.message || String(reason)
+    );
+  }
 });
 
 // React will clear the root element and render the app.
@@ -43,6 +49,7 @@ window.addEventListener("unhandledrejection", (event) => {
 try {
   const root = ReactDOM.createRoot(rootElement);
   root.render(<React.StrictMode><App /></React.StrictMode>);
+  reactMounted = true;
 } catch (error) {
   showFatalScreen("React failed to start", error?.stack || error?.message || error);
 }

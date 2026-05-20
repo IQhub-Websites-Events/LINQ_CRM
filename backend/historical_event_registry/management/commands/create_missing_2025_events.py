@@ -44,7 +44,6 @@ def _derive_event_fields(ref: HistoricalEventReference) -> dict:
     return {
         "event_code":             ref.normalized_event_code,
         "name":                   name,
-        "sub_company":            Event.SubCompany.CONFERENCES,
         "status":                 Event.Status.COMPLETED,
         "city":                   city,
         "country":                country,

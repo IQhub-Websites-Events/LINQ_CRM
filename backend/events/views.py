@@ -15,7 +15,7 @@ from .filters import EventFilter
 
 class EventViewSet(RBACMixin, viewsets.ModelViewSet):
     filterset_class = EventFilter
-    search_fields   = ["event_code", "name", "city", "sub_company"]
+    search_fields   = ["event_code", "name", "city"]
     ordering_fields = ["event_date", "name", "event_code"]
     ordering        = ["-event_date"]
 

@@ -75,8 +75,6 @@ class CurrentActiveEditionResolver:
         if filters:
             if filters.get("status"):
                 qs = qs.filter(status=filters["status"])
-            if filters.get("sub_company"):
-                qs = qs.filter(sub_company=filters["sub_company"])
             search = (filters.get("search") or "").strip()
             if search:
                 qs = qs.filter(

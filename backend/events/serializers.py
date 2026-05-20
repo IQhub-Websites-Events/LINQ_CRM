@@ -31,7 +31,7 @@ class EventListSerializer(serializers.ModelSerializer):
             "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
             "status", "event_status",
             # Legacy/system fields for full-stack API contract safety
-            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "name", "official_name", "city", "country", "venue", "accepting_web_bookings",
             "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
             "sales_executive", "sales_executive_name", "assigned_sales_users",
             "created_at", "updated_at",
@@ -62,7 +62,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
             "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
             "status", "event_status",
             # Legacy/system fields for full-stack API contract safety
-            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "name", "official_name", "city", "country", "venue", "accepting_web_bookings",
             "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
             "sales_executive", "sales_executive_name", "assigned_sales_users",
             "total_bookings", "pending_bookings",
@@ -101,7 +101,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
             "related_event_2", "related_event_3", "upcoming_event_1", "upcoming_event_2", "upcoming_event_3",
             "status",
             # Legacy/system fields
-            "name", "official_name", "sub_company", "city", "country", "venue", "accepting_web_bookings",
+            "name", "official_name", "city", "country", "venue", "accepting_web_bookings",
             "tele_marketing_team", "market_research_team", "content_check", "marketing_check",
             "sales_executive", "assigned_user_ids",
         ]

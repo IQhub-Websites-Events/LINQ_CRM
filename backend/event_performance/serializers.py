@@ -64,7 +64,6 @@ class EventMetricsSerializer(serializers.Serializer):
     event_name          = serializers.CharField()
     event_date          = serializers.DateField()
     status              = serializers.CharField()
-    sub_company         = serializers.CharField()
     city                = serializers.CharField()
     # Delegate counts
     total_delegates     = serializers.IntegerField()

@@ -7,7 +7,6 @@ class EventPaymentActivitySerializer(serializers.Serializer):
     event_name         = serializers.CharField()
     event_date         = serializers.DateField(allow_null=True)
     status             = serializers.CharField()
-    sub_company        = serializers.CharField()
     city               = serializers.CharField()
     sales_rep          = serializers.CharField()
 
