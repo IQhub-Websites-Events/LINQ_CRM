@@ -17,6 +17,9 @@ service-account*.json
 .env.test.local
 .env.production.local
 
+# ── Dependency Checks ───────────────────────────────────────────────────────
+backend/.deps_check/
+
 # ── Python ──────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
