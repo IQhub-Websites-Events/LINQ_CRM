@@ -6,7 +6,7 @@ from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 
-from accounts.views import UserViewSet, CustomAuthToken, TeamViewSet
+from accounts.views import UserViewSet, CustomAuthToken, TeamViewSet, RequestOTPView, VerifyOTPView
 from companies.views import CompanyViewSet
 from events.views import EventViewSet
 from book_event.views import BookEventViewSet
@@ -33,7 +33,9 @@ urlpatterns = [
     path("api/historical-events/", include("historical_event_registry.urls")),
     path("api/search/",          GlobalSearchView.as_view(),    name="global-search"),
     path("api/stats/dashboard/", DashboardStatsView.as_view(), name="dashboard-stats"),
-    path("api/auth/token/",      CustomAuthToken.as_view(), name="api-token"),
+    path("api/auth/token/",       CustomAuthToken.as_view(), name="api-token"),
+    path("api/auth/request-otp/", RequestOTPView.as_view(),  name="request-otp"),
+    path("api/auth/verify-otp/",  VerifyOTPView.as_view(),   name="verify-otp"),
     path("api-auth/",            include("rest_framework.urls")),
     # Serve React frontend for all non-API routes
     re_path(r"^(?!api/|admin/|api-auth/|static/).*$",

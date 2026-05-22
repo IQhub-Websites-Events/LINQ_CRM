@@ -13,6 +13,113 @@ from .serializers import UserListSerializer, UserWriteSerializer, AssignEventsSe
 
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from django.core.mail import send_mail
+from django.conf import settings as django_settings
+from django.utils import timezone
+from datetime import timedelta
+from .models import OTPToken
+
+User = get_user_model()
+
+
+class RequestOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email", "").strip().lower()
+        if not email:
+            return Response({"detail": "Email is required."}, status=400)
+
+        success_msg = {"detail": "If an account exists with this email, a login code has been sent."}
+
+        try:
+            user = User.objects.get(email__iexact=email, is_active=True)
+        except User.DoesNotExist:
+            return Response(success_msg)
+
+        recent_count = OTPToken.objects.filter(
+            user=user,
+            created_at__gte=timezone.now() - timedelta(hours=1),
+        ).count()
+        if recent_count >= 5:
+            return Response({"detail": "Too many requests. Please try again later."}, status=429)
+
+        otp_obj = OTPToken.create_for_user(user)
+
+        try:
+            send_mail(
+                subject="Your IQ-HUB CRM Login Code",
+                message=(
+                    f"Hi {user.first_name or user.username},\n\n"
+                    f"Your one-time login code is: {otp_obj.otp}\n\n"
+                    f"This code expires in 5 minutes. If you didn't request this, ignore this email.\n\n"
+                    f"— IQ-HUB CRM"
+                ),
+                from_email=django_settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Failed to send OTP email to %s", email)
+
+        return Response(success_msg)
+
+
+class VerifyOTPView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email", "").strip().lower()
+        otp = request.data.get("otp", "").strip()
+
+        if not email or not otp:
+            return Response({"detail": "Email and OTP are required."}, status=400)
+
+        try:
+            user = User.objects.get(email__iexact=email, is_active=True)
+        except User.DoesNotExist:
+            return Response({"detail": "Invalid email or code."}, status=401)
+
+        otp_obj = (
+            OTPToken.objects.filter(user=user, otp=otp, is_used=False)
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not otp_obj:
+            return Response({"detail": "Invalid email or code."}, status=401)
+
+        if otp_obj.attempts >= 5:
+            otp_obj.is_used = True
+            otp_obj.save(update_fields=["is_used"])
+            return Response({"detail": "Too many attempts. Please request a new code."}, status=429)
+
+        otp_obj.attempts += 1
+        otp_obj.save(update_fields=["attempts"])
+
+        if otp_obj.is_expired():
+            otp_obj.is_used = True
+            otp_obj.save(update_fields=["is_used"])
+            return Response({"detail": "Code has expired. Please request a new one."}, status=401)
+
+        otp_obj.is_used = True
+        otp_obj.save(update_fields=["is_used"])
+
+        token, _ = Token.objects.get_or_create(user=user)
+        user.last_login = timezone.now()
+        user.save(update_fields=["last_login"])
+
+        return Response({
+            "token": token.key,
+            "user_id": user.pk,
+            "email": user.email,
+            "username": user.username,
+            "role": user.role,
+        })
+
 
 class CustomAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
@@ -27,8 +134,6 @@ class CustomAuthToken(ObtainAuthToken):
             'email': user.email,
             'role': user.role
         })
-
-User = get_user_model()
 
 
 class UserViewSet(viewsets.ModelViewSet):

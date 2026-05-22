@@ -39,9 +39,22 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (username, password) => {
     const data = await authApi.login(username, password);
     storageSet("auth_token", data.token);
-    // Decode user info from token response (DRF token only returns token)
-    // We store basic info; full profile fetched separately if needed
     const userInfo = { username, role: data.role || "sales" };
+    storageSet("auth_user", JSON.stringify(userInfo));
+    setToken(data.token);
+    setUser(userInfo);
+    return data;
+  }, []);
+
+  const loginWithOtp = useCallback(async (email, otp) => {
+    const data = await authApi.verifyOtp(email, otp);
+    storageSet("auth_token", data.token);
+    const userInfo = {
+      username: data.username || data.email,
+      email: data.email,
+      role: data.role || "sales",
+      user_id: data.user_id,
+    };
     storageSet("auth_user", JSON.stringify(userInfo));
     setToken(data.token);
     setUser(userInfo);
@@ -59,7 +72,7 @@ export function AuthProvider({ children }) {
   const isSales = user?.role === "sales";
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, isAdmin, isSales, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ token, user, login, loginWithOtp, logout, isAdmin, isSales, isAuthenticated: !!token }}>
       {children}
     </AuthContext.Provider>
   );
