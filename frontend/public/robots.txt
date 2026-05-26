@@ -1,0 +1,5 @@
+# IQ-Hub CRM — private application, not for public indexing.
+User-agent: *
+Disallow: /
+
+Sitemap: https://iq-hub.com/sitemap.xml
