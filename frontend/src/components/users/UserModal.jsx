@@ -10,7 +10,6 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
   const [formData, setFormData] = useState({
     username: '', email: '',
     first_name: '', last_name: '',
-    password: '', confirm_password: '',
     role: 'sales', status: 'active',
     team_id: defaultTeamId || '', assigned_event_ids: [],
     mapped_lead_id: '',
@@ -23,7 +22,6 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
       setFormData({
         username: user.username || '', email: user.email || '',
         first_name: user.first_name || '', last_name: user.last_name || '',
-        password: '', confirm_password: '',
         role: user.role || 'sales', status: user.status || 'active',
         team_id: user.team_id || '',
         assigned_event_ids: user.assigned_events?.map((e) => e.id) || [],
@@ -33,7 +31,6 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
       setFormData({
         username: '', email: '',
         first_name: '', last_name: '',
-        password: '', confirm_password: '',
         role: 'sales', status: 'active',
         team_id: defaultTeamId || '', assigned_event_ids: [],
         mapped_lead_id: '',
@@ -86,17 +83,31 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
       setTeams(list);
       setEvents(eventsRes.results || eventsRes);
 
-      // Auto-assign team on initial load if creating a new user and team_id not set
-      if (!user && !formData.team_id && formData.role) {
-        const mapped = getMappedTeamIdForRole(formData.role, list);
-        if (mapped) {
-          setFormData(f => ({ ...f, team_id: mapped }));
-        }
+      // Auto-assign team on initial load if creating a new user and team_id not set.
+      // Use functional update to read current state, not stale closure.
+      if (!user) {
+        setFormData(f => {
+          if (!f.team_id && f.role) {
+            const mapped = getMappedTeamIdForRole(f.role, list);
+            if (mapped) return { ...f, team_id: mapped };
+          }
+          return f;
+        });
       }
     } catch {
       toast.error('Failed to load form options');
     }
   };
+
+  // Auto-generate username from first + last name
+  useEffect(() => {
+    if (user) return; // don't overwrite on edit
+    const first = formData.first_name.trim().toLowerCase().replace(/\s+/g, '');
+    const last = formData.last_name.trim().toLowerCase().replace(/\s+/g, '');
+    if (first || last) {
+      set('username', first && last ? `${first}.${last}` : first || last);
+    }
+  }, [formData.first_name, formData.last_name]);
 
   const handleRoleChange = (newRole) => {
     const mappedTeamId = getMappedTeamIdForRole(newRole, teams);
@@ -109,15 +120,9 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password && formData.password !== formData.confirm_password) {
-      toast.error('Passwords do not match');
-      return;
-    }
     setLoading(true);
     try {
       const payload = { ...formData };
-      delete payload.confirm_password;
-      if (!payload.password) delete payload.password;
       if (!payload.team_id) payload.team_id = null;
       if (!payload.mapped_lead_id) payload.mapped_lead_id = null;
 
@@ -193,24 +198,18 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
 
             {/* Section 1 — Account */}
-            <FormSection title="Account" desc="Login credentials and personal identity.">
+            <FormSection title="Account" desc="Personal identity and login email.">
               <Field label="First name *" span={3}>
                 <MInput value={formData.first_name} onChange={(v) => set('first_name', v)} required />
               </Field>
               <Field label="Last name *" span={3}>
                 <MInput value={formData.last_name} onChange={(v) => set('last_name', v)} required />
               </Field>
-              <Field label="Username *" span={3}>
-                <MInput mono value={formData.username} onChange={(v) => set('username', v)} placeholder="j.doe" required />
+              <Field label="Username" span={3}>
+                <MInput mono value={formData.username} readOnly />
               </Field>
               <Field label="Email *" span={3}>
-                <MInput type="email" value={formData.email} onChange={(v) => set('email', v)} placeholder="john@linq.com" required />
-              </Field>
-              <Field label={user ? 'New password (optional)' : 'Password *'} span={3}>
-                <MInput type="password" value={formData.password} onChange={(v) => set('password', v)} placeholder="••••••••" required={!user} />
-              </Field>
-              <Field label="Confirm password" span={3}>
-                <MInput type="password" value={formData.confirm_password} onChange={(v) => set('confirm_password', v)} placeholder="••••••••" required={!user && !!formData.password} />
+                <MInput type="email" value={formData.email} onChange={(v) => set('email', v)} placeholder="john@iq-hub.com" required />
               </Field>
             </FormSection>
 

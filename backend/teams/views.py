@@ -82,7 +82,7 @@ class TeamViewSet(viewsets.ModelViewSet):
                 return Response({"detail": "Destination team not found."}, status=status.HTTP_404_NOT_FOUND)
 
         user.team = dest_team
-        user.save(update_fields=["team"])
+        user.save()  # full save so User.save() role-sync persists correctly
 
         log_team = dest_team or source_team
         if log_team:
@@ -103,6 +103,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         return Response({
             "user_id":             user.id,
             "username":            user.username,
+            "role":                user.role,
             "source_team_id":      source_team.id if source_team else None,
             "destination_team_id": dest_team.id if dest_team else None,
         })
@@ -125,7 +126,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         members = list(team.members.all())
         for m in members:
             m.team = dest
-            m.save(update_fields=["team"])
+            m.save()
 
         if members and (dest or team):
             TeamActivityLog.objects.create(

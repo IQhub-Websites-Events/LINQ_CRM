@@ -262,6 +262,12 @@ export function BookingEditModal({ invoiceId, onClose, onSaved }) {
                   {assignedEvent?.speaker_sales_team && (
                     <AssignedPill role="Speaker Sales" name={assignedEvent.speaker_sales_team} color="#0ab39c" />
                   )}
+                  {assignedEvent?.spex_team && (
+                    <AssignedPill role="SpEx" name={assignedEvent.spex_team} color="#6366f1" />
+                  )}
+                  {assignedEvent?.tele_marketing_team && (
+                    <AssignedPill role="Tele Marketing" name={assignedEvent.tele_marketing_team} color="#ec4899" />
+                  )}
                   {assignedEvent?.market_research_team && (
                     <AssignedPill role="Market Research" name={assignedEvent.market_research_team} color="#f59e0b" />
                   )}

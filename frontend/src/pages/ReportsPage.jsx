@@ -254,7 +254,19 @@ function OverviewTab() {
               <span>Team Productivity Report</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {stats.team_productivity.map(team => (
+              {stats.team_productivity.map(team => {
+                const isSpex    = team.team_type === "spex";
+                const isSpeaker = team.team_type === "speaker_sales";
+                const col1 = isSpex ? "Sponsors Booked" : isSpeaker ? "Speakers" : "Bookings";
+                const col2 = isSpex ? "Sponsors Paid"   : isSpeaker ? "Speakers Paid" : "Paid Bookings";
+                const typeTag = isSpex ? "SpEx" : isSpeaker ? "Speaker Sales" : "Sales";
+                const tagColor = isSpex
+                  ? { bg: "rgba(99,102,241,0.1)", c: "#6366f1" }
+                  : isSpeaker
+                    ? { bg: "rgba(10,179,156,0.1)", c: "#0ab39c" }
+                    : { bg: "rgba(64,81,137,0.1)", c: "var(--accent)" };
+
+                return (
                 <div key={team.team_id} style={{
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
@@ -272,14 +284,19 @@ function OverviewTab() {
                     alignItems: "center",
                     justifyContent: "space-between"
                   }}>
-                    <span>{team.team_name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>{team.team_name}</span>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: "2px 8px",
+                        background: tagColor.bg, color: tagColor.c,
+                        borderRadius: 6, textTransform: "uppercase", letterSpacing: "0.04em"
+                      }}>
+                        {typeTag}
+                      </span>
+                    </div>
                     <span style={{
-                      fontSize: 10,
-                      fontWeight: 500,
-                      padding: "2px 8px",
-                      background: "var(--border)",
-                      borderRadius: 6,
-                      color: "var(--text-dim)"
+                      fontSize: 10, fontWeight: 500, padding: "2px 8px",
+                      background: "var(--border)", borderRadius: 6, color: "var(--text-dim)"
                     }}>
                       {team.members.length} member(s)
                     </span>
@@ -288,9 +305,9 @@ function OverviewTab() {
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                       <thead>
                         <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-alt)" }}>
-                          <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--text-dim)", fontWeight: 500 }}>Username</th>
-                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Bookings</th>
-                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Paid Bookings</th>
+                          <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--text-dim)", fontWeight: 500 }}>Name</th>
+                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>{col1}</th>
+                          <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>{col2}</th>
                           <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--text-dim)", fontWeight: 500 }}>Pending</th>
                         </tr>
                       </thead>
@@ -305,11 +322,12 @@ function OverviewTab() {
                           team.members.map(member => (
                             <tr key={member.username} style={{ borderBottom: "1px solid var(--border)" }}>
                               <td style={{ padding: "12px 16px", color: "var(--text)", fontWeight: 500 }}>
-                                <span>{member.full_name}</span> <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 400 }}>({member.username})</span>
+                                <span>{member.full_name}</span>
+                                <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 400, marginLeft: 5 }}>({member.username})</span>
                               </td>
                               <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--text)", fontWeight: 600 }}>{member.bookings}</td>
                               <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--success)", fontWeight: 600 }}>{member.paid_bookings}</td>
-                              <td style={{ padding: "12px 16px", textAlign: "center", color: member.pending_bookings > 0 ? "var(--danger)" : "var(--text-faint)" }}>{member.pending_bookings}</td>
+                              <td style={{ padding: "12px 16px", textAlign: "center", color: member.pending_bookings > 0 ? "var(--danger)" : "var(--text-faint)", fontWeight: member.pending_bookings > 0 ? 600 : 400 }}>{member.pending_bookings}</td>
                             </tr>
                           ))
                         )}
@@ -317,7 +335,8 @@ function OverviewTab() {
                     </table>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

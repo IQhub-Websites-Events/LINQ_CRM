@@ -41,11 +41,22 @@ class Command(BaseCommand):
                         sales_name = row.get('Sales Executive', '').strip()
                         sales_user = None
                         if sales_name:
-                            sales_user = User.objects.filter(
-                                models.Q(first_name__icontains=sales_name) | 
-                                models.Q(last_name__icontains=sales_name) |
-                                models.Q(username__icontains=sales_name.replace(" ", ".").lower())
-                            ).first()
+                            _parts = sales_name.split()
+                            sales_user = (
+                                (User.objects.filter(
+                                    first_name__iexact=_parts[0],
+                                    last_name__iexact=" ".join(_parts[1:]),
+                                ).first() if len(_parts) >= 2 else None)
+                                or (User.objects.filter(
+                                    first_name__icontains=_parts[0],
+                                    last_name__icontains=_parts[-1],
+                                ).first() if len(_parts) >= 2 else None)
+                                or User.objects.filter(
+                                    username__iexact=sales_name.replace(" ", ".").lower()
+                                ).first()
+                                or User.objects.filter(first_name__iexact=sales_name).first()
+                                or User.objects.filter(last_name__iexact=sales_name).first()
+                            )
 
                         # 2. Parse Dates and Numbers
                         def parse_date(d):

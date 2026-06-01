@@ -115,16 +115,21 @@ export function TeamsManagementPage() {
     ));
 
     try {
-      await teamsApi.moveMember({
+      const result = await teamsApi.moveMember({
         user_id:             parseInt(uid),
         source_team_id:      user.team_id || null,
         destination_team_id: targetTeam?.id || null,
       });
+      // Patch role immediately from the response so the badge updates without waiting for refetch
+      if (result?.role) {
+        setUsers(prev => prev.map(u =>
+          u.id.toString() === uid ? { ...u, role: result.role } : u
+        ));
+      }
       toast.success(
         `Moved ${user.full_name || user.username} to ${targetTeam?.name || "Unassigned"}`
       );
-      const updated = await teamsApi.list();
-      setTeams(updated.results || updated);
+      fetchData(true);
     } catch {
       toast.error("Failed to move member");
       fetchData();
@@ -145,8 +150,7 @@ export function TeamsManagementPage() {
     try {
       await teamsApi.moveMember({ user_id: userId, source_team_id: user.team_id, destination_team_id: null });
       toast.success(`${user.full_name || user.username} removed from team`);
-      const updated = await teamsApi.list();
-      setTeams(updated.results || updated);
+      fetchData(true);
     } catch {
       toast.error("Failed to remove member");
       fetchData();
@@ -165,8 +169,7 @@ export function TeamsManagementPage() {
     try {
       await teamsApi.moveMember({ user_id: userId, source_team_id: user.team_id, destination_team_id: targetTeamId });
       toast.success(`Moved to ${target.name}`);
-      const updated = await teamsApi.list();
-      setTeams(updated.results || updated);
+      fetchData(true);
     } catch {
       toast.error("Failed to move member");
       fetchData();

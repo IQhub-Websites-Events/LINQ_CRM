@@ -1,0 +1,287 @@
+"""
+sync_bookings_from_sheets.py
+────────────────────────────────────────────────────────────────────
+Pull booking rows from a Google Sheet and upsert into BookEvent.
+Matching key : invoice_number  (unique=True in the model)
+Safety rules : update_or_create only — .delete() is never called.
+Atomicity    : all DB writes are wrapped in a single transaction.atomic().
+               If any write fails the entire batch rolls back so the DB
+               is never left in a partially-synced state.
+"""
+import os
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
+import gspread
+from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
+
+from book_event.models import BookEvent
+
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+DATE_FIELDS = {
+    "event_date", "invoice_date", "payment_date",
+    "payment_due_date", "request_date",
+}
+NULLABLE_DECIMAL_FIELDS = {
+    "pre_tax_amount", "tax_amount", "total_amount", "add_ons_total_amount",
+}
+ZERO_DEFAULT_DECIMAL_FIELDS = {"discount"}
+INT_FIELDS = {"delegate_count", "edition"}
+
+# Supported sheet column headers and the BookEvent field they map to.
+# The sheet header row must use these exact names (case-sensitive).
+# Columns not in this map are silently ignored.
+COLUMN_MAP = {
+    "invoice_number":         "invoice_number",
+    "event_code":             "event_code",
+    "event_name":             "event_name",
+    "event_date":             "event_date",
+    "invoice_date":           "invoice_date",
+    "booking_code":           "booking_code",
+    "company_name":           "company_name",
+    "contact_name":           "contact_name",
+    "contact_email":          "contact_email",
+    "contact_phone":          "contact_phone",
+    "accounts_contact_email": "accounts_contact_email",
+    "discount":               "discount",
+    "discount_code":          "discount_code",
+    "pre_tax_amount":         "pre_tax_amount",
+    "tax_amount":             "tax_amount",
+    "total_amount":           "total_amount",
+    "add_ons_total_amount":   "add_ons_total_amount",
+    "currency":               "currency",
+    "ticket_tier":            "ticket_tier",
+    "delegate_count":         "delegate_count",
+    "source":                 "source",
+    "form_name":              "form_name",
+    "form_url":               "form_url",
+    "payment_status":         "payment_status",
+    "payment_date":           "payment_date",
+    "payment_due_date":       "payment_due_date",
+    "payment_type":           "payment_type",
+    "paid_or_free":           "paid_or_free",
+    "reference":              "reference",
+    "parent_code":            "parent_code",
+    "request_date":           "request_date",
+    "notes":                  "notes",
+    "add_ons":                "add_ons",
+    "attendance":             "attendance",
+}
+
+
+def _parse_date(value):
+    """Try common date formats; return None if empty or unrecognised."""
+    if not value or not str(value).strip():
+        return None
+    val = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(val, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_decimal(value, nullable=True):
+    if not value or not str(value).strip():
+        return None if nullable else Decimal("0")
+    cleaned = str(value).strip().replace(",", "").lstrip("$£€")
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None if nullable else Decimal("0")
+
+
+def _parse_int(value, default=None):
+    if not value or not str(value).strip():
+        return default
+    try:
+        return int(float(str(value).strip()))
+    except (ValueError, TypeError):
+        return default
+
+
+def _build_defaults(row, active_headers):
+    """
+    Convert a sheet row dict into a BookEvent defaults dict.
+    Only includes columns present in active_headers; invoice_number is excluded
+    (it is the lookup key, not a default).
+    """
+    defaults = {}
+    for col_header, field_name in COLUMN_MAP.items():
+        if col_header == "invoice_number" or col_header not in active_headers:
+            continue
+        raw = row.get(col_header, "")
+        if field_name in DATE_FIELDS:
+            defaults[field_name] = _parse_date(raw)
+        elif field_name in NULLABLE_DECIMAL_FIELDS:
+            defaults[field_name] = _parse_decimal(raw, nullable=True)
+        elif field_name in ZERO_DEFAULT_DECIMAL_FIELDS:
+            defaults[field_name] = _parse_decimal(raw, nullable=False)
+        elif field_name in INT_FIELDS:
+            int_default = 1 if field_name == "delegate_count" else None
+            defaults[field_name] = _parse_int(raw, default=int_default)
+        else:
+            defaults[field_name] = str(raw).strip() if raw else ""
+    return defaults
+
+
+class Command(BaseCommand):
+    help = "Sync booking rows from Google Sheets into BookEvent (upsert only — never deletes)"
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help=(
+                "Read the sheet and report what would be created/updated "
+                "without writing anything to the database."
+            ),
+        )
+
+    def handle(self, *args, **options):
+        dry_run = options["dry_run"]
+
+        # ── Load config from environment (.env is loaded by Django settings) ──
+        sheet_id   = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+        sheet_name = os.environ.get("GOOGLE_SHEET_NAME", "Sheet1").strip()
+        creds_path = os.environ.get("GOOGLE_CREDS_PATH", "credentials.json").strip()
+
+        if not sheet_id:
+            raise CommandError(
+                "GOOGLE_SHEET_ID is not set. Add it to your .env file."
+            )
+        if not os.path.isfile(creds_path):
+            raise CommandError(
+                f"Service-account credentials file not found: '{creds_path}'\n"
+                "Set GOOGLE_CREDS_PATH in .env to the correct path."
+            )
+
+        # ── Authenticate with Google Sheets (read-only scope) ──────────────────
+        self.stdout.write("Authenticating with Google Sheets (read-only)...")
+        try:
+            client = gspread.service_account(filename=creds_path, scopes=SCOPES)
+        except Exception as exc:
+            raise CommandError(f"Google authentication failed: {exc}")
+
+        # ── Open the spreadsheet / worksheet ───────────────────────────────────
+        self.stdout.write(f"Opening sheet ID '{sheet_id}', tab '{sheet_name}' ...")
+        try:
+            spreadsheet = client.open_by_key(sheet_id)
+            worksheet   = spreadsheet.worksheet(sheet_name)
+        except gspread.exceptions.SpreadsheetNotFound:
+            raise CommandError(
+                "Spreadsheet not found. Check GOOGLE_SHEET_ID and that the "
+                "service-account email has been given Viewer access to the sheet."
+            )
+        except gspread.exceptions.WorksheetNotFound:
+            raise CommandError(
+                f"Tab '{sheet_name}' not found. Check GOOGLE_SHEET_NAME in .env."
+            )
+        except Exception as exc:
+            raise CommandError(f"Could not open spreadsheet: {exc}")
+
+        # ── Fetch all rows as a list of dicts ──────────────────────────────────
+        rows = worksheet.get_all_records(head=1)
+        if not rows:
+            self.stdout.write(self.style.WARNING("Sheet is empty — nothing to sync."))
+            return
+
+        active_headers = set(rows[0].keys())
+        self.stdout.write(
+            f"Read {len(rows)} data row(s). "
+            f"Columns found: {', '.join(sorted(active_headers))}"
+        )
+
+        if "invoice_number" not in active_headers:
+            raise CommandError(
+                "Required column 'invoice_number' not found in the sheet header row. "
+                "Rename the column in your sheet to exactly: invoice_number"
+            )
+
+        # ── Phase 1: Parse all rows (no DB access yet) ─────────────────────────
+        parsed_rows  = []
+        skipped      = 0
+        parse_errors = 0
+
+        for row_num, row in enumerate(rows, start=2):  # row 1 is the header
+            invoice_number = str(row.get("invoice_number", "")).strip()
+            if not invoice_number:
+                self.stdout.write(
+                    self.style.WARNING(f"  Row {row_num}: skipped — empty invoice_number")
+                )
+                skipped += 1
+                continue
+            try:
+                defaults = _build_defaults(row, active_headers)
+                parsed_rows.append((row_num, invoice_number, defaults))
+            except Exception as exc:
+                self.stderr.write(
+                    self.style.ERROR(f"  Row {row_num}: parse error — {exc}")
+                )
+                parse_errors += 1
+
+        self.stdout.write(
+            f"\nParse result: {len(parsed_rows)} valid | "
+            f"{skipped} skipped (no invoice_number) | "
+            f"{parse_errors} parse error(s)"
+        )
+
+        if not parsed_rows:
+            self.stdout.write(self.style.WARNING("No valid rows to process."))
+            self._print_summary(len(rows), 0, 0, skipped, parse_errors, dry_run)
+            return
+
+        # ── Dry-run: check DB state, write nothing ─────────────────────────────
+        if dry_run:
+            self.stdout.write(self.style.WARNING("\n[DRY RUN] No data will be written.\n"))
+            existing = set(
+                BookEvent.objects.filter(
+                    invoice_number__in=[r[1] for r in parsed_rows]
+                ).values_list("invoice_number", flat=True)
+            )
+            would_create = sum(1 for _, inv, _ in parsed_rows if inv not in existing)
+            would_update = sum(1 for _, inv, _ in parsed_rows if inv in existing)
+            self._print_summary(
+                len(rows), would_create, would_update, skipped, parse_errors, dry_run
+            )
+            return
+
+        # ── Phase 2: Upsert in a single atomic transaction ─────────────────────
+        # If any write fails, the whole batch rolls back and CommandError is raised.
+        self.stdout.write("Writing to database...")
+        created_count = 0
+        updated_count = 0
+
+        with transaction.atomic():
+            for row_num, invoice_number, defaults in parsed_rows:
+                _, created = BookEvent.objects.update_or_create(
+                    invoice_number=invoice_number,
+                    defaults=defaults,
+                )
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
+
+        self._print_summary(
+            len(rows), created_count, updated_count, skipped, parse_errors, dry_run
+        )
+
+    def _print_summary(self, total_read, created, updated, skipped, parse_errors, dry_run):
+        label = "[DRY RUN] " if dry_run else ""
+        self.stdout.write("\n" + "-" * 52)
+        self.stdout.write(self.style.SUCCESS(f"{label}Sync Complete"))
+        self.stdout.write(f"  Sheet rows read  : {total_read}")
+        self.stdout.write(f"  Skipped          : {skipped}  (empty invoice_number)")
+        self.stdout.write(f"  Parse errors     : {parse_errors}")
+        if dry_run:
+            self.stdout.write(f"  Would create     : {created}")
+            self.stdout.write(f"  Would update     : {updated}")
+        else:
+            self.stdout.write(f"  Created          : {created}")
+            self.stdout.write(f"  Updated          : {updated}")
+        self.stdout.write("-" * 52)

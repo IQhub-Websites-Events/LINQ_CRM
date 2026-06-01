@@ -74,6 +74,16 @@ class UserWriteSerializer(serializers.ModelSerializer):
         user.save()
         if event_ids:
             user.assigned_events.set(Event.objects.filter(id__in=event_ids))
+        if user.team:
+            from teams.models import TeamActivityLog
+            request = self.context.get('request')
+            actor = request.user if (request and request.user.is_authenticated) else None
+            TeamActivityLog.objects.create(
+                action_type=TeamActivityLog.ActionType.MEMBER_ADDED,
+                team=user.team,
+                user=user,
+                moved_by=actor,
+            )
         return user
 
     def update(self, instance, validated_data):
@@ -81,25 +91,50 @@ class UserWriteSerializer(serializers.ModelSerializer):
         team_id = validated_data.pop("team_id", None)
         mapped_lead_id = validated_data.pop("mapped_lead_id", None)
         password  = validated_data.pop("password", None)
-        
+
+        old_team = instance.team
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        
+
         if team_id is not None:
             from teams.models import Team
             instance.team = Team.objects.filter(id=team_id).first() if team_id else None
 
         if mapped_lead_id is not None:
             instance.mapped_lead = User.objects.filter(id=mapped_lead_id).first() if mapped_lead_id else None
-            
+
         if password:
             instance.set_password(password)
-            
+
         instance.save()
-        
+
         if event_ids is not None:
             instance.assigned_events.set(Event.objects.filter(id__in=event_ids))
-            
+
+        new_team = instance.team
+        if team_id is not None and old_team != new_team:
+            from teams.models import TeamActivityLog
+            request = self.context.get('request')
+            actor = request.user if (request and request.user.is_authenticated) else None
+            if new_team and old_team is None:
+                TeamActivityLog.objects.create(
+                    action_type=TeamActivityLog.ActionType.MEMBER_ADDED,
+                    team=new_team, user=instance, moved_by=actor,
+                )
+            elif new_team and old_team:
+                TeamActivityLog.objects.create(
+                    action_type=TeamActivityLog.ActionType.MEMBER_MOVED,
+                    team=new_team, user=instance, moved_by=actor,
+                    source_team=old_team, destination_team=new_team,
+                )
+            elif old_team and new_team is None:
+                TeamActivityLog.objects.create(
+                    action_type=TeamActivityLog.ActionType.MEMBER_REMOVED,
+                    team=old_team, user=instance, moved_by=actor,
+                    source_team=old_team,
+                )
+
         return instance
 
 

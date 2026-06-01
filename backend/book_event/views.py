@@ -173,36 +173,72 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
 
         del_qs = BookDelegate.objects.filter(invoice__in=qs)
 
-        # Identification Lists
-        SPEX_LIST = [
-            "PLT SpEx", "GLD SpEx", "SLV SpEx", "Speaker / PLT SpEx", 
-            "Speaker / GLD SpEx", "Speaker / SLV SpEx", "Speaker / PTN SpEx", 
-            "PTN SpEx", "Add-Ons", "Upgraded to PLT SpEx", 
-            "Upgraded to GLD SpEx", "Upgraded to SLV SpEx"
-        ]
-        SPEAKER_LIST = [
-            "Speaker", "SPP", "SPP / Group Pass", "Speaker / PLT SpEx", 
-            "Speaker / GLD SpEx", "Speaker / SLV SpEx", "Speaker / PTN SpEx", 
-            "Speaker / Group Pass"
-        ]
+        # Booking-code matchers (applied on BookEvent fields).
+        # SpEx  : contains "spex" OR exactly "Add-Ons"
+        # Speaker: contains "speaker" OR contains "spp"
+        #          Hybrid codes (e.g. "Speaker / SLV SpEx") match BOTH — intentional.
+        SPEX_Q    = Q(booking_code__icontains="spex") | Q(booking_code__iexact="Add-Ons")
+        SPEAKER_Q = Q(booking_code__icontains="speaker") | Q(booking_code__icontains="spp")
+
+        # Delegate-level equivalents (prefix with invoice__ for BookDelegate querysets)
+        INV_SPEX_Q    = Q(invoice__booking_code__icontains="spex") | Q(invoice__booking_code__iexact="Add-Ons")
+        INV_SPEAKER_Q = Q(invoice__booking_code__icontains="speaker") | Q(invoice__booking_code__icontains="spp")
+
+        # For individual KPI cards, scope to the rep's own attributed bookings.
+        # SpEx / Speaker Sales attribution comes from the event's team string fields
+        # (event.spex_team / event.speaker_sales_team) — NOT the invoice sales_executive FK,
+        # because the FK is set to the main sales rep, not the SpEx/Speaker rep.
+        # Sales reps continue to use the sales_executive FK.
+        # Admin sees the global view with no restriction.
+        from events.models import Event as _Event
+
+        def _event_codes_for_field(field, name):
+            """Return event codes where the given team field icontains the name."""
+            if not name:
+                return []
+            return list(_Event.objects.filter(
+                **{f"{field}__icontains": name}
+            ).values_list("event_code", flat=True))
+
+        if not request.user.is_admin:
+            u_name = (request.user.get_full_name() or request.user.username).strip()
+            u_role = request.user.role
+
+            if u_role == "spex":
+                ecodes = _event_codes_for_field("spex_team", u_name)
+                rep_inv_qs = qs.filter(SPEX_Q, event_code__in=ecodes)
+                rep_del_qs = BookDelegate.objects.filter(invoice__in=rep_inv_qs)
+
+            elif u_role == "speaker_sales":
+                ecodes = _event_codes_for_field("speaker_sales_team", u_name)
+                rep_inv_qs = qs.filter(event_code__in=ecodes)
+                rep_del_qs = BookDelegate.objects.filter(invoice__in=rep_inv_qs)
+
+            else:
+                # Sales / Telemarketing / other — use sales_executive FK
+                rep_inv_qs = qs.filter(sales_executive=request.user)
+                rep_del_qs = BookDelegate.objects.filter(invoice__in=rep_inv_qs)
+        else:
+            rep_inv_qs = qs
+            rep_del_qs = del_qs
 
         # 1. Sales / Telemarketing Stats (Standard Delegate Counts)
-        sales = del_qs.aggregate(
+        sales = rep_del_qs.aggregate(
             total=Count("id"),
             paid=Count("id", filter=Q(invoice__payment_status="Paid")),
             free=Count("id", filter=Q(invoice__paid_or_free="Free")),
         )
 
-        # 2. SpEx Stats (Unique Company Counts based on invoice.booking_code)
-        spex_qs = qs.filter(booking_code__in=SPEX_LIST)
+        # 2. SpEx Stats — unique companies booked via SpEx codes
+        spex_qs     = rep_inv_qs.filter(SPEX_Q)
         spex_booked = spex_qs.values("company_name").distinct().count()
-        spex_paid = spex_qs.filter(payment_status="Paid").values("company_name").distinct().count()
+        spex_paid   = spex_qs.filter(payment_status="Paid").values("company_name").distinct().count()
 
-        # 3. Speaker Sales Stats (Delegate Counts based on invoice.booking_code)
-        speaker = del_qs.aggregate(
-            total=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST)),
-            confirmed=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST, attendance="Confirmed")),
-            paid=Count("id", filter=Q(invoice__booking_code__in=SPEAKER_LIST, invoice__payment_status="Paid")),
+        # 3. Speaker Sales Stats — delegates whose invoice booking_code is Speaker / SPP
+        speaker = rep_del_qs.aggregate(
+            total=Count("id", filter=INV_SPEAKER_Q),
+            confirmed=Count("id", filter=INV_SPEAKER_Q & Q(attendance="Confirmed")),
+            paid=Count("id", filter=INV_SPEAKER_Q & Q(invoice__payment_status="Paid")),
         )
 
         # Team lead productivity calculation
@@ -220,6 +256,25 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                     Q(team_lead=request.user) | Q(members__id=request.user.id, members__is_team_lead=True)
                 ).filter(is_archived=False).distinct()
 
+            def _apply_period(qs_in):
+                """Apply the selected period filter to a BookDelegate or BookEvent queryset."""
+                from datetime import timedelta
+                is_delegate = qs_in.model.__name__ == "BookDelegate"
+                date_field = "invoice__invoice_date" if is_delegate else "invoice_date"
+                if period == "today":
+                    return qs_in.filter(**{date_field: today})
+                elif period == "yesterday":
+                    return qs_in.filter(**{date_field: today - timedelta(days=1)})
+                elif period == "last_7_days":
+                    return qs_in.filter(**{f"{date_field}__gte": today - timedelta(days=7)})
+                elif period == "last_30_days":
+                    return qs_in.filter(**{f"{date_field}__gte": today - timedelta(days=30)})
+                elif period == "month":
+                    return qs_in.filter(**{f"{date_field}__year": now.year, f"{date_field}__month": now.month})
+                elif period == "year":
+                    return qs_in.filter(**{f"{date_field}__year": now.year})
+                return qs_in
+
             for t in teams_led:
                 members_stats = []
                 team_leads_count = t.members.filter(status="active", is_team_lead=True).count()
@@ -228,31 +283,72 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                 else:
                     members_qs = t.members.filter(status="active")
 
+                # Determine team type from dominant member role
+                role_counts = {}
+                for role_val in members_qs.values_list("role", flat=True):
+                    role_counts[role_val] = role_counts.get(role_val, 0) + 1
+                dominant_role = max(role_counts, key=role_counts.get) if role_counts else "sales"
+
+                if dominant_role == "spex":
+                    team_type = "spex"
+                elif dominant_role == "speaker_sales":
+                    team_type = "speaker_sales"
+                else:
+                    team_type = "sales"
+
                 for m in members_qs:
-                    m_bookings = BookDelegate.objects.filter(invoice__sales_executive=m)
-                    if period == "today":
-                        m_bookings = m_bookings.filter(invoice__invoice_date=today)
-                    elif period == "yesterday":
-                        from datetime import timedelta
-                        m_bookings = m_bookings.filter(invoice__invoice_date=today - timedelta(days=1))
-                    elif period == "last_7_days":
-                        from datetime import timedelta
-                        m_bookings = m_bookings.filter(invoice__invoice_date__gte=today - timedelta(days=7))
-                    elif period == "last_30_days":
-                        from datetime import timedelta
-                        m_bookings = m_bookings.filter(invoice__invoice_date__gte=today - timedelta(days=30))
-                    elif period == "month":
-                        m_bookings = m_bookings.filter(invoice__invoice_date__year=now.year, invoice__invoice_date__month=now.month)
-                    elif period == "year":
-                        m_bookings = m_bookings.filter(invoice__invoice_date__year=now.year)
+                    m_name = (m.get_full_name() or m.username).strip()
 
-                    booking_count = m_bookings.count()
-                    paid_count = m_bookings.filter(invoice__payment_status="Paid").count()
-                    pending_count = max(0, booking_count - paid_count)
+                    if team_type == "spex":
+                        # SpEx attribution: event.spex_team matches member name + SPEX_Q booking code
+                        m_ecodes = _event_codes_for_field("spex_team", m_name)
+                        m_invoices = _apply_period(
+                            BookEvent.objects.filter(SPEX_Q, event_code__in=m_ecodes)
+                        )
+                        booking_count = m_invoices.values("company_name").distinct().count()
+                        paid_count    = m_invoices.filter(payment_status="Paid").values("company_name").distinct().count()
+                        pending_count = max(0, booking_count - paid_count)
 
-                    unique_invoices = qs.filter(sales_executive=m)
-                    total_value = unique_invoices.aggregate(val=Sum("total_amount"))["val"] or 0
-                    paid_value = unique_invoices.filter(payment_status="Paid").aggregate(val=Sum("total_amount"))["val"] or 0
+                    elif team_type == "speaker_sales":
+                        # Speaker Sales attribution: event.speaker_sales_team matches member name
+                        # + booking_code matches SPEAKER_Q. Hybrid codes count here AND in SpEx.
+                        m_ecodes = _event_codes_for_field("speaker_sales_team", m_name)
+                        m_bookings = _apply_period(
+                            BookDelegate.objects.filter(
+                                INV_SPEAKER_Q,
+                                invoice__event_code__in=m_ecodes,
+                            )
+                        )
+                        booking_count = m_bookings.count()
+                        paid_count    = m_bookings.filter(invoice__payment_status="Paid").count()
+                        pending_count = max(0, booking_count - paid_count)
+
+                    else:
+                        # Sales / Telemarketing: attributed via sales_executive FK
+                        m_bookings = _apply_period(
+                            BookDelegate.objects.filter(invoice__sales_executive=m)
+                        )
+                        booking_count = m_bookings.count()
+                        paid_count    = m_bookings.filter(invoice__payment_status="Paid").count()
+                        pending_count = max(0, booking_count - paid_count)
+
+                    # Revenue totals: SpEx/Speaker via event team fields, Sales via FK
+                    if team_type == "spex":
+                        m_ecodes_rev = _event_codes_for_field("spex_team", m_name)
+                        member_invoices = _apply_period(
+                            BookEvent.objects.filter(SPEX_Q, event_code__in=m_ecodes_rev)
+                        )
+                    elif team_type == "speaker_sales":
+                        m_ecodes_rev = _event_codes_for_field("speaker_sales_team", m_name)
+                        member_invoices = _apply_period(
+                            BookEvent.objects.filter(event_code__in=m_ecodes_rev)
+                        )
+                    else:
+                        member_invoices = _apply_period(
+                            BookEvent.objects.filter(sales_executive=m)
+                        )
+                    total_value   = member_invoices.aggregate(val=Sum("total_amount"))["val"] or 0
+                    paid_value    = member_invoices.filter(payment_status="Paid").aggregate(val=Sum("total_amount"))["val"] or 0
                     pending_value = max(0, total_value - paid_value)
 
                     members_stats.append({
@@ -270,6 +366,7 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                 team_productivity.append({
                     "team_id": t.id,
                     "team_name": t.name,
+                    "team_type": team_type,
                     "members": members_stats
                 })
 
@@ -677,10 +774,25 @@ class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
                         se_name = _clean(row, "sales_executive")
                         if se_name:
                             from accounts.models import User
+                            _parts = se_name.split()
                             sales_exec = (
-                                User.objects.filter(first_name__icontains=se_name).first()
-                                or User.objects.filter(last_name__icontains=se_name).first()
-                                or User.objects.filter(username__iexact=se_name).first()
+                                # Full name: first + last exact (handles "Victor Venegas")
+                                (User.objects.filter(
+                                    first_name__iexact=_parts[0],
+                                    last_name__iexact=" ".join(_parts[1:]),
+                                ).first() if len(_parts) >= 2 else None)
+                                # Partial: first icontains + last icontains
+                                or (User.objects.filter(
+                                    first_name__icontains=_parts[0],
+                                    last_name__icontains=_parts[-1],
+                                ).first() if len(_parts) >= 2 else None)
+                                # username with dots ("victor.venegas")
+                                or User.objects.filter(
+                                    username__iexact=se_name.replace(" ", ".").lower()
+                                ).first()
+                                # Single-word fallback: first or last name
+                                or User.objects.filter(first_name__iexact=se_name).first()
+                                or User.objects.filter(last_name__iexact=se_name).first()
                             )
                         try:
                             dc = max(1, int(row.get("delegate_count") or 1))

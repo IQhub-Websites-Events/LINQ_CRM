@@ -15,7 +15,7 @@ class IsAdminRole(BasePermission):
             and request.user.is_authenticated
             and request.user.is_admin
         )
-
+    
 
 class IsSalesOrAdmin(BasePermission):
     message = "Authentication required."

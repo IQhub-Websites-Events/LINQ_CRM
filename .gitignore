@@ -3,6 +3,8 @@
 backend/credentials/
 backend/CREDENTIALS.md
 CREDENTIALS.md
+credentials.json
+**/credentials.json
 *.md
 *.pem
 *.key
