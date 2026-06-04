@@ -94,6 +94,56 @@ class Event(models.Model):
             
         self.tele_marketing_team = self.telemarketing_team
         self.market_research_team = self.market_research_senior
+
+        # Sync sales_team and sales_executive
+        if self.pk:
+            orig = Event.objects.filter(pk=self.pk).first()
+            if orig:
+                if self.sales_executive != orig.sales_executive:
+                    if self.sales_executive:
+                        self.sales_team = self.sales_executive.get_full_name() or self.sales_executive.username
+                    else:
+                        self.sales_team = ""
+                elif self.sales_team != orig.sales_team or (self.sales_team and not self.sales_executive):
+                    if self.sales_team:
+                        from django.contrib.auth import get_user_model
+                        User = get_user_model()
+                        name_str = self.sales_team.strip()
+                        user = User.objects.filter(role='sales').filter(
+                            models.Q(username__iexact=name_str) |
+                            models.Q(email__iexact=name_str) |
+                            models.Q(first_name__icontains=name_str) |
+                            models.Q(last_name__icontains=name_str)
+                        ).first()
+                        if not user:
+                            for u in User.objects.filter(role='sales'):
+                                full = (u.get_full_name() or u.username).lower()
+                                if name_str.lower() in full or full in name_str.lower():
+                                    user = u
+                                    break
+                        self.sales_executive = user
+                    else:
+                        self.sales_executive = None
+        else:
+            if self.sales_executive and not self.sales_team:
+                self.sales_team = self.sales_executive.get_full_name() or self.sales_executive.username
+            elif self.sales_team and not self.sales_executive:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                name_str = self.sales_team.strip()
+                user = User.objects.filter(role='sales').filter(
+                    models.Q(username__iexact=name_str) |
+                    models.Q(email__iexact=name_str) |
+                    models.Q(first_name__icontains=name_str) |
+                    models.Q(last_name__icontains=name_str)
+                ).first()
+                if not user:
+                    for u in User.objects.filter(role='sales'):
+                        full = (u.get_full_name() or u.username).lower()
+                        if name_str.lower() in full or full in name_str.lower():
+                            user = u
+                            break
+                self.sales_executive = user
         
         super().save(*args, **kwargs)
 

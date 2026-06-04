@@ -68,7 +68,7 @@ export function UserDraggable({ user, isLead, onMenuClick }) {
             {displayName}
           </div>
           <div style={{ fontSize: 10, color: "var(--text-faint)", textTransform: "capitalize", lineHeight: 1.2 }}>
-            {(user.role || "").replace(/_/g, " ")}
+            {user.custom_role_label || (user.role || "").replace(/_/g, " ")}
           </div>
         </div>
 

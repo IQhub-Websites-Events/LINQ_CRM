@@ -328,8 +328,8 @@ export function EventDetailDrawer({ eventId, onClose }) {
                 {/* 12. Sales Team */}
                 <InfoItem label="Sales Team" value={event.sales_team || "—"} />
 
-                {/* 13. Team Leader */}
-                <InfoItem label="Team Leader" value={event.team_leader || "—"} />
+                {/* 13. Sales Team Leader */}
+                <InfoItem label="Sales Team Leader" value={event.team_leader || "—"} />
 
                 {/* 14. Speaker Sales Team */}
                 <InfoItem label="Speaker Sales Team" value={event.speaker_sales_team || "—"} />

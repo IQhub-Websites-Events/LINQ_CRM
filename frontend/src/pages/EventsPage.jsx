@@ -43,7 +43,7 @@ export function EventsPage() {
     year: "",
     accepting_web_bookings: "",
     status: "",
-    sales_executive: "",
+    team_leader: "",
   });
 
   const [filterOptions, setFilterOptions] = useState({
@@ -378,7 +378,7 @@ export function EventsPage() {
                 <SortableTh sortKey="event_date" sort={sort} onSort={handleSort}>Date</SortableTh>
                 <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={handleSort}>Web Bookings</SortableTh>
                 <SortableTh noSort>Status</SortableTh>
-                <SortableTh noSort>Sales Team</SortableTh>
+                <SortableTh noSort>Sales Team Leader</SortableTh>
                 <SortableTh noSort></SortableTh>
               </tr>
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
@@ -456,12 +456,12 @@ export function EventsPage() {
                 <td style={{ padding: "4px 8px" }}>
                   <select
                     style={colFilterSelect}
-                    value={colFilters.sales_executive}
-                    onChange={(e) => handleColFilter("sales_executive", e.target.value)}
+                    value={colFilters.team_leader || ""}
+                    onChange={(e) => handleColFilter("team_leader", e.target.value)}
                   >
                     <option value="">All</option>
-                    {salesUsers.map(u => (
-                      <option key={u.id} value={u.id}>
+                    {allUsers.filter(u => u.team_name === "Sales Team" && u.is_team_lead).map(u => (
+                      <option key={u.id} value={u.full_name}>
                         {u.full_name || u.username}
                       </option>
                     ))}
@@ -492,12 +492,12 @@ export function EventsPage() {
                   <Td><span className={`badge badge-soft-${ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
                   <Td><EventStatusBadge status={ev.event_status} /></Td>
                   <Td>
-                    {ev.sales_executive_name
+                    {ev.team_leader
                       ? <span style={{
                           fontSize: 11, fontWeight: 600, padding: "2px 7px",
                           borderRadius: 20, background: "rgba(64,81,137,0.1)",
                           color: "var(--accent)", whiteSpace: "nowrap",
-                        }}>{ev.sales_executive_name}</span>
+                        }}>{ev.team_leader}</span>
                       : <span style={{ color: "var(--text-faint)" }}>—</span>
                     }
                   </Td>
@@ -637,12 +637,12 @@ export function EventsPage() {
               <Input value={modal.data.sales_team || ""} onChange={(v) => setField("sales_team", v)} placeholder="Sales Team A" />
             </FormField>
 
-            {/* 13. Team Leader */}
-            <FormField label="Team Leader">
+            {/* 13. Sales Team Leader */}
+            <FormField label="Sales Team Leader">
               <Select
                 value={modal.data.team_leader || ""}
                 onChange={(v) => setField("team_leader", v)}
-                options={salesUsers.map(u => ({ label: u.full_name, value: String(u.id) }))}
+                options={allUsers.filter(u => u.team_name === "Sales Team" && u.is_team_lead).map(u => ({ label: u.full_name, value: String(u.id) }))}
                 placeholder="— Unassigned —"
               />
             </FormField>

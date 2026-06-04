@@ -4,7 +4,6 @@ import "./index.css";
 import App from "./App";
 
 const rootElement = document.getElementById("root");
-const unsupportedPath = window.location.pathname !== "/" && !window.location.pathname.startsWith("/static/");
 
 function showFatalScreen(title, detail = "") {
   if (!rootElement) return;
@@ -20,10 +19,6 @@ function showFatalScreen(title, detail = "") {
 
 if (!rootElement) {
   throw new Error("React root element #root was not found in index.html");
-}
-
-if (unsupportedPath) {
-  window.history.replaceState({}, "", "/");
 }
 
 let reactMounted = false;

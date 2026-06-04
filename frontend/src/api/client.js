@@ -30,7 +30,20 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Global error handling — retry on network/503, redirect (never reload) on 401
+// Mark the moment a token is stored so the interceptor can suppress
+// spurious 401s that fire in the first few seconds after login.
+export function markTokenFreshness() {
+  try { localStorage.setItem("auth_token_set_at", String(Date.now())); } catch {}
+}
+
+function tokenIsFreslhySet() {
+  try {
+    const t = localStorage.getItem("auth_token_set_at");
+    return t && (Date.now() - parseInt(t, 10)) < 5000;
+  } catch { return false; }
+}
+
+// Global error handling — retry on network/503, redirect on 401 (unless token was just set)
 client.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -48,8 +61,13 @@ client.interceptors.response.use(
     }
 
     if (status === 401) {
+      // Suppress redirect if the token was just stored (login race window)
+      if (tokenIsFreslhySet()) {
+        return Promise.reject(err);
+      }
       safeStorageRemove("auth_token");
       safeStorageRemove("auth_user");
+      safeStorageRemove("auth_perms");
       window.location.replace("/");
     }
 

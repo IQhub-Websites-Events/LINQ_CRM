@@ -6,22 +6,25 @@ from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 
-from accounts.views import UserViewSet, CustomAuthToken, TeamViewSet, RequestOTPView, VerifyOTPView
+from accounts.views import UserViewSet, CustomAuthToken, TeamViewSet, RequestOTPView, VerifyOTPView, CustomRoleViewSet
 from companies.views import CompanyViewSet
 from events.views import EventViewSet
 from book_event.views import BookEventViewSet
 from book_delegate.views import BookDelegateViewSet
 from teams.views import TeamViewSet as TeamManagementViewSet
+from ticket_central.views import TicketViewSet
 from config.views import GlobalSearchView, DashboardStatsView
 
 router = DefaultRouter()
 router.register(r"users",     UserViewSet,         basename="users")
+router.register(r"roles",     CustomRoleViewSet,   basename="roles")
 router.register(r"team",      TeamViewSet,         basename="team")
 router.register(r"teams",     TeamManagementViewSet, basename="teams")
 router.register(r"companies", CompanyViewSet,      basename="companies")
 router.register(r"events",    EventViewSet,        basename="events")
 router.register(r"invoices",  BookEventViewSet,    basename="invoices")
 router.register(r"delegates", BookDelegateViewSet, basename="delegates")
+router.register(r"tickets",   TicketViewSet,       basename="tickets")
 
 urlpatterns = [
     path("admin/",               admin.site.urls),

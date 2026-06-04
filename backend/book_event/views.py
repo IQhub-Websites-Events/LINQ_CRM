@@ -13,6 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import RBACMixin, IsSalesOrAdmin, IsAdminRole
+from accounts.crm_permissions import crm_permission
 from .authentication import ApiKeyAuthentication, OriginAuthentication, HasApiKey
 from .models import BookEvent, WebhookLog
 from .serializers import (
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class BookEventViewSet(RBACMixin, viewsets.ModelViewSet):
+    permission_classes = [crm_permission("bookings")]
     filterset_class = BookEventFilter
     search_fields   = [
         "invoice_number", "event_code", "contact_name",

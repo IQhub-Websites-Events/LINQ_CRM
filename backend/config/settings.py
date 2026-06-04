@@ -13,14 +13,15 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Security ──────────────────────────────────────────────────────────────────
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-secret-key-change-in-production")
-DEBUG = os.environ.get("DEBUG", "True") == "True"
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
+SECRET_KEY = config("SECRET_KEY")
+DEBUG = config("DEBUG", default="False", cast=lambda v: v.lower() in ("true", "1"))
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://www.linq-staging-site.com,http://localhost:3001,http://87.99.135.169,https://flow.zoho.in",
-).split(",")
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in
+    os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if o.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
 
 # ── Applications ──────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ INSTALLED_APPS = [
     "rest_framework.authtoken",
     "django_filters",
     "corsheaders",
+    "django_crontab",
     # Local — order matters for FK migrations
     "teams",
     "accounts",
@@ -48,6 +50,7 @@ INSTALLED_APPS = [
     "reports",
     "event_performance",
     "historical_event_registry",
+    "ticket_central",
 ]
 
 MIDDLEWARE = [
@@ -92,18 +95,6 @@ DATABASES = {
         'PORT': config('DB_PORT', default='5432'),
     }
 }
-
-# ── SQLite Optimization (WAL Mode) ─────────────────────────────────────────────
-from django.db.backends.signals import connection_created
-from django.dispatch import receiver
-
-@receiver(connection_created)
-def set_sqlite_pragma(sender, connection, **kwargs):
-    if connection.vendor == "sqlite":
-        cursor = connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL;")
-        cursor.execute("PRAGMA synchronous=NORMAL;")
-
 
 # ── Custom Auth ───────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
@@ -176,7 +167,7 @@ EMAIL_USE_TLS   = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL  = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
-IMPORT_ALERT_EMAIL  = os.environ.get("IMPORT_ALERT_EMAIL", "harrison.peck@iq-hub.com")
+IMPORT_ALERT_EMAIL  = os.environ.get("IMPORT_ALERT_EMAIL", "")
 
 # ── Website Integration ───────────────────────────────────────────────────────
 WEBSITE_API_KEY     = os.environ.get("WEBSITE_API_KEY", "")
@@ -189,3 +180,12 @@ GOOGLE_SHEETS_CREDENTIALS = os.path.join(BASE_DIR.parent, _creds_path)
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "1x69V6G_qY6H5W_m6P9V6G_qY6H5W_m6P")
 GOOGLE_SHEET_EVENTS_TAB = "Events"
 GOOGLE_SHEET_BOOKINGS_TAB = "Bookings"
+
+
+# ── Ticket Central: scheduled ticket-number backfill (D5) ───────────────────
+# 07:00 AM IST == 01:30 UTC. cron string uses server time; activate on the
+# Linux server with `python manage.py crontab add` (no-op on Windows dev).
+CRONJOBS = [
+    ("30 1 * * *", "django.core.management.call_command", ["backfill_ticket_numbers"]),
+]
+CRONTAB_LOCK_JOBS = True  # prevent overlap if a previous run is still going

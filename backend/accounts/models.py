@@ -21,6 +21,7 @@ class User(AbstractUser):
         OPERATIONS      = "operations",      "Operations"
         SPEAKER_SALES   = "speaker_sales",   "Speaker Sales"
         TELEMARKETING   = "telemarketing",   "Telemarketing"
+        DATA_MINING     = "data_mining",     "Data Mining"
 
     class Status(models.TextChoices):
         ACTIVE    = "active",    "Active"
@@ -56,6 +57,13 @@ class User(AbstractUser):
         blank=True,
         related_name="assigned_users",
         help_text="Events accessible by this sales user. Ignored for admin.",
+    )
+    custom_role = models.ForeignKey(
+        "CustomRole",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="users",
+        help_text="Optional display-only role label. Does not affect permissions.",
     )
 
     class Meta:
@@ -104,6 +112,8 @@ class User(AbstractUser):
                 new_role = None
                 if "market research" in team_name:
                     new_role = self.Role.MARKET_RESEARCH
+                elif "data mining" in team_name or "dmd" in team_name:
+                    new_role = self.Role.DATA_MINING
                 elif "spex" in team_name:
                     new_role = self.Role.SPEX
                 elif "operation" in team_name or "ops" in team_name:
@@ -138,12 +148,7 @@ class User(AbstractUser):
         """Returns list of event_codes or None (admin = unrestricted)."""
         if self.is_admin:
             return None
-        
-        # Combine ManyToMany assignments and primary sales_executive FK assignments
-        m2m_codes = list(self.assigned_events.values_list("event_code", flat=True))
-        fk_codes  = list(self.assigned_events_list.values_list("event_code", flat=True))
-        
-        return list(set(m2m_codes + fk_codes))
+        return list(self.assigned_events.values_list("event_code", flat=True))
 
 class ActionLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="action_logs")
@@ -186,3 +191,46 @@ class OTPToken(models.Model):
             otp=otp,
             expires_at=timezone.now() + timedelta(minutes=5),
         )
+
+
+class CustomRole(models.Model):
+    """Admin-defined roles. All permissions are managed via RolePermission entries."""
+    name           = models.CharField(max_length=50, unique=True)
+    display_label  = models.CharField(max_length=50)
+    color          = models.CharField(max_length=20, default="#6b7280")
+    description    = models.TextField(blank=True, default="")
+    is_all_access  = models.BooleanField(default=False, help_text="If True, grants full access to all modules.")
+    is_system_role = models.BooleanField(default=False, help_text="Pre-seeded system role — cannot be deleted.")
+    created_at     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "custom_roles"
+        ordering = ["display_label"]
+
+    def __str__(self):
+        return self.display_label
+
+
+CRM_MODULES = [
+    "bookings", "ticket_central", "events", "reports",
+    "users", "teams", "performance", "webhooks", "roles",
+]
+
+class RolePermission(models.Model):
+    """Per-module CRUD permissions for a CustomRole."""
+    custom_role = models.ForeignKey(
+        CustomRole, on_delete=models.CASCADE, related_name="permissions"
+    )
+    module      = models.CharField(max_length=50)
+    can_view    = models.BooleanField(default=False)
+    can_create  = models.BooleanField(default=False)
+    can_update  = models.BooleanField(default=False)
+    can_delete  = models.BooleanField(default=False)
+
+    class Meta:
+        db_table         = "role_permissions"
+        unique_together  = [("custom_role", "module")]
+        ordering         = ["module"]
+
+    def __str__(self):
+        return f"{self.custom_role} · {self.module}"

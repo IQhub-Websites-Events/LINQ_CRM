@@ -1,9 +1,5 @@
-/**
- * App.jsx
- * ────────
- * Root component. Handles auth routing and the main shell layout.
- */
-import { Component, useState, useEffect } from "react";
+import { Component, useState, useEffect, createContext, useContext } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -18,58 +14,53 @@ import { TeamsManagementPage } from "./pages/TeamsManagementPage";
 import { WebhookLogsPage } from "./pages/WebhookLogsPage";
 import { GoogleSyncPage }         from "./pages/GoogleSyncPage";
 import { EventPerformancePage }   from "./pages/EventPerformancePage";
+import { TicketCentralPage }       from "./pages/TicketCentralPage";
+import { RolesPage }               from "./pages/RolesPage";
+import { NoAccessPage }            from "./pages/NoAccessPage";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { searchApi } from "./api";
 
+const NavItemContext = createContext(null);
+const useNavItem = () => useContext(NavItemContext);
 
+// Thin wrappers so navItem (from context) still drives key + prop for the three pages that need it
+function BookingsRoute()      { const n = useNavItem(); return <BookingsPage      key={n?.id || "bk"} navItem={n} />; }
+function EventsRoute()        { const n = useNavItem(); return <EventsPage        key={n?.id || "ev"} navItem={n} />; }
+function TicketCentralRoute() { const n = useNavItem(); return <TicketCentralPage key={n?.id || "tc"} navItem={n} />; }
 
-function AppShell() {
+function AppLayout() {
+  const routerNav = useNavigate();
   const { isAuthenticated } = useAuth();
-  const [screen, setScreen] = useState("bookings");
   const [badges, setBadges] = useState({});
-  const [navItem, setNavItem] = useState(null); // item from global search
+  const [navItem, setNavItem] = useState(null);
 
-  // Load pending count for sidebar badge
   useEffect(() => {
     if (!isAuthenticated) return;
     const load = () =>
       searchApi.stats().then((s) => setBadges({ pending: s.invoices?.pending || 0 })).catch(() => { });
     load();
-    const interval = setInterval(load, 60_000); // refresh every minute
+    const interval = setInterval(load, 60_000);
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
   if (!isAuthenticated) return <LoginPage />;
 
-  const navigate = (s, id) => {
-    setScreen(s);
-    setNavItem(id ? { id } : null);
-  };
-
-  const screenContent = {
-    bookings: <BookingsPage key={navItem?.id || "bk"} navItem={navItem} />,
-    events: <EventsPage key={navItem?.id || "ev"} navItem={navItem} />,
-    reports: <ReportsPage />,
-    companies: <CompaniesPage />,
-    users: <UsersPage />,
-    team: <TeamPage />,
-    "teams-management":   <TeamsManagementPage />,
-    "event-performance":  <EventPerformancePage />,
-    "webhook-logs": <WebhookLogsPage />,
-    "google-sync":  <GoogleSyncPage />,
-  };
+  const handleNav = (s) => { routerNav(`/${s}`); setNavItem(null); };
+  const handleSearchNav = (s, id) => { routerNav(`/${s}`); setNavItem(id ? { id } : null); };
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <Sidebar current={screen} onNav={(s) => { setScreen(s); setNavItem(null); }} badges={badges} />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Header onNavigate={navigate} />
-        <main style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
-          {screenContent[screen] || <BookingsPage key="bk-fallback" navItem={null} />}
-        </main>
+    <NavItemContext.Provider value={navItem}>
+      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+        <Sidebar onNav={handleNav} badges={badges} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <Header onNavigate={handleSearchNav} />
+          <main style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </NavItemContext.Provider>
   );
 }
 
@@ -132,18 +123,58 @@ class AppErrorBoundary extends Component {
   }
 }
 
+function PermissionGate({ module, children }) {
+  const { canView, permissionsLoaded } = useAuth();
+  if (!permissionsLoaded) return null;
+  if (!canView(module)) return <NoAccessPage module={module} />;
+  return children;
+}
+
+function PermissionDefaultRedirect() {
+  const { canView, permissionsLoaded, hasAnyPermission } = useAuth();
+  if (!permissionsLoaded) return null;
+  if (!hasAnyPermission) return <NoAccessPage />;
+  // Navigate to first accessible module
+  const ORDER = ["bookings", "ticket_central", "events", "reports", "performance", "users", "teams", "webhooks", "roles"];
+  const MODULE_ROUTE = {
+    bookings: "bookings", ticket_central: "ticket-central", events: "events",
+    reports: "reports", performance: "event-performance", users: "users",
+    teams: "teams-management", webhooks: "webhook-logs", roles: "roles",
+  };
+  for (const mod of ORDER) {
+    if (canView(mod)) return <Navigate to={MODULE_ROUTE[mod]} replace />;
+  }
+  return <NoAccessPage />;
+}
+
 export default function App() {
-
-
   return (
     <AppErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <ToastProvider>
-            <AppShell />
-          </ToastProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <ToastProvider>
+              <Routes>
+                <Route path="/" element={<AppLayout />}>
+                  <Route index element={<PermissionDefaultRedirect />} />
+                  <Route path="bookings"          element={<PermissionGate module="bookings">       <BookingsRoute /></PermissionGate>} />
+                  <Route path="events"            element={<PermissionGate module="events">         <EventsRoute /></PermissionGate>} />
+                  <Route path="reports"           element={<PermissionGate module="reports">        <ReportsPage /></PermissionGate>} />
+                  <Route path="companies"         element={<CompaniesPage />} />
+                  <Route path="users"             element={<PermissionGate module="users">          <UsersPage /></PermissionGate>} />
+                  <Route path="team"              element={<TeamPage />} />
+                  <Route path="teams-management"  element={<PermissionGate module="teams">          <TeamsManagementPage /></PermissionGate>} />
+                  <Route path="event-performance" element={<PermissionGate module="performance">    <EventPerformancePage /></PermissionGate>} />
+                  <Route path="ticket-central"    element={<PermissionGate module="ticket_central"> <TicketCentralRoute /></PermissionGate>} />
+                  <Route path="webhook-logs"      element={<PermissionGate module="webhooks">       <WebhookLogsPage /></PermissionGate>} />
+                  <Route path="roles"             element={<PermissionGate module="roles">          <RolesPage /></PermissionGate>} />
+                  <Route path="*"                 element={<Navigate to="bookings" replace />} />
+                </Route>
+              </Routes>
+            </ToastProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
     </AppErrorBoundary>
   );
 }

@@ -11,3 +11,5 @@ export { webhooksApi }   from "./webhooks";
 export { googleSyncApi } from "./googleSync";
 export { reportsApi }    from "./reports";
 export { eventPerformanceApi } from "./eventPerformance";
+export { ticketCentralApi } from "./ticketCentral";
+export { customRolesApi } from "./users";

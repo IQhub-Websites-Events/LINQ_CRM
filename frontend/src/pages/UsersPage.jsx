@@ -136,6 +136,7 @@ export function UsersPage() {
             <option value="speaker_sales">Speaker Sales</option>
             <option value="telemarketing">Telemarketing</option>
             <option value="market_research">Market Research</option>
+            <option value="data_mining">Data Mining</option>
             <option value="spex">SpEx</option>
             <option value="operations">Operations</option>
           </select>
@@ -202,7 +203,7 @@ export function UsersPage() {
                     <td style={cell}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>@{user.username}</span>
                     </td>
-                    <td style={cell}><RoleBadge role={user.role} /></td>
+                    <td style={cell}><RoleBadge role={user.role} label={user.custom_role_label} /></td>
                     <td style={cell}>
                       {user.team_name
                         ? <span style={{ color: 'var(--text-dim)' }}>{user.team_name}</span>
@@ -272,20 +273,22 @@ function Th({ children, style = {} }) {
   );
 }
 
-function RoleBadge({ role }) {
+function RoleBadge({ role, label }) {
   const map = {
-    admin: { bg: 'var(--danger-soft)', c: 'var(--danger)' },
-    sales: { bg: 'var(--accent-soft)', c: 'var(--accent)' },
-    speaker_sales: { bg: 'var(--success-soft)', c: 'var(--success)' },
-    telemarketing: { bg: 'var(--surface-alt)', c: 'var(--text)' },
-    market_research: { bg: 'var(--warn-soft)', c: 'var(--warn)' },
-    spex: { bg: 'var(--accent-soft)', c: 'var(--accent)' },
-    operations: { bg: 'var(--surface-alt)', c: 'var(--text-dim)' },
+    admin:          { bg: 'var(--danger-soft)',   c: 'var(--danger)'   },
+    sales:          { bg: 'var(--accent-soft)',   c: 'var(--accent)'   },
+    speaker_sales:  { bg: 'var(--success-soft)',  c: 'var(--success)'  },
+    telemarketing:  { bg: 'var(--surface-alt)',   c: 'var(--text)'     },
+    market_research:{ bg: 'var(--warn-soft)',     c: 'var(--warn)'     },
+    data_mining:    { bg: 'rgba(111,66,193,0.12)',c: '#6f42c1'         },
+    spex:           { bg: 'var(--accent-soft)',   c: 'var(--accent)'   },
+    operations:     { bg: 'var(--surface-alt)',   c: 'var(--text-dim)' },
   };
   const s = map[role] || map.operations;
+  const display = label || (role?.replace(/_/g, ' ') || '—');
   return (
-    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 6, background: s.bg, color: s.c, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
-      {role?.replace('_', ' ') || '—'}
+    <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 6, background: s.bg, color: s.c, whiteSpace: 'nowrap' }}>
+      {display}
     </span>
   );
 }

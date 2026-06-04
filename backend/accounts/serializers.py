@@ -4,8 +4,32 @@ accounts/serializers.py
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from events.models import Event
+from .models import CustomRole, RolePermission, CRM_MODULES
 
 User = get_user_model()
+
+
+class RolePermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = RolePermission
+        fields = ["module", "can_view", "can_create", "can_update", "can_delete"]
+
+
+class CustomRoleSerializer(serializers.ModelSerializer):
+    user_count  = serializers.SerializerMethodField()
+    permissions = RolePermissionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model  = CustomRole
+        fields = [
+            "id", "name", "display_label", "color", "description",
+            "is_all_access", "is_system_role", "user_count", "permissions",
+            "created_at",
+        ]
+        read_only_fields = ["created_at", "is_system_role"]
+
+    def get_user_count(self, obj):
+        return obj.users.count()
 
 
 class EventMiniSerializer(serializers.ModelSerializer):
@@ -24,6 +48,8 @@ class UserListSerializer(serializers.ModelSerializer):
     assigned_events_count = serializers.IntegerField(source='assigned_events.count', read_only=True)
     mapped_lead_id  = serializers.ReadOnlyField(source='mapped_lead.id')
     mapped_lead_name = serializers.SerializerMethodField()
+    custom_role_id    = serializers.ReadOnlyField(source='custom_role.id')
+    custom_role_label = serializers.ReadOnlyField(source='custom_role.display_label')
 
     class Meta:
         model  = User
@@ -31,7 +57,7 @@ class UserListSerializer(serializers.ModelSerializer):
             "id", "username", "email", "first_name", "last_name", "full_name",
             "role", "status", "is_active", "assigned_events", "assigned_events_count",
             "date_joined", "last_login", "team_id", "team_name", "is_team_lead",
-            "mapped_lead_id", "mapped_lead_name"
+            "mapped_lead_id", "mapped_lead_name", "custom_role_id", "custom_role_label"
         ]
         read_only_fields = ["id", "date_joined", "last_login"]
 
@@ -49,18 +75,20 @@ class UserWriteSerializer(serializers.ModelSerializer):
     )
     team_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
     mapped_lead_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
+    custom_role_id = serializers.IntegerField(required=False, write_only=True, allow_null=True)
 
     class Meta:
         model  = User
         fields = [
             "username", "email", "first_name", "last_name",
             "password", "role", "status", "assigned_event_ids", "team_id", "is_team_lead",
-            "mapped_lead_id"
+            "mapped_lead_id", "custom_role_id"
         ]
 
     def create(self, validated_data):
         event_ids = validated_data.pop("assigned_event_ids", [])
         team_id = validated_data.pop("team_id", None)
+        custom_role_id = validated_data.pop("custom_role_id", None)
         mapped_lead_id = validated_data.pop("mapped_lead_id", None)
         password  = validated_data.pop("password", None)
         user = User(**validated_data)
@@ -71,6 +99,8 @@ class UserWriteSerializer(serializers.ModelSerializer):
             user.mapped_lead = User.objects.filter(id=mapped_lead_id).first()
         if password:
             user.set_password(password)
+        if custom_role_id is not None:
+            user.custom_role = CustomRole.objects.filter(id=custom_role_id).first() if custom_role_id else None
         user.save()
         if event_ids:
             user.assigned_events.set(Event.objects.filter(id__in=event_ids))
@@ -89,6 +119,7 @@ class UserWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         event_ids = validated_data.pop("assigned_event_ids", None)
         team_id = validated_data.pop("team_id", None)
+        custom_role_id = validated_data.pop("custom_role_id", None)
         mapped_lead_id = validated_data.pop("mapped_lead_id", None)
         password  = validated_data.pop("password", None)
 
@@ -103,6 +134,9 @@ class UserWriteSerializer(serializers.ModelSerializer):
 
         if mapped_lead_id is not None:
             instance.mapped_lead = User.objects.filter(id=mapped_lead_id).first() if mapped_lead_id else None
+
+        if custom_role_id is not None:
+            instance.custom_role = CustomRole.objects.filter(id=custom_role_id).first() if custom_role_id else None
 
         if password:
             instance.set_password(password)

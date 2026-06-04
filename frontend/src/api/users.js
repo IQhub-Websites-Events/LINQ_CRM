@@ -33,4 +33,18 @@ export const usersApi = {
 
   delete: (id) =>
     client.delete(`/users/${id}/`).then((r) => r.data),
+
+  syncRoles:  ()         => client.post("/users/sync-roles/").then((r) => r.data),
+  roleStats:  ()         => client.get("/users/role-stats/").then((r) => r.data),
+  myPermissions: () => client.get("/users/my-permissions/").then((r) => r.data),
+};
+
+export const customRolesApi = {
+  list:           ()           => client.get("/roles/").then((r) => r.data),
+  create:         (data)       => client.post("/roles/", data).then((r) => r.data),
+  update:         (id, data)   => client.patch(`/roles/${id}/`, data).then((r) => r.data),
+  delete:         (id)         => client.delete(`/roles/${id}/`).then((r) => r.data),
+  setPermissions: (id, perms, isAllAccess) =>
+    client.put(`/roles/${id}/permissions/`, { permissions: perms, is_all_access: isAllAccess })
+      .then((r) => r.data),
 };

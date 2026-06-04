@@ -15,8 +15,12 @@ import { useToast } from "../contexts/ToastContext";
 import { UserModal } from "../components/users/UserModal";
 
 // ── Role display helpers ───────────────────────────────────────────────────────
-const ROLES     = ["admin", "sales", "market_research", "spex", "operations"];
-const ROLE_LABEL = { admin: "Admin", sales: "Sales", market_research: "MR", spex: "SpEx", operations: "Ops" };
+const ROLES = ["admin", "sales", "market_research", "data_mining", "telemarketing", "speaker_sales", "spex", "operations"];
+const ROLE_LABEL = {
+  admin: "Admin", sales: "Sales", market_research: "MR",
+  data_mining: "DMD", telemarketing: "Tele", speaker_sales: "Spkr Sales",
+  spex: "SpEx", operations: "Ops",
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page

@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import RBACMixin
+from accounts.crm_permissions import crm_permission
 from .models import BookDelegate
 from .serializers import (
     BookDelegateListSerializer, BookDelegateDetailSerializer, BookDelegateWriteSerializer,
@@ -14,6 +15,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 
 class BookDelegateViewSet(RBACMixin, viewsets.ModelViewSet):
+    permission_classes = [crm_permission("bookings")]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = BookDelegateFilter
     search_fields   = [

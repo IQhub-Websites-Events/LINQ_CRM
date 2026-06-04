@@ -6,9 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Team, TeamActivityLog
 from .serializers import TeamSerializer, TeamActivityLogSerializer
 from accounts.permissions import IsAdminRole
+from accounts.crm_permissions import crm_permission
 
 
 class TeamViewSet(viewsets.ModelViewSet):
+    permission_classes = [crm_permission("teams")]
     serializer_class = TeamSerializer
 
     def get_queryset(self):
@@ -17,11 +19,6 @@ class TeamViewSet(viewsets.ModelViewSet):
         if not show_archived:
             qs = qs.filter(is_archived=False)
         return qs
-
-    def get_permissions(self):
-        if self.action in ("list", "retrieve"):
-            return [IsAuthenticated()]
-        return [IsAdminRole()]
 
     def perform_create(self, serializer):
         team = serializer.save()

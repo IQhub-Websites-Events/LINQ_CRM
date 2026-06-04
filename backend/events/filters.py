@@ -14,10 +14,11 @@ class EventFilter(django_filters.FilterSet):
     official_name   = django_filters.CharFilter(lookup_expr="icontains")
     accepting_web_bookings = django_filters.BooleanFilter()
     sales_executive = django_filters.NumberFilter(field_name="sales_executive__id")
+    team_leader     = django_filters.CharFilter(lookup_expr="icontains")
 
     class Meta:
         model  = Event
-        fields = ["status", "event_date_from", "event_date_to", "city", "event_code", "year", "name", "official_name", "accepting_web_bookings", "sales_executive"]
+        fields = ["status", "event_date_from", "event_date_to", "city", "event_code", "year", "name", "official_name", "accepting_web_bookings", "sales_executive", "team_leader"]
 
     def filter_status(self, queryset, name, value):
         today = timezone.now().date()

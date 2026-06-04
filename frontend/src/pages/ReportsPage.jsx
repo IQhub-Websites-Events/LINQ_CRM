@@ -11,7 +11,7 @@
  *   Documentation  — Markdown viewer for the complete reference doc
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { invoicesApi, reportsApi, searchApi } from "../api";
+import { invoicesApi, reportsApi, searchApi, editionGrowthApi } from "../api";
 import { useFetch } from "../hooks/useFetch";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
