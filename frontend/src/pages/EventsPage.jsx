@@ -24,6 +24,15 @@ function resolveNameToId(val, users) {
   return byName ? String(byName.id) : "";
 }
 
+// Ensures a URL always has a protocol so the browser treats it as absolute.
+// e.g. "www.example.com" → "https://www.example.com"
+function toAbsoluteUrl(url) {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;  // already has protocol
+  return "https://" + trimmed;
+}
+
 export function EventsPage() {
   const toast = useToast();
   const { isAdmin, user } = useAuth();
@@ -46,6 +55,10 @@ export function EventsPage() {
     team_leader: "",
   });
 
+  // filterKey is incremented on every filter change to guarantee the fetch
+  // useEffect re-runs even if page is already 1 (React won't re-run on same state value)
+  const [filterKey, setFilterKey] = useState(0);
+
   const [filterOptions, setFilterOptions] = useState({
     codes: [],
     names: [],
@@ -58,6 +71,7 @@ export function EventsPage() {
     setColFilters(prev => ({ ...prev, [key]: val }));
     setPage(1);
     setItems([]);
+    setFilterKey(k => k + 1);
   };
 
   useEffect(() => {
@@ -116,7 +130,9 @@ export function EventsPage() {
     });
 
     return () => { cancelled = true; };
-  }, [page, search, status, sort.key, sort.dir, colFilters]);
+    // filterKey ensures effect re-runs on filter change even if page stays 1
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, search, status, sort.key, sort.dir, colFilters, filterKey]);
 
   // IntersectionObserver — fires setPage(+1) when sentinel comes into view
   useEffect(() => {
@@ -367,114 +383,118 @@ export function EventsPage() {
         </div>
 
 
-        <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-            <thead>
+        <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0 }}>
+          <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <tr style={{ background: "var(--surface-alt)" }}>
-                <SortableTh sortKey="event_code" sort={sort} onSort={handleSort}>Code</SortableTh>
-                <SortableTh sortKey="name" sort={sort} onSort={handleSort}>Name</SortableTh>
-                <SortableTh sortKey="official_name" sort={sort} onSort={handleSort}>Official Name</SortableTh>
-                <SortableTh sortKey="city" sort={sort} onSort={handleSort}>City</SortableTh>
-                <SortableTh sortKey="event_date" sort={sort} onSort={handleSort}>Date</SortableTh>
-                <SortableTh sortKey="accepting_web_bookings" sort={sort} onSort={handleSort}>Web Bookings</SortableTh>
-                <SortableTh noSort>Status</SortableTh>
-                <SortableTh noSort>Sales Team Leader</SortableTh>
-                <SortableTh noSort></SortableTh>
+                {/* Fixed first col — always visible */}
+                <SortableTh sortKey="event_code" sort={sort} onSort={handleSort} style={{ minWidth: 110, position: "sticky", left: 0, zIndex: 11, background: "var(--surface-alt)" }}>Code</SortableTh>
+                {/* 31 field columns */}
+                <SortableTh sortKey="name" sort={sort} onSort={handleSort} style={{ minWidth: 220 }}>Official Event Name</SortableTh>
+                <SortableTh sortKey="event_date" sort={sort} onSort={handleSort} style={{ minWidth: 110 }}>Start Date</SortableTh>
+                <SortableTh noSort style={{ minWidth: 110 }}>End Date</SortableTh>
+                <SortableTh sortKey="city" sort={sort} onSort={handleSort} style={{ minWidth: 150 }}>Location</SortableTh>
+                <SortableTh noSort style={{ minWidth: 130 }}>Website</SortableTh>
+                <SortableTh noSort style={{ minWidth: 110 }}>Web Bookings</SortableTh>
+                <SortableTh noSort style={{ minWidth: 150 }}>Nearest Related Event</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>Event Type</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>Website Live Date</SortableTh>
+                <SortableTh noSort style={{ minWidth: 140 }}>Sales Check</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>VR1 Sent Status</SortableTh>
+                <SortableTh noSort style={{ minWidth: 140 }}>Sales Team</SortableTh>
+                <SortableTh noSort style={{ minWidth: 150 }}>Sales Team Leader</SortableTh>
+                <SortableTh noSort style={{ minWidth: 160 }}>Speaker Sales Team</SortableTh>
+                <SortableTh noSort style={{ minWidth: 160 }}>Telemarketing Team</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>SpEx Team</SortableTh>
+                <SortableTh noSort style={{ minWidth: 170 }}>Market Research Sr.</SortableTh>
+                <SortableTh noSort style={{ minWidth: 170 }}>Market Research Jr.</SortableTh>
+                <SortableTh noSort style={{ minWidth: 170 }}>Event Management</SortableTh>
+                <SortableTh noSort style={{ minWidth: 220 }}>Email Marketing Name</SortableTh>
+                <SortableTh noSort style={{ minWidth: 180 }}>Branding Name</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>Annualisation</SortableTh>
+                <SortableTh noSort style={{ minWidth: 120 }}>Date Format</SortableTh>
+                <SortableTh noSort style={{ minWidth: 130 }}>Related Event 1</SortableTh>
+                <SortableTh noSort style={{ minWidth: 130 }}>Related Event 2</SortableTh>
+                <SortableTh noSort style={{ minWidth: 130 }}>Related Event 3</SortableTh>
+                <SortableTh noSort style={{ minWidth: 140 }}>Upcoming Event 1</SortableTh>
+                <SortableTh noSort style={{ minWidth: 140 }}>Upcoming Event 2</SortableTh>
+                <SortableTh noSort style={{ minWidth: 140 }}>Upcoming Event 3</SortableTh>
+                <SortableTh noSort style={{ minWidth: 110 }}>Status</SortableTh>
+                {/* Actions */}
+                <SortableTh noSort style={{ minWidth: 80 }}></SortableTh>
               </tr>
+              {/* Filter row */}
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.event_code}
-                    onChange={(e) => handleColFilter("event_code", e.target.value)}
-                  >
+                <td style={{ padding: "4px 8px", position: "sticky", left: 0, zIndex: 9, background: "var(--surface)" }}>
+                  <select style={colFilterSelect} value={colFilters.event_code} onChange={(e) => handleColFilter("event_code", e.target.value)}>
                     <option value="">All</option>
                     {filterOptions.codes.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </td>
                 <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.name}
-                    onChange={(e) => handleColFilter("name", e.target.value)}
-                  >
+                  <select style={colFilterSelect} value={colFilters.name} onChange={(e) => handleColFilter("name", e.target.value)}>
                     <option value="">All</option>
                     {filterOptions.names.map(n => <option key={n} value={n}>{n}</option>)}
                   </select>
                 </td>
+                {/* Start Date — year filter */}
                 <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.official_name}
-                    onChange={(e) => handleColFilter("official_name", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {filterOptions.officialNames.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </td>
-                <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.city}
-                    onChange={(e) => handleColFilter("city", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </td>
-                <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.year}
-                    onChange={(e) => handleColFilter("year", e.target.value)}
-                  >
+                  <select style={colFilterSelect} value={colFilters.year} onChange={(e) => handleColFilter("year", e.target.value)}>
                     <option value="">All</option>
                     {filterOptions.years.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </td>
+                {/* End Date — no filter */}
+                <td style={{ padding: "4px 8px" }} />
+                {/* Location */}
                 <td style={{ padding: "4px 8px" }}>
-                  <select
-                    style={colFilterSelect}
-                    value={colFilters.accepting_web_bookings}
-                    onChange={(e) => handleColFilter("accepting_web_bookings", e.target.value)}
-                  >
+                  <select style={colFilterSelect} value={colFilters.city} onChange={(e) => handleColFilter("city", e.target.value)}>
+                    <option value="">All</option>
+                    {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
+                {/* Website — no filter */}
+                <td style={{ padding: "4px 8px" }} />
+                {/* Web Bookings */}
+                <td style={{ padding: "4px 8px" }}>
+                  <select style={colFilterSelect} value={colFilters.accepting_web_bookings} onChange={(e) => handleColFilter("accepting_web_bookings", e.target.value)}>
                     <option value="">All</option>
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
                 </td>
+                {/* Nearest Related, Event Type, Website Live Date, Sales Check, VR1, Sales Team — no filter cells */}
+                <td /><td /><td /><td /><td /><td />
+                {/* Sales Team Leader filter */}
                 <td style={{ padding: "4px 8px" }}>
                   <select
-                    style={colFilterSelect}
-                    value={colFilters.status}
-                    onChange={(e) => handleColFilter("status", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
-                <td style={{ padding: "4px 8px" }}>
-                  <select
+                    id="filter-team-leader"
                     style={colFilterSelect}
                     value={colFilters.team_leader || ""}
                     onChange={(e) => handleColFilter("team_leader", e.target.value)}
                   >
                     <option value="">All</option>
                     {allUsers.filter(u => u.team_name === "Sales Team" && u.is_team_lead).map(u => (
-                      <option key={u.id} value={u.full_name}>
-                        {u.full_name || u.username}
-                      </option>
+                      <option key={u.id} value={u.full_name}>{u.full_name || u.username}</option>
                     ))}
                   </select>
                 </td>
-
-                <td></td>
+                {/* Speaker Sales, Telemarketing, SpEx, MR Sr, MR Jr, Event Mgmt, Email Mktg, Branding, Annualisation, Date Format, Related 1-3, Upcoming 1-3 — no filters */}
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td />
+                {/* Status filter */}
+                <td style={{ padding: "4px 8px" }}>
+                  <select style={colFilterSelect} value={colFilters.status} onChange={(e) => handleColFilter("status", e.target.value)}>
+                    <option value="">All</option>
+                    {EVENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td />
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                <tr><td colSpan={33} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
               ) : items.length === 0 ? (
                 <EmptyState title="No events found" />
               ) : items?.map((ev) => (
@@ -484,23 +504,87 @@ export function EventsPage() {
                   onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-alt)"}
                   onMouseLeave={(e) => e.currentTarget.style.background = ""}
                 >
-                  <Td><span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span></Td>
-                  <Td><span style={{ fontWeight: 600, fontSize: 13 }}>{ev.name}</span></Td>
-                  <Td muted>{ev.official_name || "—"}</Td>
-                  <Td muted>{ev.city}</Td>
-                  <Td mono>{fmt.date(ev.event_date)}</Td>
-                  <Td><span className={`badge badge-soft-${ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
-                  <Td><EventStatusBadge status={ev.event_status} /></Td>
+                  {/* 1. Event Code — sticky */}
+                  <Td style={{ position: "sticky", left: 0, background: "inherit", zIndex: 2 }}>
+                    <span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span>
+                  </Td>
+                  {/* 2. Official Event Name */}
+                  <Td><span style={{ fontWeight: 600, fontSize: 13 }}>{ev.official_event_name || ev.name || "—"}</span></Td>
+                  {/* 3. Start Date */}
+                  <Td mono>{fmt.date(ev.event_date) || "—"}</Td>
+                  {/* 4. End Date */}
+                  <Td mono>{fmt.date(ev.end_date) || "—"}</Td>
+                  {/* 5. Location */}
+                  <Td muted>{ev.location || ev.city || "—"}</Td>
+                  {/* 6. Website */}
                   <Td>
-                    {ev.team_leader
-                      ? <span style={{
-                          fontSize: 11, fontWeight: 600, padding: "2px 7px",
-                          borderRadius: 20, background: "rgba(64,81,137,0.1)",
-                          color: "var(--accent)", whiteSpace: "nowrap",
-                        }}>{ev.team_leader}</span>
+                    {ev.website
+                      ? <a
+                          href={toAbsoluteUrl(ev.website)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ color: "var(--accent)", fontSize: 11, textDecoration: "underline", whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", display: "block" }}
+                        >{ev.website}</a>
                       : <span style={{ color: "var(--text-faint)" }}>—</span>
                     }
                   </Td>
+                  {/* 7. Web Bookings */}
+                  <Td><span className={`badge badge-soft-${ev.web_bookings || ev.accepting_web_bookings ? 'success' : 'secondary'}`}>{ev.web_bookings || ev.accepting_web_bookings ? 'YES' : 'NO'}</span></Td>
+                  {/* 8. Nearest Related Event */}
+                  <Td muted>{ev.nearest_related_event || "—"}</Td>
+                  {/* 9. Event Type */}
+                  <Td muted>{ev.event_type || "—"}</Td>
+                  {/* 10. Website Live Date */}
+                  <Td mono>{fmt.date(ev.website_live_date) || "—"}</Td>
+                  {/* 11. Sales Check */}
+                  <Td muted>{ev.sales_check || "—"}</Td>
+                  {/* 12. VR1 Sent Status */}
+                  <Td muted>{ev.vr1_sent_status || "—"}</Td>
+                  {/* 13. Sales Team */}
+                  <Td muted>{ev.sales_team || "—"}</Td>
+                  {/* 14. Sales Team Leader */}
+                  <Td>
+                    {ev.team_leader
+                      ? <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "rgba(64,81,137,0.1)", color: "var(--accent)", whiteSpace: "nowrap" }}>{ev.team_leader}</span>
+                      : <span style={{ color: "var(--text-faint)" }}>—</span>
+                    }
+                  </Td>
+                  {/* 15. Speaker Sales Team */}
+                  <Td muted>{ev.speaker_sales_team || "—"}</Td>
+                  {/* 16. Telemarketing Team */}
+                  <Td muted>{ev.telemarketing_team || "—"}</Td>
+                  {/* 17. SpEx Team */}
+                  <Td muted>{ev.spex_team || "—"}</Td>
+                  {/* 18. Market Research Sr. */}
+                  <Td muted>{ev.market_research_senior || "—"}</Td>
+                  {/* 19. Market Research Jr. */}
+                  <Td muted>{ev.market_research_junior || "—"}</Td>
+                  {/* 20. Event Management Team */}
+                  <Td muted>{ev.event_management_team || "—"}</Td>
+                  {/* 21. Email Marketing Name */}
+                  <Td muted>{ev.email_marketing_name || "—"}</Td>
+                  {/* 22. Branding Name */}
+                  <Td muted>{ev.branding_name || "—"}</Td>
+                  {/* 23. Annualisation */}
+                  <Td muted>{ev.annualisation || "—"}</Td>
+                  {/* 24. Date Format */}
+                  <Td muted>{ev.date_format || "—"}</Td>
+                  {/* 25. Related Event 1 */}
+                  <Td muted>{ev.related_event_1 || "—"}</Td>
+                  {/* 26. Related Event 2 */}
+                  <Td muted>{ev.related_event_2 || "—"}</Td>
+                  {/* 27. Related Event 3 */}
+                  <Td muted>{ev.related_event_3 || "—"}</Td>
+                  {/* 28. Upcoming Event 1 */}
+                  <Td muted>{ev.upcoming_event_1 || "—"}</Td>
+                  {/* 29. Upcoming Event 2 */}
+                  <Td muted>{ev.upcoming_event_2 || "—"}</Td>
+                  {/* 30. Upcoming Event 3 */}
+                  <Td muted>{ev.upcoming_event_3 || "—"}</Td>
+                  {/* 31. Status */}
+                  <Td><EventStatusBadge status={ev.event_status || ev.status} /></Td>
+                  {/* Actions */}
                   <Td>
                     <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                       <button
@@ -535,7 +619,6 @@ export function EventsPage() {
                     </div>
                   </Td>
                 </tr>
-
               ))}
             </tbody>
           </table>

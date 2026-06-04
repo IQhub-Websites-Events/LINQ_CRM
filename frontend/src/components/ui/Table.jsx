@@ -1,7 +1,7 @@
 /**
  * Reusable table primitives: SortableTh, Pager, EmptyState.
  */
-export function SortableTh({ children, sortKey, sort, onSort, align = "left", width, noSort }) {
+export function SortableTh({ children, sortKey, sort, onSort, align = "left", width, noSort, style: extraStyle = {} }) {
   const active = !noSort && sortKey && sort?.key === sortKey;
   return (
     <th onClick={() => !noSort && sortKey && onSort(sortKey)} width={width}
@@ -13,6 +13,7 @@ export function SortableTh({ children, sortKey, sort, onSort, align = "left", wi
         textAlign: align, borderBottom: "1px solid var(--border)",
         whiteSpace: "nowrap", cursor: noSort ? "default" : "pointer",
         userSelect: "none",
+        ...extraStyle,
       }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
         {children}

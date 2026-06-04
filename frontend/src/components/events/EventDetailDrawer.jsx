@@ -305,7 +305,7 @@ export function EventDetailDrawer({ eventId, onClose }) {
                 <InfoItem label="Location" value={event.location || "—"} />
 
                 {/* 5. Website */}
-                <InfoItem label="Website" value={event.website ? <a href={event.website} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>{event.website}</a> : "—"} span />
+                <InfoItem label="Website" value={event.website ? <a href={(() => { const u = event.website.trim(); return /^https?:\/\//i.test(u) ? u : "https://" + u; })()} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>{event.website}</a> : "—"} span />
 
                 {/* 6. Web Bookings */}
                 <InfoItem label="Web Bookings" value={event.web_bookings ? "Yes" : "No"} />
