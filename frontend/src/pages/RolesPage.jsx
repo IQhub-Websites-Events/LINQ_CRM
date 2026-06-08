@@ -90,10 +90,16 @@ export function RolesPage() {
   };
 
   const handleDeleteRole = async (role) => {
-    if (!window.confirm(`Delete role "${role.display_label}"?`)) return;
+    const memberCount = role.user_count || 0;
+    const systemWarning = role.is_system_role
+      ? `\n\n⚠ This is a system role. Deleting it will remove permissions from ${memberCount} user${memberCount !== 1 ? "s" : ""}.`
+      : memberCount > 0
+        ? `\n\nThis will remove the role from ${memberCount} user${memberCount !== 1 ? "s" : ""}.`
+        : "";
+    if (!window.confirm(`Delete role "${role.display_label}"?${systemWarning}\n\nThis cannot be undone.`)) return;
     try {
       await customRolesApi.delete(role.id);
-      toast.success("Role deleted.");
+      toast.success(`Role "${role.display_label}" deleted.`);
       if (selectedRole?.id === role.id) setSelectedRole(null);
       fetchData(true);
     } catch (err) {
@@ -145,9 +151,7 @@ export function RolesPage() {
                       </div>
                       <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
                         <button onClick={() => { setEditRole(role); setModalOpen(true); }} style={iconBtn} title="Edit">✎</button>
-                        {!role.is_system_role && (
-                          <button onClick={() => handleDeleteRole(role)} style={{ ...iconBtn, color: "var(--danger)" }} title="Delete">✕</button>
-                        )}
+                        <button onClick={() => handleDeleteRole(role)} style={{ ...iconBtn, color: "var(--danger)" }} title="Delete">✕</button>
                       </div>
                     </div>
 

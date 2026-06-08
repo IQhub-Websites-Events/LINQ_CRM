@@ -15,4 +15,7 @@ export const delegatesApi = {
 
   update: (id, payload) =>
     client.patch(`/delegates/${id}/`, payload).then((r) => r.data),
+
+  bulkDelete: (ids) =>
+    client.post("/delegates/bulk_delete/", { ids }).then((r) => r.data),
 };

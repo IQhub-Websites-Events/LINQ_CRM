@@ -1,8 +1,9 @@
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounts.permissions import RBACMixin
+from accounts.permissions import RBACMixin, IsAdminRole
 from accounts.crm_permissions import crm_permission
 from .models import BookDelegate
 from .serializers import (
@@ -54,6 +55,28 @@ class BookDelegateViewSet(RBACMixin, viewsets.ModelViewSet):
         """GET /api/delegates/by_invoice/{invoice_number}/"""
         qs = self.get_queryset().filter(invoice__invoice_number=invoice_number)
         return Response(BookDelegateListSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=["post"], url_path="bulk_delete",
+            permission_classes=[IsAdminRole])
+    def bulk_delete(self, request):
+        """Admin-only: delete up to 1000 delegate records by ID."""
+        from accounts.models import ActionLog
+        ids = request.data.get("ids", [])
+        if not isinstance(ids, list) or not ids:
+            return Response({"detail": "ids list required"}, status=400)
+        if len(ids) > 1000:
+            return Response({"detail": "Maximum 1000 IDs per request"}, status=400)
+
+        with transaction.atomic():
+            qs    = BookDelegate.objects.filter(id__in=ids)
+            count = qs.count()
+            ActionLog.objects.create(
+                user    = request.user,
+                action  = f"Bulk deleted {count} booking delegates",
+                details = f"IDs (first 50): {ids[:50]}",
+            )
+            qs.delete()
+        return Response({"deleted": count})
 
     @action(detail=True, methods=["patch"], url_path="update_attendance")
     def update_attendance(self, request, pk=None):

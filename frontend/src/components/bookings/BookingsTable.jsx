@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { delegatesApi, invoicesApi, eventsApi } from "../../api";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -27,6 +27,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const toast = useToast();
   const { user } = useAuth();
   const isSalesOrAdmin = user?.role === "admin" || user?.role === "sales";
+  const isAdmin = user?.role === "admin";
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -61,12 +62,17 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
     discount: "",
   });
 
+  const [selected, setSelected]   = useState(new Set());
+  const [deleting, setDeleting]   = useState(false);
+  const headerCbRef               = useRef(null);
+
   const [events, setEvents] = useState([]);
   const [editInvId, setEditInvId] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [datePopup, setDatePopup] = useState(null);
 
   const load = useCallback(async (p = 1, append = false) => {
+    if (!append) setSelected(new Set());   // clear selection on fresh load
     if (p > 1) setFetchingMore(true);
     else setLoading(true);
 
@@ -145,6 +151,41 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
 
   const uniqueEditions = ["2024", "2025", "2026"];
 
+  // ── Selection helpers ────────────────────────────────────────────────────
+  const allSelected  = data.length > 0 && selected.size === data.length;
+  const someSelected = selected.size > 0 && selected.size < data.length;
+
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  const handleToggleSelect = useCallback((id, checked) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = async () => {
+    const count = Math.min(selected.size, 1000);
+    if (!window.confirm(
+      `Permanently delete ${count} booking record${count !== 1 ? "s" : ""}?\n\nThis cannot be undone.`
+    )) return;
+    const ids = [...selected].slice(0, 1000);
+    setDeleting(true);
+    try {
+      const result = await delegatesApi.bulkDelete(ids);
+      toast.success(`Deleted ${result.deleted} record${result.deleted !== 1 ? "s" : ""}.`);
+      setSelected(new Set());
+      load(1, false);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Bulk delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleColFilter = (key, val) => {
     setColFilters(prev => ({ ...prev, [key]: val }));
     setPage(1);
@@ -221,8 +262,14 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <tr style={{ background: "var(--surface-alt)" }}>
-                <Th style={{ width: 32 }}>
-                  <input type="checkbox" style={{ accentColor: "var(--accent)" }} />
+                <Th style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    ref={headerCbRef}
+                    style={{ accentColor: "var(--accent)" }}
+                    checked={allSelected}
+                    onChange={e => setSelected(e.target.checked ? new Set(data.map(r => r.id)) : new Set())}
+                  />
                 </Th>
                 <SortTh sortKey="_sort_status" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 130 }}>Status</SortTh>
                 <SortTh sortKey="_sort_invoice" current={sortKey} dir={sortDir} onSort={handleSort} style={{ minWidth: 140 }}>Invoice</SortTh>
@@ -249,7 +296,7 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
               </tr>
               {/* Filter Row */}
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                <td style={{ width: 32 }}></td>
+                <td style={{ width: 40 }}></td>
                 <td style={{ padding: "4px 14px" }}>
                   <select
                     style={colFilterInput}
@@ -451,6 +498,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                     key={row.id}
                     delegate={row}
                     onEdit={() => setEditInvId(row.book_event_id)}
+                    isSelected={selected.has(row.id)}
+                    onToggle={handleToggleSelect}
                   />
                 ))
               )}
@@ -481,6 +530,42 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
             <span style={{ fontSize: 11, color: "var(--text-faint)" }}>All records loaded</span>
           )}
         </div>
+
+        {/* Sticky bulk-action bar */}
+        {selected.size > 0 && (
+          <div style={{
+            position: "sticky", bottom: 0, zIndex: 20,
+            background: "var(--accent)", color: "#fff",
+            padding: "10px 20px",
+            display: "flex", alignItems: "center", gap: 14,
+            borderTop: "1px solid rgba(255,255,255,0.2)",
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {selected.size.toLocaleString()} selected
+            </span>
+            <button
+              onClick={() => setSelected(new Set())}
+              style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", cursor: "pointer", fontSize: 13 }}
+            >
+              ✕ Deselect all
+            </button>
+            {isAdmin && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                style={{
+                  padding: "4px 14px", borderRadius: 6, border: "none",
+                  background: "rgba(220,53,69,0.9)", color: "#fff",
+                  cursor: deleting ? "not-allowed" : "pointer",
+                  fontWeight: 600, fontSize: 13, marginLeft: "auto",
+                  opacity: deleting ? 0.7 : 1,
+                }}
+              >
+                {deleting ? "Deleting…" : `🗑 Delete ${selected.size > 1000 ? `(max 1000 — ${selected.size} selected)` : selected.size}`}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <BookingEditModal
@@ -516,23 +601,28 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
 }
 
 
-const DelegateRow = memo(({ delegate, onEdit }) => {
+const DelegateRow = memo(({ delegate, onEdit, isSelected, onToggle }) => {
   return (
     <tr
       onClick={onEdit}
       style={{
         height: 44,
         borderTop: "1px solid var(--border)",
-        background: "transparent",
+        background: isSelected ? "color-mix(in srgb, var(--accent) 8%, var(--surface))" : "transparent",
         cursor: "pointer",
         transition: "background 0.1s",
         fontSize: 13,
       }}
-      onMouseOver={(e) => { e.currentTarget.style.background = "var(--surface-alt)"; }}
-      onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
+      onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--surface-alt)"; }}
+      onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
     >
-      <td style={{ ...cell, width: 32 }}>
-        <input type="checkbox" style={{ accentColor: "var(--accent)" }} onClick={(e) => e.stopPropagation()} />
+      <td style={{ ...cell, width: 40 }} onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          style={{ accentColor: "var(--accent)" }}
+          checked={isSelected}
+          onChange={e => onToggle(delegate.id, e.target.checked)}
+        />
       </td>
 
       <td style={cell}>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { usersApi, teamsApi } from '../api';
+import { usersApi, teamsApi, customRolesApi } from '../api';
 import { useToast } from '../contexts/ToastContext';
 import { Avatar } from '../components/ui/Avatar';
 import { UserModal } from '../components/users/UserModal';
@@ -9,6 +9,7 @@ export function UsersPage() {
   const toast = useToast();
   const [users, setUsers] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [customRoles, setCustomRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({ role: '', status: '', team: '' });
@@ -18,7 +19,7 @@ export function UsersPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerUser, setDrawerUser] = useState(null);
 
-  useEffect(() => { fetchData(); fetchTeams(); }, []);
+  useEffect(() => { fetchData(); fetchTeams(); fetchRoles(); }, []);
 
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -36,6 +37,13 @@ export function UsersPage() {
     try {
       const res = await teamsApi.list();
       setTeams(res.results || res);
+    } catch {}
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const res = await customRolesApi.list();
+      setCustomRoles(Array.isArray(res) ? res : (res.results || []));
     } catch {}
   };
 
@@ -67,7 +75,8 @@ export function UsersPage() {
       user.username.toLowerCase().includes(q) ||
       (user.full_name || '').toLowerCase().includes(q) ||
       user.email.toLowerCase().includes(q);
-    const matchRole = !filters.role || user.role === filters.role;
+    // Filter by custom_role_id if a role is selected
+    const matchRole = !filters.role || String(user.custom_role_id) === filters.role;
     const matchStatus = !filters.status || user.status === filters.status;
     const matchTeam = !filters.team || user.team_id?.toString() === filters.team;
     return matchSearch && matchRole && matchStatus && matchTeam;
@@ -131,14 +140,9 @@ export function UsersPage() {
 
           <select value={filters.role} onChange={(e) => setFilters({ ...filters, role: e.target.value })} style={selectStyle}>
             <option value="">All Roles</option>
-            <option value="admin">Admin</option>
-            <option value="sales">Sales</option>
-            <option value="speaker_sales">Speaker Sales</option>
-            <option value="telemarketing">Telemarketing</option>
-            <option value="market_research">Market Research</option>
-            <option value="data_mining">Data Mining</option>
-            <option value="spex">SpEx</option>
-            <option value="operations">Operations</option>
+            {customRoles.map(r => (
+              <option key={r.id} value={String(r.id)}>{r.display_label}</option>
+            ))}
           </select>
           <select value={filters.team} onChange={(e) => setFilters({ ...filters, team: e.target.value })} style={selectStyle}>
             <option value="">All Teams</option>

@@ -10,44 +10,46 @@ const PAGE_SIZE = 50;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const COLUMNS = [
-  // ── Identifier ────────────────────────────────────────────────────
-  { key: "ticket_number",        label: "Ticket #",             minWidth: 160, filterType: "text",   section: "Identifier",  defaultVisible: true  },
-  { key: "external_id",          label: "Zoho ID",              minWidth: 160, filterType: "text",   section: "Identifier",  defaultVisible: true },
+  // ── Identifier (primary) ──────────────────────────────────────────
   { key: "status",               label: "Status",               minWidth: 130, filterType: "select", section: "Identifier",  defaultVisible: true  },
-  { key: "created_at",           label: "Created",              minWidth: 120, filterType: "date",   section: "Identifier",  defaultVisible: true  },
-  { key: "updated_at",           label: "Last Updated",         minWidth: 120, filterType: "date",   section: "Identifier",  defaultVisible: true },
+  { key: "ticket_number",        label: "Ticket #",             minWidth: 160, filterType: "text",   section: "Identifier",  defaultVisible: true  },
   // ── MR Section ────────────────────────────────────────────────────
   { key: "purpose",              label: "Purpose",              minWidth: 100, filterType: "text",   section: "MR Section",  defaultVisible: true  },
   { key: "type_of_ticket",       label: "Type of Ticket",       minWidth: 140, filterType: "text",   section: "MR Section",  defaultVisible: true  },
-  { key: "competitor_event_name",label: "Competitor Event",     minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true },
+  { key: "competitor_event_name",label: "Competitor Event",     minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true  },
   { key: "organizer",            label: "Organizer",            minWidth: 140, filterType: "text",   section: "MR Section",  defaultVisible: true  },
-  { key: "event_month_year",     label: "Event Month/Year",     minWidth: 130, filterType: "date",   section: "MR Section",  defaultVisible: true },
-  { key: "event_location",       label: "Event Location",       minWidth: 160, filterType: "text",   section: "MR Section",  defaultVisible: true },
-  { key: "relationship",         label: "Relationship",         minWidth: 120, filterType: "text",   section: "MR Section",  defaultVisible: true },
+  { key: "event_month_year",     label: "Event Month/Year",     minWidth: 130, filterType: "date",   section: "MR Section",  defaultVisible: true  },
+  { key: "event_location",       label: "Event Location",       minWidth: 160, filterType: "text",   section: "MR Section",  defaultVisible: true  },
+  { key: "relationship",         label: "Relationship",         minWidth: 120, filterType: "text",   section: "MR Section",  defaultVisible: true  },
   { key: "priority",             label: "Priority",             minWidth: 110, filterType: "text",   section: "MR Section",  defaultVisible: true  },
-  { key: "estimate",             label: "Estimate",             minWidth: 100, filterType: "number", section: "MR Section",  defaultVisible: true },
+  { key: "estimate",             label: "Estimate",             minWidth: 100, filterType: "number", section: "MR Section",  defaultVisible: true  },
   { key: "assigned_mr",          label: "Assigned MR",          minWidth: 160, filterType: "text",   section: "MR Section",  defaultVisible: true  },
-  { key: "link_url",             label: "Link URL",             minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true },
-  { key: "linkedin_keywords",    label: "LinkedIn Keywords",    minWidth: 160, filterType: "text",   section: "MR Section",  defaultVisible: true },
-  { key: "duplicate_tickets",    label: "Duplicate Tickets",    minWidth: 140, filterType: "text",   section: "MR Section",  defaultVisible: true },
-  { key: "mr_comments",          label: "MR Comments",          minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true },
+  { key: "link_url",             label: "Link URL",             minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true  },
+  { key: "linkedin_keywords",    label: "LinkedIn Keywords",    minWidth: 160, filterType: "text",   section: "MR Section",  defaultVisible: true  },
+  { key: "duplicate_tickets",    label: "Duplicate Tickets",    minWidth: 140, filterType: "text",   section: "MR Section",  defaultVisible: true  },
+  { key: "mr_comments",          label: "MR Comments",          minWidth: 180, filterType: "text",   section: "MR Section",  defaultVisible: true  },
   // ── DMD Section ───────────────────────────────────────────────────
   { key: "assign_name",          label: "Assign Name",          minWidth: 150, filterType: "text",   section: "DMD Section", defaultVisible: true  },
-  { key: "assign_date",          label: "Assign Date",          minWidth: 120, filterType: "date",   section: "DMD Section", defaultVisible: true },
-  { key: "ticket_type",          label: "Ticket Type",          minWidth: 120, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "actual_number",        label: "Actual Number",        minWidth: 120, filterType: "number", section: "DMD Section", defaultVisible: true },
-  { key: "new_contacts_created", label: "New Contacts",         minWidth: 130, filterType: "number", section: "DMD Section", defaultVisible: true },
-  { key: "mined_count",          label: "Mined Count",          minWidth: 120, filterType: "number", section: "DMD Section", defaultVisible: true },
-  { key: "complete_date",        label: "Complete Date",        minWidth: 130, filterType: "date",   section: "DMD Section", defaultVisible: true },
-  { key: "hubspot_entry_date",   label: "HubSpot Entry Date",   minWidth: 150, filterType: "date",   section: "DMD Section", defaultVisible: true },
-  { key: "dm_comments",          label: "DM Comments",          minWidth: 180, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "assign_name_lx2",      label: "Assign Name (LX-2)",   minWidth: 150, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "actual_count_lx2",     label: "Actual Count (LX-2)",  minWidth: 140, filterType: "number", section: "DMD Section", defaultVisible: true },
-  { key: "complete_date_lx2",    label: "Complete Date - LX2",  minWidth: 150, filterType: "date",   section: "DMD Section", defaultVisible: true },
-  { key: "dm_comments_lx2",      label: "DM Comments (LX-2)",   minWidth: 180, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "source_spreadsheet_id",label: "Source Sheet ID",      minWidth: 140, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "source_tab",           label: "Source Tab",           minWidth: 120, filterType: "text",   section: "DMD Section", defaultVisible: true },
-  { key: "idempotency_key",      label: "Idempotency Key",      minWidth: 150, filterType: "text",   section: "DMD Section", defaultVisible: true },
+  { key: "assign_date",          label: "Assign Date",          minWidth: 120, filterType: "date",   section: "DMD Section", defaultVisible: true  },
+  { key: "ticket_type",          label: "Ticket Type",          minWidth: 120, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  { key: "actual_number",        label: "Actual Number",        minWidth: 120, filterType: "number", section: "DMD Section", defaultVisible: true  },
+  { key: "new_contacts_created", label: "New Contacts",         minWidth: 130, filterType: "number", section: "DMD Section", defaultVisible: true  },
+  { key: "mined_count",          label: "Mined Count",          minWidth: 120, filterType: "number", section: "DMD Section", defaultVisible: true  },
+  { key: "complete_date",        label: "Complete Date",        minWidth: 130, filterType: "date",   section: "DMD Section", defaultVisible: true  },
+  { key: "hubspot_entry_date",   label: "HubSpot Entry Date",   minWidth: 150, filterType: "date",   section: "DMD Section", defaultVisible: true  },
+  { key: "dm_comments",          label: "DM Comments",          minWidth: 180, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  { key: "assign_name_lx2",      label: "Assign Name (LX-2)",   minWidth: 150, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  { key: "actual_count_lx2",     label: "Actual Count (LX-2)",  minWidth: 140, filterType: "number", section: "DMD Section", defaultVisible: true  },
+  { key: "complete_date_lx2",    label: "Complete Date - LX2",  minWidth: 150, filterType: "date",   section: "DMD Section", defaultVisible: true  },
+  { key: "dm_comments_lx2",      label: "DM Comments (LX-2)",   minWidth: 180, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  // ── Identifier (audit) ────────────────────────────────────────────
+  { key: "created_at",           label: "Created",              minWidth: 120, filterType: "date",   section: "Identifier",  defaultVisible: true  },
+  { key: "updated_at",           label: "Last Updated",         minWidth: 120, filterType: "date",   section: "Identifier",  defaultVisible: true  },
+  { key: "external_id",          label: "Zoho ID",              minWidth: 160, filterType: "text",   section: "Identifier",  defaultVisible: true  },
+  // ── DMD Section (source) ─────────────────────────────────────────
+  { key: "source_spreadsheet_id",label: "Source Sheet ID",      minWidth: 140, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  { key: "source_tab",           label: "Source Tab",           minWidth: 120, filterType: "text",   section: "DMD Section", defaultVisible: true  },
+  { key: "idempotency_key",      label: "Idempotency Key",      minWidth: 150, filterType: "text",   section: "DMD Section", defaultVisible: true  },
 ];
 
 const SORTABLE = new Set(["created_at", "updated_at", "status", "priority"]);
@@ -152,7 +154,7 @@ export function TicketTable({ statusFilter = "", onChanged }) {
 
   const [visibleKeys, setVisibleKeys] = useState(() => {
     try {
-      const saved = localStorage.getItem("tc_visible_columns");
+      const saved = localStorage.getItem("tc_visible_columns_v2");
       return saved ? JSON.parse(saved) : COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
     } catch {
       return COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
@@ -177,7 +179,7 @@ export function TicketTable({ statusFilter = "", onChanged }) {
       ? visibleKeys.filter(k => k !== key)
       : [...visibleKeys, key];
     setVisibleKeys(next);
-    localStorage.setItem("tc_visible_columns", JSON.stringify(next));
+    localStorage.setItem("tc_visible_columns_v2", JSON.stringify(next));
   };
 
   const load = useCallback(async (p = 1, append = false) => {
@@ -331,7 +333,7 @@ export function TicketTable({ statusFilter = "", onChanged }) {
                 onClick={() => {
                   const defaults = COLUMNS.filter(c => c.defaultVisible).map(c => c.key);
                   setVisibleKeys(defaults);
-                  localStorage.setItem("tc_visible_columns", JSON.stringify(defaults));
+                  localStorage.setItem("tc_visible_columns_v2", JSON.stringify(defaults));
                 }}
                 style={{ marginTop: 4, fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
               >

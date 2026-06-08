@@ -485,18 +485,13 @@ class TeamViewSet(viewsets.ViewSet):
 
 
 class CustomRoleViewSet(viewsets.ModelViewSet):
-    """Admin-only CRUD for roles. System roles cannot be deleted."""
+    """Admin-only CRUD for roles."""
     permission_classes = [IsAdminRole]
     queryset           = CustomRole.objects.prefetch_related("permissions").all()
     serializer_class   = CustomRoleSerializer
 
     def destroy(self, request, *args, **kwargs):
-        role = self.get_object()
-        if role.is_system_role:
-            return Response(
-                {"detail": "System roles cannot be deleted."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        """Allow deletion of any role. Users assigned to it will have custom_role set to NULL."""
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["put"], url_path="permissions")

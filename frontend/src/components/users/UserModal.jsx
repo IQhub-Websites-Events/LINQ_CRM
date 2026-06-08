@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { teamsApi, eventsApi, usersApi } from '../../api';
+import { teamsApi, eventsApi, usersApi, customRolesApi } from '../../api';
 import { useToast } from '../../contexts/ToastContext';
 
 export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
@@ -7,12 +7,14 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
   const [loading, setLoading] = useState(false);
   const [teams, setTeams] = useState([]);
   const [events, setEvents] = useState([]);
+  const [customRoles, setCustomRoles] = useState([]);
   const [formData, setFormData] = useState({
     username: '', email: '',
     first_name: '', last_name: '',
     role: 'sales', status: 'active',
     team_id: defaultTeamId || '', assigned_event_ids: [],
     mapped_lead_id: '',
+    custom_role_id: '',
   });
 
   useEffect(() => {
@@ -26,6 +28,7 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
         team_id: user.team_id || '',
         assigned_event_ids: user.assigned_events?.map((e) => e.id) || [],
         mapped_lead_id: user.mapped_lead_id || '',
+        custom_role_id: user.custom_role_id || '',
       });
     } else {
       setFormData({
@@ -34,6 +37,7 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
         role: 'sales', status: 'active',
         team_id: defaultTeamId || '', assigned_event_ids: [],
         mapped_lead_id: '',
+        custom_role_id: '',
       });
     }
   }, [isOpen, user, defaultTeamId]);
@@ -75,16 +79,20 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
 
   const fetchOptions = async () => {
     try {
-      const [teamsRes, eventsRes] = await Promise.all([
+      const [teamsRes, eventsRes, rolesRes] = await Promise.all([
         teamsApi.list(),
         eventsApi.list({ limit: 1000 }),
+        customRolesApi.list(),
       ]);
       const list = teamsRes.results || teamsRes;
       setTeams(list);
       setEvents(eventsRes.results || eventsRes);
 
+      // Roles from the Roles module — use as dynamic dropdown options
+      const rolesList = Array.isArray(rolesRes) ? rolesRes : (rolesRes.results || []);
+      setCustomRoles(rolesList);
+
       // Auto-assign team on initial load if creating a new user and team_id not set.
-      // Use functional update to read current state, not stale closure.
       if (!user) {
         setFormData(f => {
           if (!f.team_id && f.role) {
@@ -109,12 +117,24 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
     }
   }, [formData.first_name, formData.last_name]);
 
-  const handleRoleChange = (newRole) => {
-    const mappedTeamId = getMappedTeamIdForRole(newRole, teams);
+  // When a custom role is selected from the dropdown, derive the underlying
+  // permission-level role from the CustomRole's `name` field, which should
+  // match the User.Role enum (admin, sales, speaker_sales, etc.).
+  // If the name doesn't match any known enum value, fall back to 'sales'.
+  const VALID_ROLES = ['admin', 'sales', 'speaker_sales', 'telemarketing', 'market_research', 'data_mining', 'spex', 'operations'];
+
+  const handleRoleChange = (customRoleId) => {
+    const selectedCustomRole = customRoles.find(r => String(r.id) === String(customRoleId));
+    // Derive the underlying permission role from the custom role's name
+    const derivedRole = selectedCustomRole && VALID_ROLES.includes(selectedCustomRole.name)
+      ? selectedCustomRole.name
+      : 'sales'; // safe fallback
+    const mappedTeamId = getMappedTeamIdForRole(derivedRole, teams);
     setFormData(f => ({
       ...f,
-      role: newRole,
-      team_id: mappedTeamId || ''
+      custom_role_id: customRoleId,
+      role: derivedRole,
+      team_id: mappedTeamId || f.team_id,  // keep existing team if no match
     }));
   };
 
@@ -215,15 +235,14 @@ export function UserModal({ user, isOpen, onClose, onSave, defaultTeamId }) {
 
                         <FormSection title="Organisation" desc="Role, team, and event access." last>
               <Field key="role-field" label="Role" span={2}>
-                <MSelect value={formData.role} onChange={handleRoleChange} options={[
-                  { value: 'admin', label: 'Administrator' },
-                  { value: 'sales', label: 'Sales Executive' },
-                  { value: 'speaker_sales', label: 'Speaker Sales' },
-                  { value: 'telemarketing', label: 'Telemarketing' },
-                  { value: 'market_research', label: 'Market Research' },
-                  { value: 'spex', label: 'SpEx' },
-                  { value: 'operations', label: 'Operations' },
-                ]} />
+                <MSelect
+                  value={String(formData.custom_role_id || '')}
+                  onChange={handleRoleChange}
+                  options={[
+                    { value: '', label: 'Select a role…' },
+                    ...customRoles.map(r => ({ value: String(r.id), label: r.display_label })),
+                  ]}
+                />
               </Field>
               <Field key="team-field" label="Team" span={2}>
                 <MSelect value={formData.team_id} onChange={(v) => set('team_id', v)} disabled={true} options={[
