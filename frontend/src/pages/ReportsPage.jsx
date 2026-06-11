@@ -50,7 +50,6 @@ export function ReportsPage() {
       ["registry", "Sheet Registry"],
       ["data", "Report Data"],
       ["logs", "Sync Logs"],
-      ["docs", "Documentation"],
     ] : []),
   ];
 
@@ -84,8 +83,7 @@ export function ReportsPage() {
           tab === "growth" ? <EventGrowthTab key="growth-tab" /> :
             tab === "registry" ? <RegistryTab key="registry-tab" /> :
               tab === "data" ? <DataTab key="data-tab" /> :
-                tab === "logs" ? <SyncLogsTab key="logs-tab" /> :
-                  tab === "docs" ? <DocsTab key="docs-tab" /> : null}
+                tab === "logs" ? <SyncLogsTab key="logs-tab" /> : null}
       </div>
     </div>
   );

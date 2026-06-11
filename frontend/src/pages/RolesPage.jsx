@@ -142,14 +142,14 @@ export function RolesPage() {
                 const active = selectedRole?.id === role.id;
                 return (
                   <div key={role.id} onClick={() => handleSelectRole(role)}
-                    style={{ background: active ? "var(--accent-soft)" : "var(--surface)", border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, padding: "16px", cursor: "pointer", transition: "all .15s" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    style={{ background: active ? "var(--accent-soft)" : "var(--surface)", border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, padding: "16px", cursor: "pointer", transition: "all .15s", overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
                         <span style={{ width: 10, height: 10, borderRadius: "50%", background: role.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{role.display_label}</span>
-                        {role.is_system_role && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text-faint)" }}>SYSTEM</span>}
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{role.display_label}</span>
+                        {role.is_system_role && <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "var(--surface-alt)", border: "1px solid var(--border)", color: "var(--text-faint)", flexShrink: 0 }}>SYSTEM</span>}
                       </div>
-                      <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
                         <button onClick={() => { setEditRole(role); setModalOpen(true); }} style={iconBtn} title="Edit">✎</button>
                         <button onClick={() => handleDeleteRole(role)} style={{ ...iconBtn, color: "var(--danger)" }} title="Delete">✕</button>
                       </div>
