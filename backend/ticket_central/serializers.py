@@ -112,8 +112,25 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         return value.strip()
 
     def create(self, validated_data):
-        validated_data["created_by"] = self.context["request"].user
-        # ticket_number stays blank — filled by the daily backfill (D9).
+        from django.utils import timezone
+        from .utils import extract_type_code, extract_purpose_code, assign_next_ticket_number
+
+        user = self.context["request"].user
+        validated_data["created_by"] = user
+
+        # Submit directly as MR Submitted — no draft step.
+        validated_data["status"] = Ticket.Status.MR_SUBMITTED
+        validated_data["mr_submitted_by_id"] = user.id
+        validated_data["mr_submitted_at"] = timezone.now()
+
+        purpose_code = extract_purpose_code(validated_data.get("purpose", ""))
+        type_code = extract_type_code(validated_data.get("type_of_ticket", ""))
+
+        if purpose_code:
+            validated_data["ticket_number"] = assign_next_ticket_number(
+                purpose_code, type_code
+            )
+
         return super().create(validated_data)
 
 

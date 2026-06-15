@@ -146,6 +146,60 @@ def build_ticket_number(type_code, purpose_code, number):
     return f"{prefix} {num_str}"
 
 
+def assign_next_ticket_number(purpose_code, type_code):
+    """
+    Returns the next ticket number for this purpose, reusing gaps left by
+    deleted tickets before advancing past last_number.
+
+    Algorithm:
+      1. Lock the TicketSequence row for this purpose.
+      2. Collect every number currently in use across ALL tickets for this purpose
+         (regardless of type_code — the sequence is per-purpose).
+      3. Scan [min_used .. last_number] for the first missing slot (gap).
+      4. If a gap exists, reuse it.  Otherwise use last_number + 1.
+      5. Only update last_number when we advance beyond it.
+
+    Thread-safe: select_for_update ensures two concurrent creates for the same
+    purpose cannot pick the same number.
+    """
+    from django.db import transaction
+    from .models import TicketSequence
+
+    with transaction.atomic():
+        seq, _ = TicketSequence.objects.select_for_update().get_or_create(
+            purpose_key=purpose_code,
+            defaults={"last_number": 10000},
+        )
+
+        # All numbers currently occupied for this purpose (any type_code).
+        used = set()
+        for tn in (
+            Ticket.objects
+            .filter(purpose=purpose_code, ticket_number__gt="")
+            .values_list("ticket_number", flat=True)
+        ):
+            try:
+                used.add(int(tn.split(" ")[-1]))
+            except (ValueError, IndexError):
+                pass
+
+        if used:
+            lo = min(used)
+            # First missing slot in [lo, last_number]; fall back to last_number+1.
+            next_num = next(
+                (n for n in range(lo, seq.last_number + 1) if n not in used),
+                seq.last_number + 1,
+            )
+        else:
+            next_num = (seq.last_number or 10000) + 1
+
+        if next_num > seq.last_number:
+            seq.last_number = next_num
+            seq.save(update_fields=["last_number"])
+
+        return build_ticket_number(type_code, purpose_code, next_num)
+
+
 def _resolve_user(v):
     """Match by username (primary) or email (fallback). Returns user_id or None."""
     if not v:

@@ -17,7 +17,7 @@ export function CreateTicketModal({ onClose, onSaved }) {
     setSaving(true);
     try {
       await ticketCentralApi.create(form);
-      toast.success("Ticket created. Number will be assigned overnight.");
+      toast.success("Ticket submitted to Data Mining.");
       onSaved?.();
     } catch (err) {
       // D28: render server errors inline — field-keyed DRF errors are surfaced.
