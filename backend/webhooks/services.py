@@ -16,13 +16,12 @@ import traceback
 from datetime import datetime
 
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 
 from book_event.models import BookEvent
 from book_event.serializers import WebsiteBookingSerializer
 from book_delegate.models import BookDelegate
-from events.models import Event
+from .event_resolver import DIAG, resolve_event_code
 from .models import WebhookLog
 from .utils import unwrap_payload
 
@@ -72,35 +71,23 @@ class WebhookProcessor:
         raw_event_code = d.get("Eventcode", "")
         event_code     = self.normalize_event_code(raw_event_code)
 
-        # Look up Event accepting web bookings
-        matching_events = Event.objects.filter(
-            Q(event_code__iexact=event_code) |
-            Q(event_code__istartswith=event_code) |
-            Q(event_code__icontains=event_code) |
-            Q(event_code__iexact=raw_event_code) |
-            Q(event_code__icontains=raw_event_code)
-        ).order_by("-event_date")
-
-        target_event = None
-        for ev in matching_events:
-            if ev.accepting_web_bookings:
-                target_event = ev
-                break
-
-        # If still not found, try a broader search for any event code containing our normalized code
-        if not target_event:
-            target_event = Event.objects.filter(
-                event_code__icontains=event_code,
-                accepting_web_bookings=True
-            ).order_by("-event_date").first()
+        # Look up the Event. All code matching lives in event_resolver; this
+        # function does no matching of its own, so there is exactly one place
+        # where the anchored boundary rule can be got wrong.
+        resolution = resolve_event_code(raw_event_code, event_code)
+        target_event = resolution.event
 
         if not target_event:
-            self._note(f"Validation FAILED: No event matching '{event_code}' has web bookings option enabled.")
+            # The diagnostic carries the raw code, the normalised code, the full
+            # prefilter candidate list and which rule rejected it — a 400 here
+            # must be answerable from the log alone.
+            self._note(f"Validation FAILED: {DIAG[resolution.outcome]}")
+            self._note(resolution.diagnostic)
             duration = round(time.monotonic() - processing_start, 3)
             log.status            = WebhookLog.Status.FAILED
             log.processing_status = WebhookLog.ProcessingStatus.ERROR
-            log.http_status       = 400
-            log.error_message     = f"No event matching '{event_code}' has accepting_web_bookings enabled."
+            log.http_status       = resolution.http_status
+            log.error_message     = resolution.error_message
             log.processing_notes  = "\n".join(self.notes)
             log.processing_duration = duration
             log.processed_at      = timezone.now()
@@ -108,11 +95,13 @@ class WebhookProcessor:
                 "status", "processing_status", "http_status", "error_message",
                 "processing_notes", "processing_duration", "processed_at",
             ])
-            return False, {"detail": f"No active event matching '{event_code}' accepts web bookings."}
+            return False, {"detail": resolution.error_message}
 
         # Use the resolved target event's exact code and name!
         resolved_event_code = target_event.event_code
         event_name = target_event.name
+        self._note(f"{DIAG[resolution.outcome]} resolved {raw_event_code!r} "
+                   f"-> {resolved_event_code!r} via {resolution.tier}")
 
         d["Eventcode"] = resolved_event_code
         d["Eventname"] = event_name
@@ -159,7 +148,8 @@ class WebhookProcessor:
         try:
             with transaction.atomic():
                 if existing_invoice:
-                    invoice, db_status, note = self._update_booking(existing_invoice, d, payment_status)
+                    invoice, db_status, note = self._update_booking(
+                        existing_invoice, d, payment_status, target_event)
                 else:
                     invoice, db_status, note = self._create_booking(d, event_code, payment_status, sales_exec)
 
@@ -348,14 +338,24 @@ class WebhookProcessor:
         )
         return invoice, WebhookLog.DbInsertStatus.INSERTED, f"Booking CREATED: id={invoice.id}"
 
-    def _update_booking(self, invoice, d, payment_status):
-        """Update non-payment fields on an existing booking."""
+    def _update_booking(self, invoice, d, payment_status, target_event):
+        """
+        Update non-payment fields on an existing booking.
+
+        event_code comes from the resolved Event verbatim. It used to be
+        normalize_event_code(d["Eventcode"]), but by this point d["Eventcode"]
+        has already been replaced with the RESOLVED code, so normalising again
+        stripped the year suffix a second time and wrote a code that matches no
+        Event. Harmless on today's data — no Event code currently carries a year
+        suffix or hits the ACU mapping, so the second pass is a no-op and 0 rows
+        are corrupted — but it is a landmine the first time either becomes true.
+        """
         update_fields = []
-        
+
         parsed_invoice_date = self.parse_webhook_date(d.get("InvoiceDate")) or self.parse_webhook_date(d.get("Date"))
-        
+
         field_map = {
-            "event_code":             self.normalize_event_code(d.get("Eventcode", "")),
+            "event_code":             target_event.event_code,
             "event_name":             d.get("Eventname", ""),
             "event_date":             self.parse_webhook_date(d.get("Date")),
             "company_name":           d.get("DelegateCompanyName", ""),

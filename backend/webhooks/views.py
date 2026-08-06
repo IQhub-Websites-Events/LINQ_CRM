@@ -100,8 +100,11 @@ class WebhookIngestionView(APIView):
                 resp_status = status.HTTP_201_CREATED if result.get("db_action") == "inserted" else status.HTTP_200_OK
             elif log.status == WebhookLog.Status.DUPLICATE:
                 resp_status = status.HTTP_409_CONFLICT
-            elif log.http_status == 400:
-                resp_status = status.HTTP_400_BAD_REQUEST
+            elif log.http_status in (400, 409):
+                # 409 is an ambiguous event code — two open editions matched and
+                # the resolver refuses to guess between them. Honour the status
+                # the processor decided rather than flattening it to 400/500.
+                resp_status = log.http_status
             else:
                 resp_status = status.HTTP_500_INTERNAL_SERVER_ERROR
 
