@@ -119,7 +119,7 @@ class EventViewSet(FilterSpecMixin, BulkUpdateMixin, RBACMixin, viewsets.ModelVi
         return [effect] if effect else []
     filterset_class = EventFilter
     search_fields   = ["event_code", "name", "city"]
-    ordering_fields = ["event_date", "name", "event_code"]
+    ordering_fields = ["id", "event_date", "name", "event_code"]
     ordering        = ["-event_date"]
 
     def get_queryset(self):

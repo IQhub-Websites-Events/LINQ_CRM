@@ -139,7 +139,9 @@ REST_FRAMEWORK = {
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
+        # Appends the pk as a final tiebreaker so paginated lists cannot
+        # duplicate or skip rows across pages. See accounts/ordering.py.
+        "accounts.ordering.StableOrderingFilter",
     ],
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",

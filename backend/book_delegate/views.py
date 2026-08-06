@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from accounts.bulk_update import BulkUpdateMixin
 from accounts.filter_spec import FilterSpecMixin, build_filter_spec_fields
+from accounts.ordering import StableOrderingFilter
 from accounts.permissions import RBACMixin, IsAdminRole
 from accounts.crm_permissions import crm_permission
 from book_event.models import BookEvent
@@ -131,13 +132,17 @@ class BookDelegateViewSet(FilterSpecMixin, BulkUpdateMixin, RBACMixin, viewsets.
     bulk_update_side_effects = {
         ("delegate_payment_status", "Cancelled"): "also sets delegate_count → 0",
     }
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    # StableOrderingFilter, not the stock one: the default sort
+    # (-_sort_request_date) is heavily tied, and without a pk tiebreaker
+    # pagination duplicates and skips rows. See accounts/ordering.py.
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, StableOrderingFilter]
     filterset_class = BookDelegateFilter
     search_fields   = [
         "first_name", "last_name", "email", "position",
         "invoice__invoice_number", "event_code", "company_name_raw",
     ]
     ordering_fields = [
+        "id",   # was silently dropped as an unknown field before
         "_sort_invoice", "_sort_status", "_sort_date", "_sort_name", "_sort_request_date",
         "first_name", "last_name", "email", "event_code", "attendance", "created_at",
         "position", "company_name_raw",

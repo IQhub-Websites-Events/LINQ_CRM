@@ -137,7 +137,7 @@ class TicketViewSet(FilterSpecMixin, BulkUpdateMixin, RBACMixin, viewsets.ModelV
         "assign_name_lx2", "linkedin_keywords", "event_location",
         "assigned_mr", "assign_name",
     ]
-    ordering_fields = ["created_at", "updated_at", "status", "priority"]
+    ordering_fields = ["id", "created_at", "updated_at", "status", "priority"]
     ordering        = ["-created_at"]
 
     def get_queryset(self):
