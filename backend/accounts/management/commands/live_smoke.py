@@ -44,10 +44,17 @@ from ticket_central.views import TicketViewSet
 
 User = get_user_model()
 
+# (label, viewset, path, most-tied ordering the UI offers as a column header)
+#
+# The tied ordering matters as much as the default. Measured on this data,
+# tickets.created_at (the default sort) has 7,853 distinct values over 35,690
+# rows and drifts little, while tickets.status — one click on the Status header
+# — has TWO distinct values over the same 35,690 rows. Sampling only the default
+# ordering is blind to the case that actually breaks.
 SURFACES = [
-    ("Bookings",       BookDelegateViewSet, "/api/delegates/"),
-    ("Ticket Central", TicketViewSet,       "/api/tickets/"),
-    ("Events",         EventViewSet,        "/api/events/"),
+    ("Bookings",       BookDelegateViewSet, "/api/delegates/", "_sort_status"),
+    ("Ticket Central", TicketViewSet,       "/api/tickets/",   "status"),
+    ("Events",         EventViewSet,        "/api/events/",    "event_date"),
 ]
 
 
@@ -55,8 +62,9 @@ class Command(BaseCommand):
     help = "Read-only smoke test of the list, filter and bulk-update endpoints."
 
     def add_arguments(self, parser):
-        parser.add_argument("--pages", type=int, default=3,
-                            help="How many pages to walk per surface (default 3).")
+        parser.add_argument("--pages", type=int, default=20,
+                            help="How many pages to sample per surface at each of "
+                                 "the shallow and deep ends (default 20).")
         parser.add_argument("--page-size", type=int, default=50,
                             help="Rows per page (default 50).")
         parser.add_argument("--user", default=None,
@@ -147,7 +155,7 @@ class Command(BaseCommand):
 
     def _schemas(self):
         self.stdout.write("\nfilter_schema / bulk_update_schema")
-        for label, viewset, path in SURFACES:
+        for label, viewset, path, _tied in SURFACES:
             code, body = self._call(viewset, {"get": "filter_schema"},
                                     f"{path}filter_schema/")
             self._check(f"{label} filter_schema", code, 200)
@@ -160,36 +168,98 @@ class Command(BaseCommand):
             if code == 200:
                 self._note(f"{label} editable fields", len(body["fields"]))
 
+    def _page_plan(self, pages, page_size, total):
+        """
+        Which page numbers to sample: the first N, plus N more spread across
+        the deep end and always including the last full page.
+
+        Depth is the whole point. OFFSET drift grows with the offset — a
+        non-unique sort lets Postgres reshuffle tied rows, and the window
+        slides over rows it has already returned. Walking pages 1-3 of 266
+        found nothing when this surface was provably losing 494 rows; the
+        damage lives in the pages nobody samples.
+
+        Deep samples are taken as ADJACENT PAIRS (p, p+1), which matters more
+        than how many of them there are. A duplicated row shows up as the same
+        id on two consecutive pages, so an isolated deep page cannot reveal it
+        — there is nothing to collide with. Sampling pages 240 and 241 catches
+        the drift at offset 12,000; sampling 240 alone catches nothing.
+
+        Only full pages are sampled, so the expected union size is exactly
+        len(plan) * page_size with no partial-page special case.
+        """
+        full_pages = (total or 0) // page_size
+        if full_pages <= 0:
+            return []
+        head = list(range(1, min(pages, full_pages) + 1))
+        deep = []
+        if full_pages > pages:
+            for i in range(max(1, pages // 2)):
+                frac = (i + 1) / max(1, pages // 2)
+                p = int(round(pages + frac * (full_pages - pages)))
+                p = min(max(p, pages + 1), full_pages)
+                deep.append(p)
+                if p + 1 <= full_pages:
+                    deep.append(p + 1)      # its neighbour, so overlap can show
+                elif p - 1 > pages:
+                    deep.append(p - 1)
+        return sorted(set(head + deep))
+
     def _pagination(self, pages, page_size):
         """
-        Walk the first N pages and assert the union is exactly the number of
-        rows those pages should have covered.
+        Sample shallow AND deep pages, and assert the union is exactly the
+        number of rows those pages should have covered.
 
         Checking only for duplicates is not enough: LIMIT/OFFSET over a
         non-unique sort loses a row for every one it repeats, and the losses
-        are invisible. Comparing the union size to min(total, pages*size)
-        catches both halves at once.
+        are invisible. Comparing the union size to len(plan)*size catches both
+        halves at once.
+
+        This is still a SAMPLE, not a proof. `manage.py pagination_walk` walks
+        every page of every surface and is the exhaustive check; this one is
+        sized to gate a deploy in seconds.
         """
-        self.stdout.write(f"\npagination (first {pages} pages of {page_size})")
-        for label, viewset, path in SURFACES:
-            seen, total, ok = set(), None, True
-            for page in range(1, pages + 1):
-                code, body = self._call(
-                    viewset, {"get": "list"},
-                    f"{path}?page={page}&page_size={page_size}")
-                if code == 404:
-                    break            # ran past the end; not an error
-                if code != 200:
-                    self._check(f"{label} page {page}", code, 200)
-                    ok = False
-                    break
-                total = body["count"]
-                seen |= {r["id"] for r in body["results"]}
-            if not ok:
-                continue
-            expected = min(total or 0, pages * page_size)
-            self._check(f"{label} distinct ids over {pages} pages", len(seen), expected)
+        self.stdout.write(
+            f"\npagination (sample: up to {pages} shallow + {pages} deep pages "
+            f"of {page_size}; exhaustive proof is `manage.py pagination_walk`)")
+        for label, viewset, path, tied in SURFACES:
+            # Both the default ordering and the most-tied column the UI offers.
+            # A tiebreaker that only reaches the default path leaves the bug
+            # live the moment a rep clicks a column header.
+            for sort_label, ordering in (("default sort", None),
+                                         (f"sort={tied}", tied)):
+                self._pagination_one(label, viewset, path, sort_label, ordering,
+                                     pages, page_size)
+
+    def _pagination_one(self, label, viewset, path, sort_label, ordering,
+                        pages, page_size):
+        suffix = f"&ordering={quote(ordering)}" if ordering else ""
+        code, body = self._call(
+            viewset, {"get": "list"}, f"{path}?page=1&page_size={page_size}{suffix}")
+        if code != 200:
+            self._check(f"{label} [{sort_label}] page 1", code, 200)
+            return
+        total = body["count"]
+        plan = self._page_plan(pages, page_size, total)
+        if not plan:
+            self._note(f"{label} [{sort_label}] pagination",
+                       f"skipped - fewer than {page_size} rows")
             self._note(f"{label} total rows", total)
+            return
+
+        seen = set()
+        for page in plan:
+            code, body = self._call(
+                viewset, {"get": "list"},
+                f"{path}?page={page}&page_size={page_size}{suffix}")
+            if code != 200:
+                self._check(f"{label} [{sort_label}] page {page}", code, 200)
+                return
+            seen |= {r["id"] for r in body["results"]}
+        self._check(f"{label} [{sort_label}] distinct ids over {len(plan)} sampled pages",
+                    len(seen), len(plan) * page_size)
+        self._note(f"{label} [{sort_label}] pages sampled",
+                   f"{plan[:3]}..{plan[-3:]} of {total // page_size}")
 
     def _filter_spec(self):
         """
@@ -253,7 +323,7 @@ class Command(BaseCommand):
         builds a plan, without writing anything.
         """
         self.stdout.write("\nbulk_update preview (commit=false)")
-        for label, viewset, path in SURFACES:
+        for label, viewset, path, _tied in SURFACES:
             code, schema = self._call(viewset, {"get": "bulk_update_schema"},
                                       f"{path}bulk_update_schema/")
             if code != 200:
