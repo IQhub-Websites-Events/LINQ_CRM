@@ -1,4 +1,4 @@
-import client from "./client";
+import client, { assertIdArray } from "./client";
 
 export const eventsApi = {
   list: (params) =>
@@ -106,6 +106,7 @@ export const eventsApi = {
   // Omit `value` when undefined — the backend reads KEY PRESENCE, so an
   // always-sent value would make a value-less preview fail validation.
   bulkUpdate: (ids, field, value, commit, planHash) => {
+    assertIdArray(ids, "eventsApi.bulkUpdate");
     const body = { ids, field, commit, plan_hash: planHash };
     if (value !== undefined) body.value = value;
     return client.post("/events/bulk_update/", body).then((r) => r.data);

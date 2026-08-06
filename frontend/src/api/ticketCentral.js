@@ -1,4 +1,4 @@
-import client from "./client";
+import client, { assertIdArray } from "./client";
 
 export const ticketCentralApi = {
   list:       (params)     => client.get("tickets/", { params }).then((r) => r.data),
@@ -11,11 +11,15 @@ export const ticketCentralApi = {
   stats:      ()           => client.get("tickets/stats/").then((r) => r.data),
   bulkImport: (payload)    => client.post("tickets/bulk_import/", payload).then((r) => r.data),
   delete:     (id)         => client.delete(`tickets/${id}/`).then((r) => r.data),
-  bulkDelete: (ids)        => client.post("tickets/bulk_delete/", { ids }).then((r) => r.data),
+  bulkDelete: (ids)        => {
+    assertIdArray(ids, "ticketCentralApi.bulkDelete");
+    return client.post("tickets/bulk_delete/", { ids }).then((r) => r.data);
+  },
 
   // Omit `value` entirely when undefined — the backend reads KEY PRESENCE, so an
   // always-sent value would make a preview fail validation.
   bulkUpdate: (ids, field, value, commit, planHash) => {
+    assertIdArray(ids, "ticketCentralApi.bulkUpdate");
     const body = { ids, field, commit, plan_hash: planHash };
     if (value !== undefined) body.value = value;
     return client.post("tickets/bulk_update/", body).then((r) => r.data);

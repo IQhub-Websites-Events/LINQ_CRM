@@ -26,6 +26,24 @@ export function serializeParams(params) {
   return search.toString();
 }
 
+/**
+ * Fail loudly when an ID collection is not a real Array.
+ *
+ * Two bugs have already shipped at this seam and both were invisible to green
+ * test suites: a Set serialises to {} through JSON.stringify (it has no
+ * enumerable own properties), so the backend saw {"ids": {}} and answered
+ * "ids list required"; and a pre-encoded spec string got encoded twice. Silent
+ * coercion is the enemy here — a wrong type must throw at the call site with
+ * the actual type named, not travel to the server as an empty object.
+ */
+export function assertIdArray(ids, method) {
+  if (!Array.isArray(ids)) {
+    throw new Error(
+      `${method}: ids must be an Array, got ${Object.prototype.toString.call(ids)}`,
+    );
+  }
+}
+
 const client = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
