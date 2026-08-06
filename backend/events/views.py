@@ -8,14 +8,115 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import RBACMixin, IsAdminRole, IsSalesOrAdmin
+from accounts.bulk_update import BulkUpdateMixin
 from accounts.crm_permissions import crm_permission
+from accounts.filter_spec import FilterSpecMixin, build_filter_spec_fields
 from .models import Event
 from .serializers import EventListSerializer, EventDetailSerializer, EventWriteSerializer
 from .filters import EventFilter
 
 
-class EventViewSet(RBACMixin, viewsets.ModelViewSet):
+class EventViewSet(FilterSpecMixin, BulkUpdateMixin, RBACMixin, viewsets.ModelViewSet):
     permission_classes = [crm_permission("events")]
+
+    # ── Compound filter spec ──────────────────────────────────────────────────
+    # Everything is filterable here, INCLUDING event_code and the nine
+    # save()-derived fields. Only WRITING those was dangerous; reading them is
+    # not. Note: BookEvent.edition holds Excel serial dates on 5,854 rows, so
+    # numeric comparisons against edition-like data will behave oddly. Surfaced,
+    # not fixed — it belongs to the separate event_code/edition work item.
+    filter_spec_fields = build_filter_spec_fields(
+        Event,
+        labels={
+            "event_code": "Event Code", "official_event_name": "Official Event Name",
+            "web_bookings": "Web Bookings",
+            "accepting_web_bookings": "Accepting Web Bookings (derived)",
+            "name": "Name (derived)", "official_name": "Official Name (derived)",
+            "city": "City (derived)", "country": "Country (derived)",
+            "venue": "Venue (derived)", "sales_team": "Sales Team (derived)",
+            "tele_marketing_team": "Telemarketing Team (derived)",
+            "market_research_team": "Market Research Team (derived)",
+        },
+    )
+
+    # ── Mass update ───────────────────────────────────────────────────────────
+    # Event has no parent FK. BookEvent links to it by event_code TEXT, not a
+    # relation, so there is no collateral set and no split-group UI.
+    #
+    # Event.save() (models.py:79-148) derives NINE fields. Only SOURCE fields are
+    # wired; every derived field is excluded, because writing a derived field
+    # directly would be silently undone on the next save of its source.
+    #
+    #   official_event_name  -> name, official_name   (falls back to event_code)
+    #   location             -> city, country, venue
+    #   web_bookings         -> accepting_web_bookings
+    #   telemarketing_team   -> tele_marketing_team
+    #   market_research_senior -> market_research_team
+    #   sales_executive     <-> sales_team   (BIDIRECTIONAL, fuzzy user match,
+    #                                         plus a per-object SELECT at :99-101)
+    #
+    # EXCLUDED and why:
+    #   event_code   — identity, and 86 of 215 BookEvent codes already fail to
+    #                  match this table (40.8% of invoices). Mass-editing codes
+    #                  would deepen an outstanding data-integrity problem.
+    #                  It also feeds name/official_name when official_event_name
+    #                  is blank (models.py:84-86).
+    #   edition      — not a field on Event; the corrupt editions live on
+    #                  BookEvent (5,854 rows hold Excel serial dates). Same
+    #                  outstanding problem; nothing here may touch it.
+    #   name, official_name, accepting_web_bookings, city, country, venue,
+    #   tele_marketing_team, market_research_team, sales_team
+    #                — all derived in save(). Callers set the SOURCE field.
+    #   sales_executive — an FK whose save() path fuzzy-matches users and writes
+    #                  back to sales_team; too much hidden behaviour for a
+    #                  generic writer. Deferred deliberately.
+    bulk_update_label = "events"
+    bulk_update_parent_path = None
+
+    # No field below is null=True — all are NOT NULL in the schema — so none is
+    # marked nullable.
+    bulk_update_fields = {
+        "status": {
+            "group": "row", "type": "choice", "label": "Status",
+            "choices": list(Event.Status.values),
+        },
+        "web_bookings": {
+            "group": "row", "type": "boolean", "label": "Web Bookings",
+        },
+        "location": {
+            "group": "row", "type": "text", "label": "Location",
+        },
+        "official_event_name": {
+            "group": "row", "type": "text", "label": "Official Event Name",
+        },
+    }
+
+    # Every save()-derivation of a wired field MUST be declared here, or the
+    # preview understates what the change actually does.
+    bulk_update_side_effects = {
+        ("web_bookings", False): (
+            "also sets accepting_web_bookings → False; the website booking "
+            "webhook will stop accepting registrations for these events"
+        ),
+        ("web_bookings", "false"): (
+            "also sets accepting_web_bookings → False; the website booking "
+            "webhook will stop accepting registrations for these events"
+        ),
+        ("web_bookings", True): "also sets accepting_web_bookings → True",
+        ("web_bookings", "true"): "also sets accepting_web_bookings → True",
+    }
+
+    def get_bulk_update_side_effects(self, field, raw_value):
+        """
+        location and official_event_name overwrite their derived fields for ANY
+        value, so they cannot be keyed by (field, value) in the static dict.
+        """
+        if field == "location":
+            return ["also overwrites city, country and venue"]
+        if field == "official_event_name":
+            return ["also overwrites name and official_name"]
+        effect = self.bulk_update_side_effects.get((field, raw_value))
+        return [effect] if effect else []
     filterset_class = EventFilter
     search_fields   = ["event_code", "name", "city"]
     ordering_fields = ["event_date", "name", "event_code"]

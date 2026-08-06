@@ -12,6 +12,11 @@ class Ticket(models.Model):
 
     # ── Enums ─────────────────────────────────────────────────────────────
     class Status(models.TextChoices):
+        # DRAFT is no longer reachable through the API: creation goes straight
+        # to MR_SUBMITTED (serializers.py:121-124). It is kept in the enum
+        # because migrated/historical rows still hold it, and because
+        # submit_mr accepts DRAFT alongside RETURNED — in practice that branch
+        # now only serves the RETURNED loop.
         DRAFT           = "draft",           "Draft"
         MR_SUBMITTED    = "mr_submitted",    "MR Submitted"
         COMPLETED       = "completed",       "Completed"
@@ -41,9 +46,14 @@ class Ticket(models.Model):
         DIRECT   = "direct",   "Direct"
         INDIRECT = "indirect", "Indirect"
 
-    # ── Identifiers (shared, read-only post-create) ──────────────────────
+    # ── Identifiers (shared; not caller-writable) ────────────────────────
     # D1: NOT unique — historical data has duplicate ticket_numbers by design.
-    # D9: filled by the overnight backfill job, not at form submit.
+    # Assigned AT CREATE by TicketCreateSerializer.create() (serializers.py:129-132)
+    # whenever a purpose is present, which the serializer requires — so in
+    # practice every API-created ticket is numbered immediately. The overnight
+    # `backfill_ticket_numbers` cron is retained for migrated/historical rows
+    # that arrived without one. This supersedes D9, which said the number was
+    # filled overnight rather than at form submit.
     ticket_number = models.CharField(max_length=50, blank=True, default="", db_index=True)
     # D2: Zoho record ID — the true unique key for migrated records.
     external_id   = models.CharField(

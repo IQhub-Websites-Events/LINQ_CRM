@@ -31,8 +31,8 @@ class BookDelegateFilter(django_filters.FilterSet):
         choices=BookEvent.PaymentType.choices,
         method="filter_payment_type",
     )
-    paid_or_free = django_filters.ChoiceFilter(
-        choices=[("", "All"), *BookEvent.PaidOrFree.choices],
+    paid_or_free = django_filters.MultipleChoiceFilter(
+        choices=BookEvent.PaidOrFree.choices,
         method="filter_paid_or_free",
     )
     ticket_tier = django_filters.MultipleChoiceFilter(
@@ -72,10 +72,9 @@ class BookDelegateFilter(django_filters.FilterSet):
         )
 
     def filter_paid_or_free(self, queryset, name, value):
-        if not value:
-            return queryset
+        # `value` is now a list (MultipleChoiceFilter); _effective_filter ORs across it.
         return self._effective_filter(
-            queryset, "delegate_paid_or_free", "invoice__paid_or_free", [value]
+            queryset, "delegate_paid_or_free", "invoice__paid_or_free", value
         )
 
     def filter_ticket_tier(self, queryset, name, value):

@@ -5,12 +5,17 @@ Production-ready configuration with environment variable overrides.
 import os
 from pathlib import Path
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
-from decouple import config
-
-load_dotenv()
+from decouple import AutoConfig
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Resolve .env from the project layout rather than the current working
+# directory, so `manage.py` works from backend/ or from the repo root.
+load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR.parent / ".env")
+config = AutoConfig(search_path=BASE_DIR)
 
 # ── Security ──────────────────────────────────────────────────────────────────
 SECRET_KEY = config("SECRET_KEY")
@@ -85,16 +90,37 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+# Resolved in order:
+#   1. DATABASE_URL — single connection string, used by most hosting platforms
+#   2. DB_NAME/DB_USER/DB_PASSWORD/… — explicit PostgreSQL credentials
+#   3. SQLite under BASE_DIR — local development only, refused when DEBUG is off
+DATABASE_URL = config("DATABASE_URL", default="")
+DB_NAME = config("DB_NAME", default="")
+
+if DATABASE_URL:
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+elif DB_NAME:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": DB_NAME,
+            "USER": config("DB_USER"),
+            "PASSWORD": config("DB_PASSWORD"),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5432"),
+        }
     }
-}
+elif DEBUG:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    raise ImproperlyConfigured(
+        "No database configured. Set DATABASE_URL, or DB_NAME/DB_USER/DB_PASSWORD."
+    )
 
 # ── Custom Auth ───────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
@@ -134,7 +160,9 @@ USE_TZ = True
 # ── Static ────────────────────────────────────────────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR.parent / "frontend" / "build" / "static"]
+# Only present once the React app has been built (`npm run build` in frontend/).
+_frontend_static = BASE_DIR.parent / "frontend" / "build" / "static"
+STATICFILES_DIRS = [_frontend_static] if _frontend_static.is_dir() else []
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── Logging ───────────────────────────────────────────────────────────────────

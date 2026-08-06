@@ -4,6 +4,11 @@ import { useToast } from "../../contexts/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { TicketStatusBadge, TicketPriorityBadge } from "./TicketStatusBadge";
 import { TicketDetailModal } from "./TicketDetailModal";
+import { MultiSelectFilter } from "../ui/MultiSelectFilter";
+import { BulkUpdateModal } from "../ui/BulkUpdateModal";
+import { FilterBuilderModal } from "../ui/FilterBuilderModal";
+import { FilterChips } from "../ui/FilterChips";
+import { useFilterSpec } from "../../hooks/useFilterSpec";
 
 const PAGE_SIZE = 50;
 
@@ -11,7 +16,13 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 const COLUMNS = [
   // ── Identifier (primary) ──────────────────────────────────────────
-  { key: "status",               label: "Status",               minWidth: 130, filterType: "select", section: "Identifier",  defaultVisible: true  },
+  { key: "status",               label: "Status",               minWidth: 130, filterType: "multiselect", section: "Identifier", defaultVisible: true,
+    options: [
+      { value: "draft",        label: "Draft" },
+      { value: "mr_submitted", label: "MR Submitted" },
+      { value: "completed",    label: "Completed" },
+      { value: "returned",     label: "Returned" },
+    ] },
   { key: "ticket_number",        label: "Ticket #",             minWidth: 160, filterType: "text",   section: "Identifier",  defaultVisible: true  },
   // ── MR Section ────────────────────────────────────────────────────
   { key: "purpose",              label: "Purpose",              minWidth: 100, filterType: "text",   section: "MR Section",  defaultVisible: true  },
@@ -74,6 +85,12 @@ function buildFilterParams(colFilters) {
   const params = {};
   for (const [key, val] of Object.entries(colFilters)) {
     if (val === "" || val == null) continue;
+    // Multi-select filters hold arrays; an empty one means "no filter". Non-empty
+    // arrays pass straight through and the client serialiser repeats the key.
+    if (Array.isArray(val)) {
+      if (val.length) params[key] = val;
+      continue;
+    }
     if (key in DATE_TO_PARAM)  params[DATE_TO_PARAM[key]] = val;
     else if (key in NUM_TO_PARAM) params[NUM_TO_PARAM[key]] = val;
     else params[key] = val;
@@ -113,14 +130,26 @@ function renderCell(ticket, col) {
 }
 
 function FilterCell({ col, value, onChange, disabled }) {
+  if (col.filterType === "multiselect") {
+    // MultiSelectFilter coerces a non-array value to [], so an unset "" is safe here.
+    return (
+      <MultiSelectFilter
+        options={col.options || []}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    );
+  }
   if (col.filterType === "select") {
     return (
       <select value={value} onChange={e => onChange(e.target.value)} style={colFilterInput} disabled={disabled}>
         <option value="">All</option>
-        <option value="draft">Draft</option>
-        <option value="mr_submitted">MR Submitted</option>
-        <option value="completed">Completed</option>
-        <option value="returned">Returned</option>
+        {(col.options || []).map(o => {
+          const v = typeof o === "object" ? o.value : o;
+          const l = typeof o === "object" ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
       </select>
     );
   }
@@ -135,8 +164,12 @@ function FilterCell({ col, value, onChange, disabled }) {
 
 export function TicketTable({ statusFilter = "", onChanged }) {
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, canUpdate } = useAuth();
   const isAdmin = user?.role === "admin";
+  // Mass update is an edit, so gate it on the permission the backend actually
+  // enforces (crm_permission maps bulk_update to can_update), not the
+  // hardcoded admin role that guards the destructive delete.
+  const canMassUpdate = canUpdate("ticket_central");
 
   const [data, setData]                 = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -150,7 +183,35 @@ export function TicketTable({ statusFilter = "", onChanged }) {
   const [colFilters, setColFilters]     = useState({});
   const [selected, setSelected]         = useState(new Set());
   const [pickerOpen, setPickerOpen]     = useState(false);
+  const [bulkOpen, setBulkOpen]         = useState(false);
+  const [bulkSchema, setBulkSchema]     = useState(null);
   const pickerRef = useRef(null);
+
+  // ── Compound filter spec (mirrors BookingsTable) ─────────────────────────
+  const spec = useFilterSpec("ticket_central");
+  const [filterSchema, setFilterSchema] = useState(null);
+  const [filterOpen, setFilterOpen]     = useState(false);
+  const loadToken = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    ticketCentralApi.filterSchema()
+      .then((s) => {
+        if (cancelled) return;
+        setFilterSchema(s);
+        const { dropped } = spec.sanitize(s);
+        if (dropped.length > 0) {
+          toast.info("Some saved filters were removed because fields changed.");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        spec.markSchemaFailed();
+        toast.error("Filters unavailable — could not load the field list.");
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [visibleKeys, setVisibleKeys] = useState(() => {
     try {
@@ -187,6 +248,7 @@ export function TicketTable({ statusFilter = "", onChanged }) {
     if (p > 1) setFetchingMore(true);
     else setLoading(true);
 
+    const token = ++loadToken.current;
     try {
       const filterParams = buildFilterParams(colFilters);
       const params = {
@@ -195,26 +257,34 @@ export function TicketTable({ statusFilter = "", onChanged }) {
         ...filterParams,
       };
       if (statusFilter) params.status = statusFilter;
+      if (spec.encodedParam) params.filter_spec = spec.encodedParam;
 
       const res = await ticketCentralApi.list(params);
+      if (token !== loadToken.current) return;   // superseded — discard
       const results = res.results || [];
       const count = res.count || 0;
 
       setData(prev => append ? [...prev, ...results] : results);
       setTotal(count);
       setHasMore((p * PAGE_SIZE) < count);
-    } catch {
-      toast.error("Failed to load tickets");
+    } catch (err) {
+      if (token !== loadToken.current) return;
+      const detail = err.response?.status === 400 && err.response?.data?.detail;
+      toast.error(detail || "Failed to load tickets");
     } finally {
-      setLoading(false);
-      setFetchingMore(false);
+      if (token === loadToken.current) {
+        setLoading(false);
+        setFetchingMore(false);
+      }
     }
-  }, [sortKey, sortDir, statusFilter, colFilters, toast]);
+  }, [sortKey, sortDir, statusFilter, colFilters, spec.encodedParam, toast]);
 
+  // Gated on hydrated — see the note in BookingsTable.
   useEffect(() => {
+    if (!spec.hydrated) return;
     setPage(1);
     load(1, false);
-  }, [statusFilter, colFilters, sortKey, sortDir, load]);
+  }, [statusFilter, colFilters, sortKey, sortDir, load, spec.hydrated]);
 
   const loadMore = useCallback(() => {
     if (loading || fetchingMore || !hasMore) return;
@@ -244,6 +314,35 @@ export function TicketTable({ statusFilter = "", onChanged }) {
     onChanged?.();
   }, [load, onChanged]);
 
+  // Schema is fetched lazily on first open — it never changes during a session
+  // and most visits never open the modal.
+  const openBulkUpdate = async () => {
+    setBulkOpen(true);
+    if (bulkSchema) return;
+    try {
+      setBulkSchema(await ticketCentralApi.bulkUpdateSchema());
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not load editable fields.");
+      setBulkOpen(false);
+    }
+  };
+
+  const handleBulkPreview = useCallback(
+    (field, value) => ticketCentralApi.bulkUpdate([...selected], field, value, false, null),
+    [selected],
+  );
+
+  const handleBulkCommit = useCallback(
+    async (field, value, planHash) => {
+      const result = await ticketCentralApi.bulkUpdate([...selected], field, value, true, planHash);
+      setSelected(new Set());
+      load(1, false);
+      onChanged?.();
+      return result;
+    },
+    [selected, load, onChanged],
+  );
+
   const handleBulkDelete = async () => {
     const count = Math.min(selected.size, 1000);
     const confirmed = window.confirm(
@@ -262,7 +361,9 @@ export function TicketTable({ statusFilter = "", onChanged }) {
     }
   };
 
-  const hasAnyFilter = Object.values(colFilters).some(v => v);
+  // An empty array is truthy, so multi-select filters must be length-checked.
+  const hasAnyFilter = Object.values(colFilters)
+    .some(v => (Array.isArray(v) ? v.length > 0 : !!v));
   const allSelected  = data.length > 0 && selected.size === data.length;
   const someSelected = selected.size > 0 && selected.size < data.length;
 
@@ -287,6 +388,30 @@ export function TicketTable({ statusFilter = "", onChanged }) {
             </button>
           )}
         </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          onClick={() => setFilterOpen(true)}
+          disabled={!filterSchema}
+          title={filterSchema ? "Build a compound filter" : "Filters unavailable"}
+          style={{
+            ...secondaryBtnStyle,
+            display: "inline-flex", alignItems: "center", gap: 6,
+            opacity: filterSchema ? 1 : 0.5,
+            cursor: filterSchema ? "pointer" : "not-allowed",
+            borderColor: spec.criteria.length ? "var(--accent)" : undefined,
+            color: spec.criteria.length ? "var(--accent)" : undefined,
+          }}
+        >
+          ⚙ Filters
+          {spec.criteria.length > 0 && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              minWidth: 17, height: 17, padding: "0 5px", borderRadius: 9,
+              background: "var(--accent)", color: "#fff", fontSize: 10.5, fontWeight: 700,
+            }}>{spec.criteria.length}</span>
+          )}
+        </button>
 
         {/* Column picker */}
         <div ref={pickerRef} style={{ position: "relative" }}>
@@ -342,7 +467,15 @@ export function TicketTable({ statusFilter = "", onChanged }) {
             </div>
           )}
         </div>
+        </div>
       </div>
+
+      <FilterChips
+        criteria={spec.criteria}
+        schema={filterSchema}
+        onRemove={spec.removeCriterion}
+        onClearAll={spec.clearAll}
+      />
 
       {/* Table container */}
       <div style={{
@@ -452,7 +585,11 @@ export function TicketTable({ statusFilter = "", onChanged }) {
             borderTop: "1px solid rgba(255,255,255,0.2)",
           }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>
-              {selected.size.toLocaleString()} selected
+              {/* "Select all" only reaches rows scrolled into memory, so say so
+                  whenever more rows match than are currently loaded. */}
+              {data.length < total
+                ? `${selected.size.toLocaleString()} selected of ${data.length.toLocaleString()} loaded (${total.toLocaleString()} total — scroll for more)`
+                : `${selected.size.toLocaleString()} selected`}
             </span>
             <button
               onClick={() => setSelected(new Set())}
@@ -460,6 +597,14 @@ export function TicketTable({ statusFilter = "", onChanged }) {
             >
               ✕ Deselect all
             </button>
+            {canMassUpdate && (
+              <button
+                onClick={openBulkUpdate}
+                style={{ padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              >
+                ✎ Update {selected.size.toLocaleString()}
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={handleBulkDelete}
@@ -471,6 +616,24 @@ export function TicketTable({ statusFilter = "", onChanged }) {
           </div>
         )}
       </div>
+
+      <FilterBuilderModal
+        open={filterOpen && !!filterSchema}
+        onClose={() => setFilterOpen(false)}
+        schema={filterSchema}
+        criteria={spec.criteria}
+        onApply={spec.replaceAll}
+      />
+
+      <BulkUpdateModal
+        open={bulkOpen && !!bulkSchema}
+        onClose={() => setBulkOpen(false)}
+        selectedIds={[...selected]}
+        schema={bulkSchema}
+        rowLabel="ticket"
+        onPreview={handleBulkPreview}
+        onCommit={handleBulkCommit}
+      />
 
       {detailId && (
         <TicketDetailModal

@@ -10,6 +10,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.bulk_update import BulkUpdateMixin
+from accounts.filter_spec import FilterSpecMixin, build_filter_spec_fields
 from accounts.permissions import RBACMixin, IsAdminRole
 from accounts.crm_permissions import crm_permission
 from .models import Ticket, TicketSequence
@@ -31,7 +33,7 @@ from .permissions import (
 logger = logging.getLogger(__name__)
 
 
-class TicketViewSet(RBACMixin, viewsets.ModelViewSet):
+class TicketViewSet(FilterSpecMixin, BulkUpdateMixin, RBACMixin, viewsets.ModelViewSet):
     """
     GET    /api/tickets/                   — list (paginated, filtered)
     POST   /api/tickets/                   — create (MR only)
@@ -43,6 +45,90 @@ class TicketViewSet(RBACMixin, viewsets.ModelViewSet):
     GET    /api/tickets/stats/             — status counts for dashboard
     """
     permission_classes = [crm_permission("ticket_central")]
+
+    # ── Mass update ───────────────────────────────────────────────────────────
+    # Ticket has no parent FK — every row is independent, so there is no
+    # collateral, no split-group UI and no blast-radius warning.
+    #
+    # priority, type_of_ticket and relationship are plain CharFields with NO
+    # choices= at the DB level. That is deliberate (see the D4 comments at
+    # models.py:71-75 — Zoho's values don't match a fixed set), which means the
+    # allow-list below is the ONLY value safety these three have. Nothing at the
+    # database or model layer will catch a bad value.
+    #
+    # None of the four wired fields is null=True, so none is `nullable`:
+    # all are CharField(blank=True, default="").
+    bulk_update_label = "tickets"
+    bulk_update_parent_path = None
+
+    # ── Compound filter spec ──────────────────────────────────────────────────
+    # Read-only filtering is safe on fields that mass-update deliberately
+    # excludes. status, ticket_number and every provenance field ARE filterable
+    # here even though writing them is refused: reading a workflow state cannot
+    # route around the submit guards, whereas writing it can.
+    filter_spec_fields = build_filter_spec_fields(
+        Ticket,
+        labels={
+            "assigned_mr": "Assigned MR", "assign_name": "Assign Name",
+            "assign_name_lx2": "Assign Name (LX-2)", "mr_comments": "MR Comments",
+            "dm_comments": "DM Comments", "dm_comments_lx2": "DM Comments (LX-2)",
+            "type_of_ticket": "Type of Ticket", "ticket_type": "Ticket Type (DMD)",
+            "event_month_year": "Event Month/Year",
+        },
+    )
+
+    _BULK_STATIC_FIELDS = {
+        "priority": {
+            "group": "row", "type": "choice", "label": "Priority",
+            "choices": list(Ticket.Priority.values),
+        },
+        "type_of_ticket": {
+            "group": "row", "type": "choice", "label": "Type of Ticket",
+            "choices": list(Ticket.TypeOfTicket.values),
+        },
+        "relationship": {
+            "group": "row", "type": "choice", "label": "Relationship",
+            "choices": list(Ticket.Relationship.values),
+        },
+    }
+
+    @property
+    def bulk_update_fields(self):
+        """
+        assigned_mr's options are resolved per request from active users rather
+        than hardcoded. The column stores an EMAIL (verified against live data:
+        every real assignee matches an active user's email), and it is a
+        CharField not an FK — the D4 migration-safety decision — so without a
+        server-supplied list a mass assign would be free text across up to 1000
+        rows, and one typo would silently fragment the assignee set.
+        """
+        from accounts.models import User
+        fields = dict(self._BULK_STATIC_FIELDS)
+        fields["assigned_mr"] = {
+            "group": "row", "type": "choice", "label": "Assigned MR",
+            "choices": list(
+                User.objects.filter(is_active=True)
+                .exclude(email="")
+                .order_by("email")
+                .values_list("email", flat=True)
+            ),
+        }
+        return fields
+
+    # EXCLUDED, and why — anything absent from bulk_update_fields is refused:
+    #   status         — the three submit actions own every transition
+    #                    (submit_mr:127, submit_dmd:152, return_to_mr:178), each
+    #                    guarding on current status and stamping *_submitted_by/at.
+    #                    Creation now goes straight to MR_SUBMITTED, so DRAFT is
+    #                    unreachable via the API; a generic writer would be the
+    #                    ONLY way to force a ticket back into DRAFT, re-opening
+    #                    submit_mr on an already-submitted ticket and leaving
+    #                    provenance null.
+    #   ticket_number  — assigned at create by the serializer, and by the
+    #                    backfill cron for migrated rows. Never caller-writable.
+    #   mr_submitted_by/at, dmd_submitted_by/at, returned_by/at, return_reason
+    #                  — provenance, written only by the three submit actions.
+
     filterset_class = TicketFilter
     search_fields   = [
         "ticket_number", "event_code", "purpose",

@@ -57,6 +57,19 @@ class BookDelegate(models.Model):
         # Force delegate_count to 0 if payment status is Cancelled
         if self.delegate_payment_status == "Cancelled":
             self.delegate_count = 0
+        elif self.pk:
+            # Restore on the TRANSITION off Cancelled only. A blanket
+            # "if delegate_count == 0: set 1" would clobber a deliberate zero —
+            # the field declares choices=[(0,"0"),(1,"1")] and is writable in
+            # the serializer, so 0 on a non-cancelled delegate is legitimate.
+            prev = (
+                BookDelegate.objects
+                .filter(pk=self.pk)
+                .values_list("delegate_payment_status", flat=True)
+                .first()
+            )
+            if prev == "Cancelled":
+                self.delegate_count = 1
         if self.event_code:
             import re
             match = re.search(r'(\d{2,4})$', self.event_code)

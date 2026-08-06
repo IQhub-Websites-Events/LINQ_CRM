@@ -2,9 +2,34 @@ import axios from "axios";
 
 const BASE_URL = process.env.REACT_APP_API_URL || "/api/";
 
+/**
+ * Serialise params so array values become repeated bare keys:
+ *   { payment_status: ["Paid", "Cancelled"] } -> payment_status=Paid&payment_status=Cancelled
+ *
+ * django-filter's MultipleChoiceFilter reads these with QueryDict.getlist(). Axios' default
+ * array format is `payment_status[]=Paid`, which the backend does not recognise — and it
+ * ignores the unknown key silently rather than erroring, so the request comes back
+ * unfiltered. Empty strings and empty arrays are dropped so "no filter" sends nothing.
+ */
+export function serializeParams(params) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value)) {
+      value.forEach((v) => {
+        if (v !== undefined && v !== null && v !== "") search.append(key, v);
+      });
+      continue;
+    }
+    search.append(key, value);
+  }
+  return search.toString();
+}
+
 const client = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
+  paramsSerializer: { serialize: serializeParams },
 });
 
 function safeStorageGet(key) {

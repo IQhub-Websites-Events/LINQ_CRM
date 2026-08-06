@@ -1,0 +1,313 @@
+"""
+events/tests_bulk_update.py
+────────────────────────────
+Phase 5: mass update on EventViewSet.
+
+Event.save() (models.py:79-148) derives NINE fields and performs a per-object
+SELECT. That makes per-object save() load-bearing here more than on any other
+surface — a queryset .update() would desync all nine silently. Several tests
+below exist purely to prove save() ran.
+
+NOTE: nothing in this module calls .delete() on a queryset, and the clear_all
+endpoint (views.py:555) is never exercised.
+"""
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
+
+from accounts.models import ActionLog, CustomRole, RolePermission
+from events.models import Event
+from events.views import EventViewSet
+
+User = get_user_model()
+
+BULK   = EventViewSet.as_view({"post": "bulk_update"})
+SCHEMA = EventViewSet.as_view({"get": "bulk_update_schema"})
+
+DERIVED_FIELDS = [
+    "name", "official_name", "accepting_web_bookings", "city", "country",
+    "venue", "tele_marketing_team", "market_research_team", "sales_team",
+]
+
+
+class EventBulkUpdateTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.all_access = CustomRole.objects.create(
+            name="ev_bulk_admin", display_label="Ev Bulk Admin", is_all_access=True,
+        )
+        cls.user = User.objects.create_user(
+            username="ev_bulk", password="x", role="admin", email="ev@iq-hub.com",
+        )
+        cls.user.custom_role = cls.all_access
+        cls.user.save()
+
+        readonly_role, _ = CustomRole.objects.get_or_create(
+            name="ev_view_only", defaults={"display_label": "Ev View", "is_all_access": False},
+        )
+        RolePermission.objects.update_or_create(
+            custom_role=readonly_role, module="events",
+            defaults={"can_view": True, "can_create": False,
+                      "can_update": False, "can_delete": False},
+        )
+        cls.readonly = User.objects.create_user(
+            username="ev_readonly", password="x", role="sales", email="evro@iq-hub.com",
+        )
+        cls.readonly.custom_role = readonly_role
+        cls.readonly.save()
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.events = [
+            Event.objects.create(
+                event_code=f"TST{i} - AA", event_date="2026-06-0{}".format(i + 1),
+                status=Event.Status.DRAFT, web_bookings=True,
+                location="Origin City", official_event_name=f"Original Name {i}",
+            )
+            for i in range(3)
+        ]
+        self.ids = [e.id for e in self.events]
+
+    def _post(self, body, user=None):
+        req = self.factory.post("/bulk_update/", body, format="json")
+        force_authenticate(req, user=user or self.user)
+        resp = BULK(req)
+        # Calling a view directly returns an unrendered DRF Response; .content
+        # raises until it is rendered. Render here so byte-level assertions work.
+        resp.render()
+        return resp
+
+    def _preview(self, ids, field, value=None, user=None):
+        body = {"ids": ids, "field": field, "commit": False}
+        if value is not None:
+            body["value"] = value
+        return self._post(body, user=user)
+
+    def _commit(self, ids, field, value, user=None):
+        plan = self._preview(ids, field, value, user=user)
+        self.assertEqual(plan.status_code, 200, plan.data)
+        return self._post({
+            "ids": ids, "field": field, "value": value,
+            "commit": True, "plan_hash": plan.data["plan_hash"],
+        }, user=user)
+
+    # ── (a) ───────────────────────────────────────────────────────────────────
+    def test_a_safe_field_changes_all_and_row_count_holds(self):
+        before = Event.objects.count()
+        r = self._commit(self.ids, "status", Event.Status.LIVE)
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data["updated"], 3)
+        for e in self.events:
+            e.refresh_from_db()
+            self.assertEqual(e.status, Event.Status.LIVE)
+        self.assertEqual(Event.objects.count(), before)
+
+    # ── (b) per-object save() proof ───────────────────────────────────────────
+    def test_b_location_overwrites_city_country_venue(self):
+        two = self.ids[:2]
+        r = self._commit(two, "location", "Barcelona")
+        self.assertEqual(r.status_code, 200, r.data)
+        self.assertEqual(r.data["updated"], 2)
+        for e in Event.objects.filter(id__in=two):
+            # Only Event.save() does this — a queryset .update() would not.
+            self.assertEqual(e.location, "Barcelona")
+            self.assertEqual(e.city, "Barcelona")
+            self.assertEqual(e.country, "Barcelona")
+            self.assertEqual(e.venue, "Barcelona")
+
+    def test_b_location_side_effect_is_declared(self):
+        r = self._preview(self.ids, "location", "Anywhere")
+        self.assertEqual(r.data["side_effects"],
+                         ["also overwrites city, country and venue"])
+
+    # ── (c) ───────────────────────────────────────────────────────────────────
+    def test_c_official_event_name_drives_name_and_official_name(self):
+        r = self._commit(self.ids, "official_event_name", "Unified Summit 2026")
+        self.assertEqual(r.status_code, 200, r.data)
+        for e in Event.objects.filter(id__in=self.ids):
+            self.assertEqual(e.official_event_name, "Unified Summit 2026")
+            self.assertEqual(e.name, "Unified Summit 2026")
+            self.assertEqual(e.official_name, "Unified Summit 2026")
+
+    def test_c_official_event_name_side_effect_is_declared(self):
+        r = self._preview(self.ids, "official_event_name", "X")
+        self.assertEqual(r.data["side_effects"],
+                         ["also overwrites name and official_name"])
+
+    # ── (d) ───────────────────────────────────────────────────────────────────
+    def test_d_web_bookings_drives_accepting_web_bookings(self):
+        r = self._commit(self.ids, "web_bookings", "false")
+        self.assertEqual(r.status_code, 200, r.data)
+        for e in Event.objects.filter(id__in=self.ids):
+            self.assertFalse(e.web_bookings)
+            self.assertFalse(e.accepting_web_bookings)   # derived in save()
+
+        back = self._commit(self.ids, "web_bookings", "true")
+        self.assertEqual(back.status_code, 200)
+        for e in Event.objects.filter(id__in=self.ids):
+            self.assertTrue(e.web_bookings)
+            self.assertTrue(e.accepting_web_bookings)
+
+    def test_d_web_bookings_off_warns_about_the_webhook(self):
+        r = self._preview(self.ids, "web_bookings", "false")
+        self.assertEqual(len(r.data["side_effects"]), 1)
+        self.assertIn("accepting_web_bookings", r.data["side_effects"][0])
+        self.assertIn("webhook", r.data["side_effects"][0])
+
+    def test_d_boolean_string_is_coerced_not_stored_as_text(self):
+        """'false' must become the bool False, not a truthy string."""
+        self._commit(self.ids[:1], "web_bookings", "false")
+        e = Event.objects.get(pk=self.ids[0])
+        self.assertIs(e.web_bookings, False)
+
+    # ── (e) exclusions ────────────────────────────────────────────────────────
+    def test_e_event_code_rejected(self):
+        r = self._preview(self.ids, "event_code", "NEW - XX")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("not bulk-editable", r.data["detail"])
+        for e in self.events:
+            e.refresh_from_db()
+            self.assertTrue(e.event_code.startswith("TST"))
+
+    def test_e_edition_rejected(self):
+        r = self._preview(self.ids, "edition", 2026)
+        self.assertEqual(r.status_code, 400)
+
+    def test_e_all_nine_derived_fields_rejected(self):
+        for field in DERIVED_FIELDS:
+            r = self._preview(self.ids, field, "anything")
+            self.assertEqual(r.status_code, 400, f"{field} was NOT rejected")
+            self.assertIn("not bulk-editable", r.data["detail"])
+
+    def test_e_sales_executive_rejected(self):
+        r = self._preview(self.ids, "sales_executive", self.user.id)
+        self.assertEqual(r.status_code, 400)
+
+    # ── (f) ───────────────────────────────────────────────────────────────────
+    def test_f_preview_writes_nothing(self):
+        before = Event.objects.count()
+        r = self._preview(self.ids, "status", Event.Status.CANCELLED)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["updated"], 0)
+        self.assertEqual(r.data["distribution"], {"Draft": 3})
+        for e in self.events:
+            e.refresh_from_db()
+            self.assertEqual(e.status, Event.Status.DRAFT)
+        self.assertEqual(Event.objects.count(), before)
+
+    # ── (g) ───────────────────────────────────────────────────────────────────
+    def test_g_rerun_is_no_op(self):
+        self._commit(self.ids, "status", Event.Status.LIVE)
+        again = self._preview(self.ids, "status", Event.Status.LIVE)
+        self.assertEqual(again.data["no_op"], 3)
+
+    # ── (h) ───────────────────────────────────────────────────────────────────
+    def test_h_one_actionlog_with_full_ids(self):
+        before = ActionLog.objects.count()
+        self._commit(self.ids, "status", Event.Status.COMPLETED)
+        self.assertEqual(ActionLog.objects.count(), before + 1)
+        log = ActionLog.objects.latest("created_at")
+        self.assertEqual(log.action, "Bulk updated status on 3 events")
+        self.assertIn(str(sorted(self.ids)), log.details)
+
+    # ── (i) ───────────────────────────────────────────────────────────────────
+    def test_i_collateral_empty_and_single_group(self):
+        r = self._preview(self.ids, "status", Event.Status.LIVE)
+        self.assertEqual(r.data["collateral"]["count"], 0)
+        self.assertEqual(r.data["collateral"]["sample"], [])
+
+        req = self.factory.get("/bulk_update_schema/")
+        force_authenticate(req, user=self.user)
+        s = SCHEMA(req)
+        self.assertFalse(s.data["parent_enabled"])
+        self.assertEqual({c["group"] for c in s.data["fields"].values()}, {"row"})
+        self.assertEqual(s.data["label"], "events")
+
+    # ── (j) ───────────────────────────────────────────────────────────────────
+    def test_j_user_without_can_update_is_forbidden(self):
+        r = self._preview(self.ids, "status", Event.Status.LIVE, user=self.readonly)
+        self.assertEqual(r.status_code, 403)
+        for e in self.events:
+            e.refresh_from_db()
+            self.assertEqual(e.status, Event.Status.DRAFT)
+
+    # ── Frontend payload contract ─────────────────────────────────────────────
+    # These post the EXACT body shape frontend/src/api/events.js builds, rather
+    # than a convenient hand-written one. The ViewSet-level tests above all
+    # passed while the real browser call was 400ing, because they never
+    # exercised the payload the client actually sends.
+    #
+    #   bulkUpdate: (ids, field, value, commit, planHash) => {
+    #     const body = { ids, field, commit, plan_hash: planHash };
+    #     if (value !== undefined) body.value = value;
+    #     return client.post("/events/bulk_update/", body)...
+    #
+    # Verified against the real module by loading it in Node with axios stubbed.
+    @staticmethod
+    def _frontend_body(ids, field, value, commit, plan_hash):
+        body = {"ids": ids, "field": field, "commit": commit, "plan_hash": plan_hash}
+        if value is not None:            # JS: `if (value !== undefined)`
+            body["value"] = value
+        return body
+
+    def test_frontend_preview_payload_is_accepted(self):
+        body = self._frontend_body(self.ids, "status", None, False, None)
+        self.assertNotIn("value", body)          # key omitted, not null
+        self.assertIsInstance(body["ids"], list)
+        r = self._post(body)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.data["requested"], 3)
+
+    def test_frontend_commit_payload_is_accepted(self):
+        """
+        Mirrors the modal's real three-call sequence. Picking a field previews
+        with NO value; picking a value re-previews WITH it; Apply commits using
+        that second hash. Committing against the value-less hash is a 409 by
+        design — has_value is part of the digest — so the middle call is not
+        optional.
+        """
+        no_value = self._post(self._frontend_body(self.ids, "status", None, False, None))
+        self.assertEqual(no_value.status_code, 200)
+
+        with_value = self._post(
+            self._frontend_body(self.ids, "status", Event.Status.LIVE, False, None)
+        )
+        self.assertEqual(with_value.status_code, 200)
+        self.assertNotEqual(no_value.data["plan_hash"], with_value.data["plan_hash"])
+
+        r = self._post(self._frontend_body(
+            self.ids, "status", Event.Status.LIVE, True, with_value.data["plan_hash"],
+        ))
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.data["updated"], 3)
+
+    def test_empty_selection_is_the_30_byte_ids_error(self):
+        """
+        Regression lock for the reported bug. An empty selection produced
+        exactly {"detail":"ids list required"} — 30 bytes — and the three
+        indistinguishable causes (empty list, wrong type, missing key) all land
+        here, which is why the endpoint now logs what it received.
+        """
+        for ids in ([], {}, None):
+            body = self._frontend_body(ids, "status", None, False, None)
+            r = self._post(body)
+            self.assertEqual(r.status_code, 400)
+            self.assertEqual(r.content, b'{"detail":"ids list required"}')
+            self.assertEqual(len(r.content), 30)
+        self.assertEqual(Event.objects.count(), 3)
+
+    # ── schema hygiene ────────────────────────────────────────────────────────
+    def test_choices_match_model_enum(self):
+        req = self.factory.get("/bulk_update_schema/")
+        force_authenticate(req, user=self.user)
+        f = SCHEMA(req).data["fields"]
+        self.assertEqual(f["status"]["choices"], list(Event.Status.values))
+        self.assertEqual(set(f.keys()),
+                         {"status", "web_bookings", "location", "official_event_name"})
+
+    def test_no_field_is_nullable(self):
+        """Every wired Event column is NOT NULL in the schema."""
+        req = self.factory.get("/bulk_update_schema/")
+        force_authenticate(req, user=self.user)
+        for key, cfg in SCHEMA(req).data["fields"].items():
+            self.assertFalse(cfg.get("nullable", False), f"{key} should not be nullable")

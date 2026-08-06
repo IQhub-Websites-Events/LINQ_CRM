@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { eventsApi, usersApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
 import { EventSmartImportModal } from "../components/events/EventSmartImportModal";
+import { BulkUpdateModal } from "../components/ui/BulkUpdateModal";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { SortableTh, EmptyState, Td } from "../components/ui/Table";
@@ -35,7 +36,10 @@ function toAbsoluteUrl(url) {
 
 export function EventsPage() {
   const toast = useToast();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, canUpdate } = useAuth();
+  // Mass update is an edit — gate it on the permission the backend enforces
+  // (crm_permission maps bulk_update to can_update), not the admin role.
+  const canMassUpdate = canUpdate("events");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [modal, setModal] = useState(null);
@@ -94,9 +98,70 @@ export function EventsPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef(null);
+
+  // ── Multi-row selection ──────────────────────────────────────────────────
+  // Distinct from selectedEventId above, which is single-row drawer state and
+  // keeps working independently.
+  const [selected, setSelected] = useState(new Set());
+  const headerCbRef = useRef(null);
+
+  const allSelected  = items.length > 0 && selected.size === items.length;
+  const someSelected = selected.size > 0 && selected.size < items.length;
+
+  useEffect(() => {
+    if (headerCbRef.current) headerCbRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  const toggleSelect = (id, checked) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      checked ? next.add(id) : next.delete(id);
+      return next;
+    });
+  };
+
+  // ── Mass update ──────────────────────────────────────────────────────────
+  const [bulkOpen, setBulkOpen]     = useState(false);
+  const [bulkSchema, setBulkSchema] = useState(null);
+
+  // Fetched lazily on first open — it never changes during a session.
+  const openBulkUpdate = async () => {
+    setBulkOpen(true);
+    if (bulkSchema) return;
+    try {
+      setBulkSchema(await eventsApi.bulkUpdateSchema());
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not load editable fields.");
+      setBulkOpen(false);
+    }
+  };
+
+  // MUST be memoised. BulkUpdateModal's preview effect lists onPreview in its
+  // dependency array, so an unmemoised handler gets a fresh identity on every
+  // render of this page and re-fires the effect each time — including the
+  // renders handleBulkCommit itself causes by clearing the selection. That
+  // fired a preview with an empty id array and the endpoint answered
+  // {"detail":"ids list required"}. BookingsTable and TicketTable already
+  // memoise theirs; this page did not.
+  const handleBulkPreview = useCallback(
+    (field, value) => eventsApi.bulkUpdate([...selected], field, value, false, null),
+    [selected],
+  );
+
+  const handleBulkCommit = useCallback(
+    async (field, value, planHash) => {
+      const result = await eventsApi.bulkUpdate([...selected], field, value, true, planHash);
+      setSelected(new Set());
+      setPage(1);
+      setItems([]);
+      return result;
+    },
+    [selected],
+  );
 
   // Fetch a page and accumulate
   useEffect(() => {
@@ -123,6 +188,10 @@ export function EventsPage() {
       const newItems = data?.results || [];
       setItems(prev => page === 1 ? newItems : [...prev, ...newItems]);
       setHasMore(!!data?.next);
+      setTotal(data?.count ?? newItems.length);
+      // A fresh page-1 load means the filter or sort changed — the old
+      // selection refers to rows that may no longer be listed.
+      if (page === 1) setSelected(new Set());
     }).catch(() => {
       if (!cancelled) setHasMore(false);
     }).finally(() => {
@@ -387,8 +456,18 @@ export function EventsPage() {
           <table style={{ width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <tr style={{ background: "var(--surface-alt)" }}>
+                {/* Selection col — sticky at 0; Code shifts to left:40 behind it */}
+                <th style={{ width: 40, minWidth: 40, padding: "0 12px", position: "sticky", left: 0, zIndex: 11, background: "var(--surface-alt)", borderBottom: "1px solid var(--border)" }}>
+                  <input
+                    type="checkbox"
+                    ref={headerCbRef}
+                    style={{ accentColor: "var(--accent)" }}
+                    checked={allSelected}
+                    onChange={e => setSelected(e.target.checked ? new Set(items.map(i => i.id)) : new Set())}
+                  />
+                </th>
                 {/* Fixed first col — always visible */}
-                <SortableTh sortKey="event_code" sort={sort} onSort={handleSort} style={{ minWidth: 110, position: "sticky", left: 0, zIndex: 11, background: "var(--surface-alt)" }}>Code</SortableTh>
+                <SortableTh sortKey="event_code" sort={sort} onSort={handleSort} style={{ minWidth: 110, position: "sticky", left: 40, zIndex: 11, background: "var(--surface-alt)" }}>Code</SortableTh>
                 {/* 31 field columns */}
                 <SortableTh sortKey="name" sort={sort} onSort={handleSort} style={{ minWidth: 220 }}>Official Event Name</SortableTh>
                 <SortableTh sortKey="event_date" sort={sort} onSort={handleSort} style={{ minWidth: 110 }}>Start Date</SortableTh>
@@ -425,7 +504,9 @@ export function EventsPage() {
               </tr>
               {/* Filter row */}
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-                <td style={{ padding: "4px 8px", position: "sticky", left: 0, zIndex: 9, background: "var(--surface)" }}>
+                {/* spacer under the selection column */}
+                <td style={{ width: 40, minWidth: 40, padding: "4px 12px", position: "sticky", left: 0, zIndex: 9, background: "var(--surface)" }} />
+                <td style={{ padding: "4px 8px", position: "sticky", left: 40, zIndex: 9, background: "var(--surface)" }}>
                   <select style={colFilterSelect} value={colFilters.event_code} onChange={(e) => handleColFilter("event_code", e.target.value)}>
                     <option value="">All</option>
                     {filterOptions.codes.map(c => <option key={c} value={c}>{c}</option>)}
@@ -494,7 +575,7 @@ export function EventsPage() {
 
             <tbody>
               {loading ? (
-                <tr><td colSpan={33} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
+                <tr><td colSpan={34} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>Loading…</td></tr>
               ) : items.length === 0 ? (
                 <EmptyState title="No events found" />
               ) : items?.map((ev) => (
@@ -504,8 +585,25 @@ export function EventsPage() {
                   onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface-alt)"}
                   onMouseLeave={(e) => e.currentTarget.style.background = ""}
                 >
-                  {/* 1. Event Code — sticky */}
-                  <Td style={{ position: "sticky", left: 0, background: "inherit", zIndex: 2 }}>
+                  {/* 0. Selection. Raw <td>, not <Td> — the shared Td drops every
+                         prop except children/mono/muted/right/style, so an onClick
+                         passed to it would be silently ignored. stopPropagation on
+                         BOTH the cell and the input, or the row's onClick fires and
+                         the detail drawer opens on every tick. */}
+                  <td
+                    style={{ width: 40, minWidth: 40, padding: "0 12px", verticalAlign: "middle", position: "sticky", left: 0, background: "inherit", zIndex: 2 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{ accentColor: "var(--accent)", cursor: "pointer" }}
+                      checked={selected.has(ev.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => toggleSelect(ev.id, e.target.checked)}
+                    />
+                  </td>
+                  {/* 1. Event Code — sticky, shifted right by the selection column */}
+                  <Td style={{ position: "sticky", left: 40, background: "inherit", zIndex: 2 }}>
                     <span className="badge badge-soft-primary" style={{ fontSize: 11, fontWeight: 700 }}>{ev.event_code}</span>
                   </Td>
                   {/* 2. Official Event Name */}
@@ -638,7 +736,48 @@ export function EventsPage() {
             </div>
           )}
         </div>
+
+        {/* Sticky bulk-action bar — mirrors BookingsTable/TicketTable */}
+        {selected.size > 0 && (
+          <div style={{
+            position: "sticky", bottom: 0, zIndex: 20,
+            background: "var(--accent)", color: "#fff",
+            padding: "10px 20px",
+            display: "flex", alignItems: "center", gap: 14,
+            borderTop: "1px solid rgba(255,255,255,0.2)",
+          }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              {items.length < total
+                ? `${selected.size.toLocaleString()} selected of ${items.length.toLocaleString()} loaded (${total.toLocaleString()} total — scroll for more)`
+                : `${selected.size.toLocaleString()} selected`}
+            </span>
+            <button
+              onClick={() => setSelected(new Set())}
+              style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", cursor: "pointer", fontSize: 13 }}
+            >
+              ✕ Deselect all
+            </button>
+            {canMassUpdate && (
+              <button
+                onClick={openBulkUpdate}
+                style={{ padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13, marginLeft: "auto" }}
+              >
+                ✎ Update {selected.size.toLocaleString()}
+              </button>
+            )}
+          </div>
+        )}
       </div>
+
+      <BulkUpdateModal
+        open={bulkOpen && !!bulkSchema}
+        onClose={() => setBulkOpen(false)}
+        selectedIds={[...selected]}
+        schema={bulkSchema}
+        rowLabel="event"
+        onPreview={handleBulkPreview}
+        onCommit={handleBulkCommit}
+      />
 
       <EventDetailDrawer
         eventId={selectedEventId}

@@ -23,12 +23,14 @@ _CREATE_ACTIONS = frozenset({
 })
 
 # Actions that need can_update
+# NOTE: bulk_update is POST, so without it here the HTTP-method fallback below
+# would map it to can_create instead of can_update.
 _UPDATE_ACTIONS = frozenset({
     "update", "partial_update", "update_attendance",
     "submit_dmd", "return_to_mr", "move_member", "bulk_move",
     "assign_lead", "toggle_status", "reset_password", "move_team",
     "assign_events", "add_event", "remove_event", "archive",
-    "sync_roles",
+    "sync_roles", "bulk_update",
 })
 
 # Actions that need can_delete

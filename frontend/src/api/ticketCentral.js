@@ -12,5 +12,15 @@ export const ticketCentralApi = {
   bulkImport: (payload)    => client.post("tickets/bulk_import/", payload).then((r) => r.data),
   delete:     (id)         => client.delete(`tickets/${id}/`).then((r) => r.data),
   bulkDelete: (ids)        => client.post("tickets/bulk_delete/", { ids }).then((r) => r.data),
+
+  // Omit `value` entirely when undefined — the backend reads KEY PRESENCE, so an
+  // always-sent value would make a preview fail validation.
+  bulkUpdate: (ids, field, value, commit, planHash) => {
+    const body = { ids, field, commit, plan_hash: planHash };
+    if (value !== undefined) body.value = value;
+    return client.post("tickets/bulk_update/", body).then((r) => r.data);
+  },
+  bulkUpdateSchema: ()     => client.get("tickets/bulk_update_schema/").then((r) => r.data),
+  filterSchema:     ()     => client.get("tickets/filter_schema/").then((r) => r.data),
   clearAll:   ()           => client.post("tickets/clear_all/").then((r) => r.data),
 };

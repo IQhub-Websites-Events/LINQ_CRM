@@ -18,4 +18,19 @@ export const delegatesApi = {
 
   bulkDelete: (ids) =>
     client.post("/delegates/bulk_delete/", { ids }).then((r) => r.data),
+
+  // The backend reads KEY PRESENCE, not truthiness: omitting `value` means
+  // "not chosen yet" (preview only), while sending it as null means "clear the
+  // field". Pass undefined for the former so the key is left out entirely.
+  bulkUpdate: (ids, field, value, commit, planHash) => {
+    const body = { ids, field, commit, plan_hash: planHash };
+    if (value !== undefined) body.value = value;
+    return client.post("/delegates/bulk_update/", body).then((r) => r.data);
+  },
+
+  bulkUpdateSchema: () =>
+    client.get("/delegates/bulk_update_schema/").then((r) => r.data),
+
+  filterSchema: () =>
+    client.get("/delegates/filter_schema/").then((r) => r.data),
 };

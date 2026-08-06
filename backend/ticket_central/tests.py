@@ -35,13 +35,57 @@ User = get_user_model()
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
-def make_user(username, role, **kwargs):
+_ALL_ACCESS_ROLE_NAME = "test_all_access"
+
+
+def restricted_role(name, *, view=True, create=False, update=False, delete=False,
+                    module="ticket_central"):
+    """A CustomRole with explicit per-module CRUD flags, for permission tests."""
+    from accounts.models import CustomRole, RolePermission
+    role, _ = CustomRole.objects.get_or_create(
+        name=name, defaults={"display_label": name, "is_all_access": False},
+    )
+    RolePermission.objects.update_or_create(
+        custom_role=role, module=module,
+        defaults={"can_view": view, "can_create": create,
+                  "can_update": update, "can_delete": delete},
+    )
+    return role
+
+
+def all_access_role():
+    """
+    TicketViewSet is guarded by crm_permission("ticket_central") (views.py:45),
+    which resolves through User.custom_role. A user without one is refused on
+    every request, so the default test user needs a role attached or the whole
+    suite 403s before it reaches the behaviour under test.
+    """
+    from accounts.models import CustomRole
+    role, _ = CustomRole.objects.get_or_create(
+        name=_ALL_ACCESS_ROLE_NAME,
+        defaults={"display_label": "Test All Access", "is_all_access": True},
+    )
+    return role
+
+
+def make_user(username, role, custom_role=_ALL_ACCESS_ROLE_NAME, **kwargs):
+    """
+    `custom_role` controls CRM permissions, independently of `role` (the legacy
+    string field). Defaults to an all-access role; pass custom_role=None for a
+    deliberately role-less user, or a CustomRole instance for a restricted one.
+    """
     u = User.objects.create_user(
         username=username,
         password="testpass123",
         role=role,
         **kwargs,
     )
+    if custom_role == _ALL_ACCESS_ROLE_NAME:
+        u.custom_role = all_access_role()
+        u.save(update_fields=["custom_role"])
+    elif custom_role is not None:
+        u.custom_role = custom_role
+        u.save(update_fields=["custom_role"])
     Token.objects.create(user=u)
     return u
 
@@ -299,10 +343,16 @@ class PermissionTests(APITestCase):
 
     @classmethod
     def setUpTestData(cls):
-        cls.admin = make_user("admin1", "admin")
-        cls.mr    = make_user("mr1",    "market_research")
-        cls.dmd   = make_user("dmd1",   "data_mining")
-        cls.sales = make_user("sales1", "sales")
+        # These tests assert what each role may NOT do, so they need genuinely
+        # restricted CustomRoles — the all-access default would grant everything
+        # and every "cannot" assertion would fail.
+        cls.admin = make_user("admin1", "admin")   # all-access
+        cls.mr    = make_user("mr1", "market_research",
+                              custom_role=restricted_role("tc_mr", create=True, update=True))
+        cls.dmd   = make_user("dmd1", "data_mining",
+                              custom_role=restricted_role("tc_dmd", update=True))
+        cls.sales = make_user("sales1", "sales",
+                              custom_role=restricted_role("tc_sales"))
         cls.ticket = make_ticket(
             purpose="Permission Test", type_of_ticket="BX",
             created_by=cls.mr,
@@ -493,24 +543,52 @@ class CRUDTests(APITestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("purpose", resp.data)
 
-    def test_create_sets_status_draft(self):
+    def test_create_sets_status_mr_submitted(self):
+        """
+        Creation goes straight to MR Submitted — there is no draft step.
+        Supersedes the original D9 expectation of 'draft'; see
+        TicketCreateSerializer.create() (serializers.py:121-124), which also
+        stamps mr_submitted_by/at at the same moment.
+        """
         auth(self.client, self.mr)
         resp = self.client.post("/api/tickets/", {
-            "purpose": "Draft Status", "type_of_ticket": "BX",
+            "purpose": "Straight To MR", "type_of_ticket": "BX",
         }, format="json")
         self.assertEqual(resp.status_code, 201)
         ticket = Ticket.objects.get(pk=resp.data["id"])
-        self.assertEqual(ticket.status, "draft")
+        self.assertEqual(ticket.status, Ticket.Status.MR_SUBMITTED)
+        self.assertEqual(ticket.mr_submitted_by, self.mr)
+        self.assertIsNotNone(ticket.mr_submitted_at)
 
-    def test_create_ticket_number_blank(self):
-        """D9: ticket_number is blank at creation — filled overnight."""
+    def test_create_assigns_ticket_number_when_purpose_present(self):
+        """
+        ticket_number is assigned AT CREATE, not overnight — supersedes D9.
+        Format is '{type}-{purpose} {n}' (utils.build_ticket_number), and
+        extract_purpose_code only strips whitespace, so the purpose text is
+        embedded verbatim.
+        """
         auth(self.client, self.mr)
         resp = self.client.post("/api/tickets/", {
-            "purpose": "No Number Yet", "type_of_ticket": "BX",
+            "purpose": "Numbered", "type_of_ticket": "BX",
         }, format="json")
         self.assertEqual(resp.status_code, 201)
         ticket = Ticket.objects.get(pk=resp.data["id"])
-        self.assertEqual(ticket.ticket_number, "")
+        self.assertNotEqual(ticket.ticket_number, "")
+        self.assertTrue(ticket.ticket_number.startswith("BX-Numbered "))
+
+    def test_create_without_purpose_is_rejected(self):
+        """
+        The serializer guards ticket_number on `if purpose_code:`, but purpose
+        is validated as required first (serializers.py:104-107), so the
+        no-purpose branch is unreachable through the API — the request 400s
+        before create() runs. Recorded so the guard's dead branch is explicit.
+        """
+        auth(self.client, self.mr)
+        resp = self.client.post("/api/tickets/", {
+            "purpose": "   ", "type_of_ticket": "BX",
+        }, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("purpose", resp.data)
 
     def test_list_returns_200(self):
         auth(self.client, self.mr)

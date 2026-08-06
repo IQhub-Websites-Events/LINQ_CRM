@@ -8,7 +8,7 @@ import { fmt } from "../../utils/helpers";
 
 const PAGE_SIZE = 48;
 
-export function BookingsCardGrid({ statusFilter = "", onTotalChange }) {
+export function BookingsCardGrid({ statusFilter = [], onTotalChange }) {
   const toast = useToast();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ export function BookingsCardGrid({ statusFilter = "", onTotalChange }) {
 
     try {
       const params = { page: p, page_size: PAGE_SIZE };
-      if (statusFilter) params.payment_status = statusFilter;
+      if (statusFilter?.length) params.payment_status = statusFilter;
       const res = await delegatesApi.list(params);
       const results = res.results || [];
       const count = res.count || 0;

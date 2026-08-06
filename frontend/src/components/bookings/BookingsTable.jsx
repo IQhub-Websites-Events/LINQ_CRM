@@ -9,9 +9,39 @@ import { fmt } from "../../utils/helpers";
 import { BookingEditModal } from "./BookingEditModal";
 import { AddBookingModal } from "./AddBookingModal";
 import { DatePopup } from "./DatePopup";
+import { MultiSelectFilter } from "../ui/MultiSelectFilter";
+import { BulkUpdateModal } from "../ui/BulkUpdateModal";
+import { FilterBuilderModal } from "../ui/FilterBuilderModal";
+import { FilterChips } from "../ui/FilterChips";
+import { useFilterSpec } from "../../hooks/useFilterSpec";
 import { PAYMENT_TYPES, TICKET_TIERS, PAID_OR_FREE, PAYMENT_STATUSES, DISCOUNT_OPTIONS } from "../../utils/constants";
 
 const PAGE_SIZE = 50;
+
+// Column filter shape. Array-valued keys map to backend MultipleChoiceFilters and are
+// sent as repeated query params ([] = no filter); string keys are single-valued.
+const EMPTY_COL_FILTERS = {
+  invoice_number: "",
+  event_code: "",
+  edition: "",
+  booking_code: "",
+  first_name: "",
+  last_name: "",
+  position: "",
+  company_name: "",
+  accounts_contact_email: "",
+  email: "",
+  phone_number: "",
+  attendance: "",
+  paid_or_free: [],
+  ticket_tier: [],
+  payment_type: [],
+  request_date: "",
+  invoice_date: "",
+  payment_date: "",
+  delegate_count: "",
+  discount: "",
+};
 
 const getEditionFromCode = (code) => {
   if (!code) return "—";
@@ -23,11 +53,18 @@ const getEditionFromCode = (code) => {
   return "—";
 };
 
-export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
+// `statusFilter` is an array of payment statuses ([] = no filter). It lives on the page
+// rather than in colFilters so the strip above the table and the STATUS column dropdown
+// are the same piece of state and can never disagree.
+export function BookingsTable({ statusFilter = [], onStatusFilterChange, onTotalChange }) {
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, canUpdate } = useAuth();
   const isSalesOrAdmin = user?.role === "admin" || user?.role === "sales";
   const isAdmin = user?.role === "admin";
+  // Mass update is an edit, not a destructive act — gate it on the same
+  // permission the backend enforces (crm_permission maps bulk_update to
+  // can_update), not on the hardcoded admin role that guards bulk delete.
+  const canMassUpdate = canUpdate("bookings");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -37,34 +74,47 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
   const [sortKey, setSortKey] = useState("_sort_request_date");
   const [sortDir, setSortDir] = useState("desc");
 
-  // Column Filters
-  const [colFilters, setColFilters] = useState({
-    invoice_number: "",
-    event_code: "",
-    edition: "",
-    booking_code: "",
-    first_name: "",
-    last_name: "",
-    position: "",
-    company_name: "",
-    accounts_contact_email: "",
-    email: "",
-    phone_number: "",
-    payment_status: "",
-    attendance: "",
-    paid_or_free: "",
-    ticket_tier: "",
-    payment_type: "",
-    request_date: "",
-    invoice_date: "",
-    payment_date: "",
-    delegate_count: "",
-    discount: "",
-  });
+  const [colFilters, setColFilters] = useState(EMPTY_COL_FILTERS);
 
   const [selected, setSelected]   = useState(new Set());
   const [deleting, setDeleting]   = useState(false);
+  const [bulkOpen, setBulkOpen]   = useState(false);
+  const [bulkSchema, setBulkSchema] = useState(null);
   const headerCbRef               = useRef(null);
+
+  // ── Compound filter spec ─────────────────────────────────────────────────
+  const spec = useFilterSpec("bookings");
+  const [filterSchema, setFilterSchema] = useState(null);
+  const [filterOpen, setFilterOpen]     = useState(false);
+
+  // Monotonic token: only the newest request may render. Covers the
+  // hydration race (an in-flight unfiltered load resolving after a filtered
+  // one) and the infinite-scroll path (a stale page-2 append).
+  const loadToken = useRef(0);
+
+  // Schema is fetched on mount, not lazily — hydration depends on it.
+  useEffect(() => {
+    let cancelled = false;
+    delegatesApi.filterSchema()
+      .then((s) => {
+        if (cancelled) return;
+        setFilterSchema(s);
+        const { dropped } = spec.sanitize(s);
+        if (dropped.length > 0) {
+          toast.info("Some saved filters were removed because fields changed.");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Never block the table: run unfiltered with the builder disabled.
+        spec.markSchemaFailed();
+        toast.error("Filters unavailable — could not load the field list.");
+      });
+    return () => { cancelled = true; };
+    // Mount only: the schema does not change within a session, and spec's
+    // identity changes on every criteria edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [events, setEvents] = useState([]);
   const [editInvId, setEditInvId] = useState(null);
@@ -76,9 +126,12 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
     if (p > 1) setFetchingMore(true);
     else setLoading(true);
 
+    const token = ++loadToken.current;
     try {
       const activeFilters = Object.fromEntries(
-        Object.entries(colFilters).filter(([_, v]) => v !== "" && v !== null && v !== undefined)
+        Object.entries(colFilters).filter(([_, v]) => (
+          Array.isArray(v) ? v.length > 0 : (v !== "" && v !== null && v !== undefined)
+        ))
       );
 
       const params = {
@@ -87,9 +140,10 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         ...activeFilters,
       };
 
-      // Map frontend column filter keys to backend filterset keys
-      if (statusFilter) params.payment_status = statusFilter;
-      if (colFilters.payment_status) params.payment_status = colFilters.payment_status;
+      // Status is page-level state, not a column filter. Sent as an array so the
+      // client serialiser emits payment_status=A&payment_status=B for the backend's
+      // MultipleChoiceFilter.
+      if (statusFilter?.length) params.payment_status = statusFilter;
 
       // Date exact match mapping (date_from = date_to = value)
       if (colFilters.request_date) {
@@ -105,26 +159,41 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
         params.payment_date_to = colFilters.payment_date;
       }
 
+      // Compound spec rides alongside the column filters; the backend ANDs them.
+      if (spec.encodedParam) params.filter_spec = spec.encodedParam;
+
       const res = await delegatesApi.list(params);
+      if (token !== loadToken.current) return;   // superseded — discard
       const results = res.results || [];
       const count = res.count || 0;
 
       setData(prev => append ? [...prev, ...results] : results);
       setTotal(count);
       setHasMore((p * PAGE_SIZE) < count);
-    } catch {
-      toast.error("Failed to load bookings");
+    } catch (err) {
+      if (token !== loadToken.current) return;
+      // A 400 here means the spec was rejected. Surface the server's reason
+      // rather than a generic failure, and do not retry.
+      const detail = err.response?.status === 400 && err.response?.data?.detail;
+      toast.error(detail || "Failed to load bookings");
     } finally {
-      setLoading(false);
-      setFetchingMore(false);
+      if (token === loadToken.current) {
+        setLoading(false);
+        setFetchingMore(false);
+      }
     }
-  }, [sortKey, sortDir, statusFilter, colFilters, toast]);
+  }, [sortKey, sortDir, statusFilter, colFilters, spec.encodedParam, toast]);
 
-  // Initial load or filter change
+  // Initial load or filter change.
+  // GATED ON hydrated: with a stored spec this holds the first request until
+  // sanitize() has run, so there is exactly one request and no unfiltered
+  // flash. With no stored spec hydrated is true on the first render and this
+  // fires immediately, unchanged from before.
   useEffect(() => {
+    if (!spec.hydrated) return;
     setPage(1);
     load(1, false);
-  }, [statusFilter, colFilters, sortKey, sortDir, load]);
+  }, [statusFilter, colFilters, sortKey, sortDir, load, spec.hydrated]);
 
   const loadMore = useCallback(() => {
     if (loading || fetchingMore || !hasMore) return;
@@ -186,6 +255,34 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
     }
   };
 
+  // Schema is fetched lazily on first open rather than on mount — it never
+  // changes during a session and most visits never open the modal.
+  const openBulkUpdate = async () => {
+    setBulkOpen(true);
+    if (bulkSchema) return;
+    try {
+      setBulkSchema(await delegatesApi.bulkUpdateSchema());
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not load editable fields.");
+      setBulkOpen(false);
+    }
+  };
+
+  const handleBulkPreview = useCallback(
+    (field, value) => delegatesApi.bulkUpdate([...selected], field, value, false, null),
+    [selected],
+  );
+
+  const handleBulkCommit = useCallback(
+    async (field, value, planHash) => {
+      const result = await delegatesApi.bulkUpdate([...selected], field, value, true, planHash);
+      setSelected(new Set());
+      load(1, false);
+      return result;
+    },
+    [selected, load],
+  );
+
   const handleColFilter = (key, val) => {
     setColFilters(prev => ({ ...prev, [key]: val }));
     setPage(1);
@@ -202,7 +299,10 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const hasAnyFilter = statusFilter || Object.values(colFilters).some(v => v);
+  // An empty array is truthy in JS, so array filters must be length-checked.
+  const isSet = (v) => (Array.isArray(v) ? v.length > 0 : !!v);
+  const hasAnyFilter = isSet(statusFilter) || Object.values(colFilters).some(isSet)
+    || spec.criteria.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -224,7 +324,8 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           {hasAnyFilter && (
             <button
               onClick={() => {
-                setColFilters({});
+                setColFilters(EMPTY_COL_FILTERS);
+                onStatusFilterChange?.([]);
                 setPage(1);
               }}
               style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}
@@ -234,15 +335,39 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           )}
         </div>
 
-        {isSalesOrAdmin && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
-            onClick={() => setShowAddModal(true)}
-            style={primaryBtnStyle}
+            onClick={() => setFilterOpen(true)}
+            disabled={!filterSchema}
+            title={filterSchema ? "Build a compound filter" : "Filters unavailable"}
+            style={{
+              ...filterBtnStyle,
+              opacity: filterSchema ? 1 : 0.5,
+              cursor: filterSchema ? "pointer" : "not-allowed",
+              borderColor: spec.criteria.length ? "var(--accent)" : "var(--border)",
+              color: spec.criteria.length ? "var(--accent)" : "var(--text-dim)",
+            }}
           >
-            + Add Booking
+            ⚙ Filters
+            {spec.criteria.length > 0 && (
+              <span style={filterBadgeStyle}>{spec.criteria.length}</span>
+            )}
           </button>
-        )}
+
+          {isSalesOrAdmin && (
+            <button onClick={() => setShowAddModal(true)} style={primaryBtnStyle}>
+              + Add Booking
+            </button>
+          )}
+        </div>
       </div>
+
+      <FilterChips
+        criteria={spec.criteria}
+        schema={filterSchema}
+        onRemove={spec.removeCriterion}
+        onClearAll={spec.clearAll}
+      />
 
       {/* Table container */}
       <div style={{
@@ -298,14 +423,11 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
               <tr style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
                 <td style={{ width: 40 }}></td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select
-                    style={colFilterInput}
-                    value={colFilters.payment_status || ""}
-                    onChange={(e) => handleColFilter("payment_status", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    options={PAYMENT_STATUSES}
+                    value={statusFilter}
+                    onChange={(v) => { onStatusFilterChange?.(v); setPage(1); }}
+                  />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
                   <input
@@ -425,34 +547,25 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
                   />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select
-                    style={colFilterInput}
-                    value={colFilters.paid_or_free || ""}
-                    onChange={(e) => handleColFilter("paid_or_free", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {PAID_OR_FREE.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    options={PAID_OR_FREE}
+                    value={colFilters.paid_or_free}
+                    onChange={(v) => handleColFilter("paid_or_free", v)}
+                  />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select
-                    style={colFilterInput}
-                    value={colFilters.ticket_tier || ""}
-                    onChange={(e) => handleColFilter("ticket_tier", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {TICKET_TIERS.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    options={TICKET_TIERS}
+                    value={colFilters.ticket_tier}
+                    onChange={(v) => handleColFilter("ticket_tier", v)}
+                  />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
-                  <select
-                    style={colFilterInput}
-                    value={colFilters.payment_type || ""}
-                    onChange={(e) => handleColFilter("payment_type", e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {PAYMENT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <MultiSelectFilter
+                    options={PAYMENT_TYPES}
+                    value={colFilters.payment_type}
+                    onChange={(v) => handleColFilter("payment_type", v)}
+                  />
                 </td>
                 <td style={{ padding: "4px 14px" }}>
                   <select
@@ -541,7 +654,11 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
             borderTop: "1px solid rgba(255,255,255,0.2)",
           }}>
             <span style={{ fontWeight: 600, fontSize: 14 }}>
-              {selected.size.toLocaleString()} selected
+              {/* "Select all" only reaches rows scrolled into memory, so say so
+                  whenever more rows match than are currently loaded. */}
+              {data.length < total
+                ? `${selected.size.toLocaleString()} selected of ${data.length.toLocaleString()} loaded (${total.toLocaleString()} total — scroll for more)`
+                : `${selected.size.toLocaleString()} selected`}
             </span>
             <button
               onClick={() => setSelected(new Set())}
@@ -549,6 +666,14 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
             >
               ✕ Deselect all
             </button>
+            {canMassUpdate && (
+              <button
+                onClick={openBulkUpdate}
+                style={{ padding: "4px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+              >
+                ✎ Update {selected.size.toLocaleString()}
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={handleBulkDelete}
@@ -567,6 +692,24 @@ export function BookingsTable({ statusFilter = "Pending", onTotalChange }) {
           </div>
         )}
       </div>
+
+      <FilterBuilderModal
+        open={filterOpen && !!filterSchema}
+        onClose={() => setFilterOpen(false)}
+        schema={filterSchema}
+        criteria={spec.criteria}
+        onApply={spec.replaceAll}
+      />
+
+      <BulkUpdateModal
+        open={bulkOpen && !!bulkSchema}
+        onClose={() => setBulkOpen(false)}
+        selectedIds={[...selected]}
+        schema={bulkSchema}
+        rowLabel="delegate"
+        onPreview={handleBulkPreview}
+        onCommit={handleBulkCommit}
+      />
 
       <BookingEditModal
         invoiceId={editInvId}
@@ -826,6 +969,19 @@ const viewBtnStyle = {
   fontFamily: "inherit",
   transition: "all .15s",
   whiteSpace: "nowrap",
+};
+
+const filterBtnStyle = {
+  display: "inline-flex", alignItems: "center", gap: 6,
+  padding: "7px 14px", fontSize: 12, fontWeight: 600,
+  background: "var(--surface)", border: "1px solid var(--border)",
+  borderRadius: 8, fontFamily: "inherit", transition: "all 0.15s",
+};
+
+const filterBadgeStyle = {
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+  minWidth: 17, height: 17, padding: "0 5px", borderRadius: 9,
+  background: "var(--accent)", color: "#fff", fontSize: 10.5, fontWeight: 700,
 };
 
 const colFilterInput = {

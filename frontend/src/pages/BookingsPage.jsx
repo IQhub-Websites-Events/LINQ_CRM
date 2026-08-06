@@ -12,7 +12,9 @@ const STATUS_TABS = ["All", "Pending", "Paid"];
 
 export function BookingsPage({ navItem }) {
   const [view, setView] = useState("table"); // "table" | "cards"
-  const [statusFilter, setStatusFilter] = useState(navItem ? "" : "Pending");
+  // Array of payment statuses ([] = All). Shared by the strip below and the STATUS
+  // column dropdown in BookingsTable, so the two can never disagree.
+  const [statusFilter, setStatusFilter] = useState(navItem ? [] : ["Pending"]);
   const [period, setPeriod] = useState("total");
   const [importOpen, setImportOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -26,7 +28,7 @@ export function BookingsPage({ navItem }) {
   );
 
   const handleClearFilters = useCallback(() => {
-    setStatusFilter("");
+    setStatusFilter([]);
   }, []);
 
   const handleClearAll = async () => {
@@ -110,6 +112,7 @@ export function BookingsPage({ navItem }) {
             {view === "table" ? (
               <BookingsTable
                 statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
               />
             ) : (
               <BookingsCardGrid
@@ -132,7 +135,12 @@ export function BookingsPage({ navItem }) {
 
 
 function FilterStrip({ statusFilter, onStatusChange }) {
-  const active = statusFilter || "All";
+  // A tab is only lit when it is the sole selected status. Pick two or more statuses in
+  // the column dropdown and no tab lights up — the strip is a shortcut, not the truth.
+  const selected = Array.isArray(statusFilter) ? statusFilter : [];
+  const active = selected.length === 0
+    ? "All"
+    : selected.length === 1 ? selected[0] : null;
   return (
     <div style={{
       display: "flex",
@@ -156,7 +164,7 @@ function FilterStrip({ statusFilter, onStatusChange }) {
           return (
             <button
               key={tab}
-              onClick={() => onStatusChange(tab === "All" ? "" : tab)}
+              onClick={() => onStatusChange(tab === "All" ? [] : [tab])}
               style={{
                 fontFamily: "var(--font-sans)",
                 fontSize: 12,
