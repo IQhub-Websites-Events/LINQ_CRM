@@ -17,6 +17,7 @@ import { EventPerformancePage }   from "./pages/EventPerformancePage";
 import { TicketCentralPage }       from "./pages/TicketCentralPage";
 import { RolesPage }               from "./pages/RolesPage";
 import { NoAccessPage }            from "./pages/NoAccessPage";
+import { PaperReviewPage, ProposalSubmissionPage } from "./pages/ComingSoonPage";
 import { Sidebar } from "./components/layout/Sidebar";
 import { Header } from "./components/layout/Header";
 import { searchApi } from "./api";
@@ -135,11 +136,16 @@ function PermissionDefaultRedirect() {
   if (!permissionsLoaded) return null;
   if (!hasAnyPermission) return <NoAccessPage />;
   // Navigate to first accessible module
-  const ORDER = ["bookings", "ticket_central", "events", "reports", "performance", "users", "teams", "webhooks", "roles"];
+  // The placeholder modules sit last: a user who can see anything real should
+  // land on that, not on a Coming Soon page. They are still listed, otherwise
+  // a role granted ONLY a placeholder would fall through to No Access despite
+  // having a visible sidebar entry.
+  const ORDER = ["bookings", "ticket_central", "events", "reports", "performance", "users", "teams", "webhooks", "roles", "paper_review", "proposal_submission"];
   const MODULE_ROUTE = {
     bookings: "bookings", ticket_central: "ticket-central", events: "events",
     reports: "reports", performance: "event-performance", users: "users",
     teams: "teams-management", webhooks: "webhook-logs", roles: "roles",
+    paper_review: "paper-review", proposal_submission: "proposal-submission",
   };
   for (const mod of ORDER) {
     if (canView(mod)) return <Navigate to={MODULE_ROUTE[mod]} replace />;
@@ -168,6 +174,8 @@ export default function App() {
                   <Route path="ticket-central"    element={<PermissionGate module="ticket_central"> <TicketCentralRoute /></PermissionGate>} />
                   <Route path="webhook-logs"      element={<PermissionGate module="webhooks">       <WebhookLogsPage /></PermissionGate>} />
                   <Route path="roles"             element={<PermissionGate module="roles">          <RolesPage /></PermissionGate>} />
+                  <Route path="paper-review"        element={<PermissionGate module="paper_review">        <PaperReviewPage /></PermissionGate>} />
+                  <Route path="proposal-submission" element={<PermissionGate module="proposal_submission"><ProposalSubmissionPage /></PermissionGate>} />
                   <Route path="*"                 element={<Navigate to="bookings" replace />} />
                 </Route>
               </Routes>

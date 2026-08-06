@@ -12,6 +12,8 @@ const CRM_MODULES = [
   { key: "performance",    label: "Performance"    },
   { key: "webhooks",       label: "Webhooks"       },
   { key: "roles",          label: "Roles"          },
+  { key: "paper_review",        label: "Paper Review"        },
+  { key: "proposal_submission", label: "Proposal Submission" },
 ];
 
 export function RolesPage() {

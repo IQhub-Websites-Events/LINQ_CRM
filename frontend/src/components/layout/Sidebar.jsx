@@ -15,6 +15,8 @@ const UsersIcon    = () => <Svg><path d="M9 12v-1a3 3 0 00-3-3H4a3 3 0 00-3 3v1"
 const WebhookIcon  = () => <Svg><path d="M2 7c0-2.8 2.2-5 5-5s5 2.2 5 5-2.2 5-5 5" /><path d="M7 7l-2 4h4l-2 4" /></Svg>;
 const TicketIcon   = () => <Svg><path d="M1 4.5A1.5 1.5 0 012.5 3h9A1.5 1.5 0 0113 4.5V6a1 1 0 000 2v1.5A1.5 1.5 0 0111.5 11h-9A1.5 1.5 0 011 9.5V8a1 1 0 000-2V4.5z" /><path d="M6 3v8" strokeDasharray="1.4 1.4" /></Svg>;
 const ShieldIcon   = () => <Svg><path d="M7 1L2 3v4c0 3.3 2.2 6.3 5 7 2.8-.7 5-3.7 5-7V3L7 1z" /></Svg>;
+const PaperIcon    = () => <Svg><path d="M8 1H3.5A1.5 1.5 0 002 2.5v9A1.5 1.5 0 003.5 13h7a1.5 1.5 0 001.5-1.5V5L8 1z" /><path d="M8 1v4h4M4.5 8h5M4.5 10.5h3" /></Svg>;
+const SubmitIcon   = () => <Svg><path d="M7 1.5v6M4.5 4L7 1.5 9.5 4" /><path d="M1.5 8.5v3A1.5 1.5 0 003 13h8a1.5 1.5 0 001.5-1.5v-3" /></Svg>;
 
 // module key → nav item id (route)
 const MODULE_TO_NAV = {
@@ -27,10 +29,12 @@ const MODULE_TO_NAV = {
   roles:          { id: "roles",             label: "Roles",       Icon: ShieldIcon   },
   teams:          { id: "teams-management",  label: "Teams",       Icon: UsersIcon    },
   webhooks:       { id: "webhook-logs",      label: "Webhooks",    Icon: WebhookIcon  },
+  paper_review:        { id: "paper-review",        label: "Paper Review",        Icon: PaperIcon  },
+  proposal_submission: { id: "proposal-submission", label: "Proposal Submission", Icon: SubmitIcon },
 };
 
 // Ordered module groups for the sidebar
-const PIPELINE_MODULES   = ["bookings", "ticket_central"];
+const PIPELINE_MODULES   = ["bookings", "ticket_central", "paper_review", "proposal_submission"];
 const CATALOGUE_MODULES  = ["events"];
 const INSIGHTS_MODULES   = ["reports"];
 const ADMIN_MODULES      = ["performance", "users", "roles", "teams", "webhooks"];

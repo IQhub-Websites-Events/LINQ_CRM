@@ -214,6 +214,10 @@ class CustomRole(models.Model):
 CRM_MODULES = [
     "bookings", "ticket_central", "events", "reports",
     "users", "teams", "performance", "webhooks", "roles",
+    # Placeholder pipeline modules. Registered so roles can be configured
+    # ahead of the real feature; every existing role is backfilled all-False
+    # by migration 0020, so nothing is visible until it is granted.
+    "paper_review", "proposal_submission",
 ]
 
 class RolePermission(models.Model):

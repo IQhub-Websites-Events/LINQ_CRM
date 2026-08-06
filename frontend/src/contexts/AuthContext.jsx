@@ -10,9 +10,11 @@ import { markTokenFreshness } from "../api/client";
 
 const AuthContext = createContext(null);
 
+// Mirrors CRM_MODULES in backend/accounts/models.py — keep the two in sync.
 const ALL_MODULES = [
   "bookings", "ticket_central", "events", "reports",
   "users", "teams", "performance", "webhooks", "roles",
+  "paper_review", "proposal_submission",
 ];
 
 function storageGet(key) {
