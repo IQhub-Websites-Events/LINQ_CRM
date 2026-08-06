@@ -339,6 +339,30 @@ class FilterSpecMixin:
             return self._annotation_name(key)
         return cfg.get("source", key)
 
+    # ── Value coercion ────────────────────────────────────────────────────────
+    _TRUE = frozenset(["true", "True", "1", 1, True])
+    _FALSE = frozenset(["false", "False", "0", 0, False])
+
+    def _coerce_value(self, value, cfg, where):
+        """
+        Normalise a submitted value to the type the ORM expects.
+
+        Booleans are the case that matters. A <select> yields the STRING
+        "false", and Django's BooleanField.to_python raises ValidationError on
+        it — which escapes as a 500 rather than a clean 400. Worse, anywhere a
+        string were accepted, "false" is truthy in Python and would mean True.
+        """
+        if cfg["type"] != "boolean":
+            return value
+        # `1 in {True}` is True in Python, so compare identity for bools first.
+        if isinstance(value, bool):
+            return value
+        if value in self._TRUE:
+            return True
+        if value in self._FALSE:
+            return False
+        raise FilterSpecError(f"{where}: '{value}' is not a valid true/false value.")
+
     # ── Validation ────────────────────────────────────────────────────────────
     def _validate(self, spec):
         if not isinstance(spec, dict):
@@ -379,6 +403,7 @@ class FilterSpecMixin:
                 )
 
             values = self._validate_arity(where, c, op, cfg)
+            values = [self._coerce_value(v, cfg, where) for v in values]
             cleaned.append({"field": key, "op": op, "values": values})
         return cleaned
 

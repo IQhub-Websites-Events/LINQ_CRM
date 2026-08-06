@@ -114,6 +114,9 @@ export const eventsApi = {
 
   bulkUpdateSchema: () =>
     client.get("/events/bulk_update_schema/").then((r) => r.data),
+
+  filterSchema: () =>
+    client.get("/events/filter_schema/").then((r) => r.data),
 };
 
 export const historicalEventsApi = {

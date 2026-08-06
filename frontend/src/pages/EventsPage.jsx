@@ -3,6 +3,9 @@ import { eventsApi, usersApi } from "../api";
 import { EventDetailDrawer } from "../components/events/EventDetailDrawer";
 import { EventSmartImportModal } from "../components/events/EventSmartImportModal";
 import { BulkUpdateModal } from "../components/ui/BulkUpdateModal";
+import { FilterBuilderModal } from "../components/ui/FilterBuilderModal";
+import { FilterChips } from "../components/ui/FilterChips";
+import { useFilterSpec } from "../hooks/useFilterSpec";
 import { useToast } from "../contexts/ToastContext";
 import { useAuth } from "../contexts/AuthContext";
 import { SortableTh, EmptyState, Td } from "../components/ui/Table";
@@ -124,6 +127,40 @@ export function EventsPage() {
     });
   };
 
+  // ── Compound filter spec ─────────────────────────────────────────────────
+  // EventsPage is a PAGE, not a table component, and was the one surface
+  // originally written without useCallback — which produced the render-loop
+  // 400s in mass update. Every handler below is memoised, and effects depend
+  // on primitives (spec.hydrated, spec.encodedParam), never on `spec`, which
+  // is a fresh object literal on every render.
+  const spec = useFilterSpec("events");
+  const [filterSchema, setFilterSchema] = useState(null);
+  const [filterOpen, setFilterOpen]     = useState(false);
+  const loadToken = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    eventsApi.filterSchema()
+      .then((s) => {
+        if (cancelled) return;
+        setFilterSchema(s);
+        const { dropped } = spec.sanitize(s);
+        if (dropped.length > 0) {
+          toast.info("Some saved filters were removed because fields changed.");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        spec.markSchemaFailed();
+        toast.error("Filters unavailable — could not load the field list.");
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openFilterBuilder = useCallback(() => setFilterOpen(true), []);
+  const closeFilterBuilder = useCallback(() => setFilterOpen(false), []);
+
   // ── Mass update ──────────────────────────────────────────────────────────
   const [bulkOpen, setBulkOpen]     = useState(false);
   const [bulkSchema, setBulkSchema] = useState(null);
@@ -165,7 +202,14 @@ export function EventsPage() {
 
   // Fetch a page and accumulate
   useEffect(() => {
+    // HYDRATION GATE: with a stored spec this holds the first request until
+    // sanitize() has run, so there is exactly one request and no flash of the
+    // unfiltered table. With nothing stored, hydrated is true on the first
+    // render and this behaves exactly as before.
+    if (!spec.hydrated) return undefined;
+
     let cancelled = false;
+    const token = ++loadToken.current;
     if (page === 1) {
       setLoading(true);
       setHasMore(true);
@@ -177,14 +221,19 @@ export function EventsPage() {
       Object.entries(colFilters).filter(([_, v]) => v !== "" && v !== null && v !== undefined)
     );
 
-    eventsApi.list({
+    const params = {
       page, page_size: PAGE_SIZE,
       ...(search ? { search } : {}),
       ...(status ? { status } : {}),
       ...activeFilters,
       ordering: sort.dir === "asc" ? sort.key : `-${sort.key}`,
-    }).then(data => {
-      if (cancelled) return;
+    };
+    if (spec.encodedParam) params.filter_spec = spec.encodedParam;
+
+    eventsApi.list(params).then(data => {
+      // Stale-response guard: only the newest request may render. Covers the
+      // hydration race and a superseded page-2 append.
+      if (cancelled || token !== loadToken.current) return;
       const newItems = data?.results || [];
       setItems(prev => page === 1 ? newItems : [...prev, ...newItems]);
       setHasMore(!!data?.next);
@@ -192,16 +241,22 @@ export function EventsPage() {
       // A fresh page-1 load means the filter or sort changed — the old
       // selection refers to rows that may no longer be listed.
       if (page === 1) setSelected(new Set());
-    }).catch(() => {
-      if (!cancelled) setHasMore(false);
+    }).catch((err) => {
+      if (cancelled || token !== loadToken.current) return;
+      setHasMore(false);
+      const detail = err.response?.status === 400 && err.response?.data?.detail;
+      if (detail) toast.error(detail);
     }).finally(() => {
-      if (!cancelled) { setLoading(false); setLoadingMore(false); }
+      if (!cancelled && token === loadToken.current) {
+        setLoading(false); setLoadingMore(false);
+      }
     });
 
     return () => { cancelled = true; };
     // filterKey ensures effect re-runs on filter change even if page stays 1
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, status, sort.key, sort.dir, colFilters, filterKey]);
+  }, [page, search, status, sort.key, sort.dir, colFilters, filterKey,
+      spec.hydrated, spec.encodedParam]);
 
   // IntersectionObserver — fires setPage(+1) when sentinel comes into view
   useEffect(() => {
@@ -420,6 +475,39 @@ export function EventsPage() {
             <button className="btn btn-primary" onClick={openCreate}>+ New Event</button>
           </div>
         )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        <button
+          onClick={openFilterBuilder}
+          disabled={!filterSchema}
+          title={filterSchema ? "Build a compound filter" : "Filters unavailable"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "7px 14px", fontSize: 12, fontWeight: 600,
+            background: "var(--surface)", borderRadius: 8, fontFamily: "inherit",
+            border: `1px solid ${spec.criteria.length ? "var(--accent)" : "var(--border)"}`,
+            color: spec.criteria.length ? "var(--accent)" : "var(--text-dim)",
+            opacity: filterSchema ? 1 : 0.5,
+            cursor: filterSchema ? "pointer" : "not-allowed",
+          }}
+        >
+          ⚙ Filters
+          {spec.criteria.length > 0 && (
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              minWidth: 17, height: 17, padding: "0 5px", borderRadius: 9,
+              background: "var(--accent)", color: "#fff", fontSize: 10.5, fontWeight: 700,
+            }}>{spec.criteria.length}</span>
+          )}
+        </button>
+
+        <FilterChips
+          criteria={spec.criteria}
+          schema={filterSchema}
+          onRemove={spec.removeCriterion}
+          onClearAll={spec.clearAll}
+        />
       </div>
 
 
@@ -768,6 +856,14 @@ export function EventsPage() {
           </div>
         )}
       </div>
+
+      <FilterBuilderModal
+        open={filterOpen && !!filterSchema}
+        onClose={closeFilterBuilder}
+        schema={filterSchema}
+        criteria={spec.criteria}
+        onApply={spec.replaceAll}
+      />
 
       <BulkUpdateModal
         open={bulkOpen && !!bulkSchema}
