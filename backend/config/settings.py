@@ -5,6 +5,7 @@ Production-ready configuration with environment variable overrides.
 import os
 from pathlib import Path
 import dj_database_url
+from corsheaders.defaults import default_headers
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from decouple import AutoConfig
@@ -27,7 +28,34 @@ CORS_ALLOWED_ORIGINS = [
     os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
     if o.strip()
 ]
+
+# Browser-based REST clients used to exercise /api/webhooks/ingest/ by hand send
+# their own chrome-extension:// origin. Appended after the env list rather than
+# added to .env, because .env is per-environment and this needs to hold wherever
+# the app runs; load_dotenv() puts CORS_ALLOWED_ORIGINS into os.environ, so a
+# value there would otherwise silently replace anything set here.
+CORS_EXTRA_ALLOWED_ORIGINS = [
+    "chrome-extension://gmmkjpcadciiokjpikmkkmapphbmdjok",
+]
+for _origin in CORS_EXTRA_ALLOWED_ORIGINS:
+    if _origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origin)
+
 CORS_ALLOW_CREDENTIALS = True
+
+# The auth headers this API uses are all "non-simple", so a browser will not send
+# them unless the CORS preflight names them explicitly. django-cors-headers'
+# defaults cover only accept / authorization / content-type / user-agent /
+# x-csrftoken / x-requested-with — so a preflighted request arrived with no key
+# at all and the endpoint correctly answered 401. All three are listed here:
+#   x-crm-api-key    -> /api/webhooks/ingest/      (webhooks/utils.py)
+#   x-webhook-secret -> legacy static secret       (webhooks/utils.py)
+#   x-api-key        -> /api/invoices/create_from_website/ (book_event/authentication.py)
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-crm-api-key",
+    "x-webhook-secret",
+    "x-api-key",
+]
 
 # ── Applications ──────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
